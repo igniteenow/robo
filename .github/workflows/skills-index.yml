@@ -1,15 +1,9 @@
 name: Build Skills Index
 
 on:
-  schedule:
-    # Run twice daily: 6 AM and 6 PM UTC
-    - cron: "0 6,18 * * *"
+  # Ignitee Now: automatic triggers are off until this workflow has been
+  # reviewed for the IgniteeNow org. Run it from the Actions tab when ready.
   workflow_dispatch: # Manual trigger
-  push:
-    branches: [main]
-    paths:
-      - "scripts/build_skills_index.py"
-      - ".github/workflows/skills-index.yml"
 
 permissions:
   contents: read
