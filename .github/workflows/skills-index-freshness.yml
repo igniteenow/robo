@@ -8,8 +8,8 @@ name: Skills Index Freshness Check
 # Triggered every 4 hours so we catch a stuck cron within one tick.
 
 on:
-  schedule:
-    - cron: '0 */4 * * *'
+  # Ignitee Now: automatic triggers are off until this workflow has been
+  # reviewed for the IgniteeNow org. Run it from the Actions tab when ready.
   workflow_dispatch:
 
 permissions:

@@ -4,9 +4,9 @@ name: Publish E2E evidence
 # checks out main, never the PR ref, and treats the downloaded artifact as
 # untrusted input before uploading validated GitHub attachments.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  # Ignitee Now: automatic triggers are off until this workflow has been
+  # reviewed for the IgniteeNow org. Run it from the Actions tab when ready.
+  workflow_dispatch:
 
 permissions:
   actions: read
