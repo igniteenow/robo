@@ -1,0 +1,30 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --all-extras --dev
+      - run: uv run pytest -q -x --ignore=tests/livetest
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run check
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd apps/ios && xcodegen generate
+      - run: >
+          cd apps/ios && xcodebuild -project Robo.xcodeproj -scheme Robo
+          -destination 'platform=iOS Simulator,name=iPhone 15' -skipPackagePluginValidation
+          CODE_SIGNING_ALLOWED=NO test

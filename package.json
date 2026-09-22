@@ -1,0 +1,70 @@
+{
+  "name": "robo-engineer",
+  "version": "3.0.1",
+  "description": "Robo autonomous cross-platform engineering robot.",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "ui-tui",
+    "ui-tui/packages/*",
+    "web",
+    "tests-js",
+    "packages/*"
+  ],
+  "scripts": {
+    "postinstall": "echo '✅ Browser tools ready. Run: python run_agent.py --help'",
+    "install:root": "npm install --workspaces=false",
+    "install:web": "npm install --workspace web",
+    "install:tui": "npm install --workspace ui-tui",
+    "install:desktop": "npm install --workspace apps/desktop",
+    "audit:root": "npm audit --workspaces=false",
+    "audit:web": "npm audit --workspace web",
+    "audit:tui": "npm audit --workspace ui-tui",
+    "audit:fix:root": "npm audit fix --workspaces=false",
+    "audit:fix:web": "npm audit fix --workspace web",
+    "audit:fix:tui": "npm audit fix --workspace ui-tui",
+    "check": "npm run --ws check",
+    "fix": "npm run --ws fix"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@streamdown/math": "1.0.2",
+    "agent-browser": "0.26.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "typescript-eslint": "8.64.0",
+    "eslint-plugin-perfectionist": "5.10.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-unused-imports": "4.4.1",
+    "globals": "17.7.0"
+  },
+  "overrides": {
+    "lodash": "4.18.1",
+    "yauzl": "^3.3.1",
+    "protobufjs": "^8.7.1",
+    "js-yaml": "4.3.1",
+    "node-gyp": {
+      "undici": "6.28.0"
+    }
+  },
+  "engines": {
+    "node": ">=22.22.0",
+    "npm": "<11.10.0 || >=11.17.0"
+  },
+  "allowScripts": {
+    "unicode-animations": false,
+    "esbuild@0.28.1": true,
+    "node-pty@1.1.0": true,
+    "electron-winstaller@5.4.0": true,
+    "agent-browser@0.26.0": true,
+    "electron@41.10.3": true,
+    "fsevents@2.3.2": true,
+    "fsevents@2.3.3": true
+  },
+  "author": "Ignitee Now",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IgniteeNow/robo-engineer.git"
+  }
+}

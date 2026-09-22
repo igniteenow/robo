@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
+  <title id="t">Robo by Ignitee Now</title>
+  <defs>
+    <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#D52734"/>
+      <stop offset=".55" stop-color="#DF5A30"/>
+      <stop offset="1" stop-color="#F5A13A"/>
+    </linearGradient>
+    <linearGradient id="eye" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#DF5A30"/>
+      <stop offset="1" stop-color="#F5A13A"/>
+    </linearGradient>
+  </defs>
+  <!-- tile -->
+  <rect width="512" height="512" rx="112" fill="#0A1030"/>
+  <!-- disc: the indigo circle from the Ignitee Now emblem -->
+  <circle cx="256" cy="290" r="170" fill="#3F3E98"/>
+  <!-- flame: Robo's spark, rising behind the head -->
+  <path fill="url(#flame)" d="M262 44c40 62 118 98 118 190 0 70-54 118-124 118s-124-48-124-118c0-52 30-86 62-116 2 40 16 62 40 72-12-52-4-102 28-146z"/>
+  <path fill="#F7C088" opacity=".55" d="M264 150c20 30 52 50 52 94 0 34-26 58-60 58s-60-24-60-58c0-22 10-38 26-52 2 18 10 28 22 32-4-26 4-52 20-74z"/>
+  <!-- head -->
+  <rect x="120" y="292" width="20" height="52" rx="8" fill="#8E8CE0"/>
+  <rect x="372" y="292" width="20" height="52" rx="8" fill="#8E8CE0"/>
+  <rect x="136" y="216" width="240" height="200" rx="58" fill="#FFE9D6"/>
+  <rect x="164" y="254" width="184" height="96" rx="42" fill="#0A1030"/>
+  <rect x="198" y="282" width="40" height="40" rx="14" fill="url(#eye)"/>
+  <rect x="274" y="282" width="40" height="40" rx="14" fill="url(#eye)"/>
+  <rect x="230" y="372" width="52" height="10" rx="5" fill="#3F3E98"/>
+</svg>

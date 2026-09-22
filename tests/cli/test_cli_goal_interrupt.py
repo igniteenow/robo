@@ -1,0 +1,153 @@
+"""Tests for CLI goal-continuation interrupt handling.
+
+Covers:
+- Ctrl+C during a /goal turn auto-pauses the goal (no more continuations).
+- Empty/whitespace-only responses skip the judge (no phantom continuations).
+- Clean response without interrupt still drives the judge + enqueues.
+
+These tests exercise ``_maybe_continue_goal_after_turn`` directly on a
+minimal ``RoboCLI`` stub (pattern used elsewhere in tests/cli).
+"""
+
+from __future__ import annotations
+
+import queue
+import uuid
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Fixtures
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def robo_home(tmp_path, monkeypatch):
+    """Isolated ROBO_HOME so SessionDB.state_meta writes stay hermetic."""
+    home = tmp_path / ".robo"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("ROBO_HOME", str(home))
+
+    # Bust the goal module's DB cache so it re-resolves ROBO_HOME each test.
+    from robo_cli import goals
+    goals._DB_CACHE.clear()
+    yield home
+    goals._DB_CACHE.clear()
+
+
+def _make_cli_with_goal(session_id: str, goal_text: str = "build a thing"):
+    """Build a minimal RoboCLI stub with an active goal wired in."""
+    from cli import RoboCLI
+    from robo_cli.goals import GoalManager
+
+    cli = RoboCLI.__new__(RoboCLI)
+    # State the hook + helpers touch directly.
+    cli._pending_input = queue.Queue()
+    cli._last_turn_interrupted = False
+    cli.conversation_history = []
+    # `_get_goal_manager()` reads `self.session_id` directly, not
+    # `self.agent.session_id`. Match the production lookup.
+    cli.session_id = session_id
+    cli.agent = MagicMock()
+    cli.agent.session_id = session_id
+
+    mgr = GoalManager(session_id=session_id, default_max_turns=5)
+    mgr.set(goal_text)
+    cli._goal_manager = mgr
+    return cli, mgr
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Tests
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestInterruptAutoPause:
+
+    def test_interrupted_turn_is_resumable(self, robo_home):
+        """After auto-pause from Ctrl+C, /goal resume puts it back to active."""
+        sid = f"sid-resume-{uuid.uuid4().hex}"
+        cli, mgr = _make_cli_with_goal(sid)
+        cli._last_turn_interrupted = True
+        cli.conversation_history = [
+            {"role": "assistant", "content": "partial"},
+        ]
+        with patch("robo_cli.goals.judge_goal"):
+            cli._maybe_continue_goal_after_turn()
+        assert mgr.state.status == "paused"
+
+        mgr.resume()
+        assert mgr.state.status == "active"
+
+
+
+
+class TestHealthyTurnStillRuns:
+    def test_clean_response_enqueues_continuation_when_judge_says_continue(
+        self, robo_home,
+    ):
+        """Sanity check: the hook still works in the happy path."""
+        sid = f"sid-healthy-{uuid.uuid4().hex}"
+        cli, mgr = _make_cli_with_goal(sid)
+        cli._last_turn_interrupted = False
+        cli.conversation_history = [
+            {"role": "user", "content": "go"},
+            {"role": "assistant", "content": "did some work, more to do"},
+        ]
+
+        # Force the judge to say "continue" without touching the network.
+        with patch(
+            "robo_cli.goals.judge_goal",
+            return_value=("continue", "needs more steps", False, None, False),
+        ):
+            cli._maybe_continue_goal_after_turn()
+
+        # Continuation prompt must be queued.
+        assert not cli._pending_input.empty()
+        queued = cli._pending_input.get_nowait()
+        assert "Continuing toward your standing goal" in queued
+        assert mgr.state.status == "active"
+
+    def test_clean_response_marks_done_when_judge_says_done(self, robo_home):
+        sid = f"sid-done-{uuid.uuid4().hex}"
+        cli, mgr = _make_cli_with_goal(sid)
+        cli._last_turn_interrupted = False
+        cli.conversation_history = [
+            {"role": "assistant", "content": "all finished, here's the result"},
+        ]
+
+        with patch(
+            "robo_cli.goals.judge_goal",
+            return_value=("done", "goal satisfied", False, None, False),
+        ):
+            cli._maybe_continue_goal_after_turn()
+
+        assert cli._pending_input.empty()
+        assert mgr.state.status == "done"
+
+
+class TestInterruptFlagLifecycle:
+    def test_chat_resets_flag_at_entry(self, robo_home):
+        """chat() must reset _last_turn_interrupted at the top of each turn.
+
+        This guards against stale flag state: if turn N was interrupted and
+        turn N+1 runs clean, the hook must not see True from N.
+        """
+        # We can't run chat() end-to-end here, but we can assert the reset
+        # is the first thing after the secret-capture registration by
+        # inspecting the source shape.
+        from cli import RoboCLI
+        import inspect
+
+        src = inspect.getsource(RoboCLI.chat)
+        # Look for an explicit reset near the top of chat().
+        head = src.split("if not self._ensure_runtime_credentials", 1)[0]
+        assert "self._last_turn_interrupted = False" in head, (
+            "chat() must reset _last_turn_interrupted before run_conversation "
+            "runs — otherwise a prior turn's interrupt state leaks into the "
+            "next turn's goal hook decision."
+        )

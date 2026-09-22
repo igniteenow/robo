@@ -1,0 +1,54 @@
+name: robo
+description: Robo — professional desktop engineer
+# Colours for this skin live in robo_cli/skin_engine.py (one source of truth,
+# audited for contrast by tests/robo_cli/test_skin_palettes.py). This file adds
+# the banner art, tool emojis and wording on top.
+
+spinner:
+  # Restrained indicator: a rotating quadrant, no mascot faces.
+  waiting_faces: ["◐", "◓", "◑", "◒"]
+  thinking_faces: ["◐", "◓", "◑", "◒"]
+  thinking_verbs:
+    - analyzing
+    - tracing dependencies
+    - testing assumptions
+    - checking evidence
+    - engineering the next step
+    - verifying the result
+  wings:
+    - ["", ""]
+
+branding:
+  agent_name: "Robo"
+  welcome: "Robo online — talk normally or assign an engineering task."
+  goodbye: "Robo standing by."
+  response_label: " ROBO "
+  prompt_symbol: "›"
+  help_header: "ROBO COMMAND DECK"
+
+tool_prefix: "│"
+tool_emojis:
+  terminal: "▸"
+  web_search: "⌕"
+  browser: "◎"
+  read_file: "≡"
+  write_file: "✎"
+  memory: "◇"
+
+banner_logo: |
+  [bold #F5A13A]██████╗  ██████╗ ██████╗  ██████╗[/]
+  [bold #EF8A22]██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗[/]
+  [#E8742A]██████╔╝██║   ██║██████╔╝██║   ██║[/]
+  [#DF5A30]██╔══██╗██║   ██║██╔══██╗██║   ██║[/]
+  [#D93F32]██║  ██║╚██████╔╝██████╔╝╚██████╔╝[/]
+  [#D52734]╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝[/]
+
+banner_hero: |
+  [bold #D52734]           .-~~~~~~~~~~~~-.           [/]
+  [bold #D52734]       _.-'      ___       '-._       [/]
+  [#FFE9D6]       /       .-'___'-.        \      [/]
+  [#FFE9D6]      |       /  ◉   ◉  \        |     [/]
+  [#FFE9D6]      |       |    ᴗ    |        |     [/]
+  [#EF8A22]       \       \  ───  /        /      [/]
+  [#EF8A22]        '._      '---'      _.'       [/]
+  [dim #7C82AD]             ROBOT ENGINEER             [/]

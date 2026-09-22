@@ -1,0 +1,77 @@
+# XcodeGen spec — `brew install xcodegen && xcodegen generate` produces Robo.xcodeproj.
+name: Robo
+options:
+  bundleIdPrefix: com.igniteenow
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "3.0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""            # set your Apple Developer Team ID
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+targets:
+  Robo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Robo
+      - path: Robo/Resources
+        type: folder
+        buildPhase: resources
+    info:
+      path: Robo/Info.plist
+      properties:
+        CFBundleDisplayName: Robo
+        CFBundleName: Robo
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSMicrophoneUsageDescription: Robo listens only while you hold the microphone button, to turn your voice into a request.
+        NSSpeechRecognitionUsageDescription: Robo transcribes your voice on-device (or via Apple's service when on-device recognition is unavailable) to send it as text.
+        NSCameraUsageDescription: Robo uses the camera only to scan the pairing QR code shown by `robo serve`.
+        NSLocalNetworkUsageDescription: Robo connects to your Robo gateway on the local network when you pair with a LAN address.
+        NSRemindersFullAccessUsageDescription: Robo reads and creates reminders only when you ask it to, for example "remind me to call the bank tomorrow".
+        NSCalendarsFullAccessUsageDescription: Robo reads and creates calendar events only when you ask it to, for example "what is on my calendar Friday".
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSBonjourServices: [_robo-gateway._tcp]
+        UIBackgroundModes: [audio]
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.igniteenow.robo
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies: []
+  RoboTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RoboTests
+    dependencies:
+      - target: Robo
+schemes:
+  Robo:
+    build:
+      targets:
+        Robo: all
+        RoboTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [RoboTests]
+    archive:
+      config: Release
