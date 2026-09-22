@@ -4,7 +4,7 @@
     python3 assets/brand/build_icons.py
 
 One source of truth (`assets/brand/robo-mark.svg`) feeds the desktop app, the
-bootstrap installer, the web dashboard, the docs site and the iOS app, so the
+bootstrap installer, the web dashboard and the docs site, so the
 product can never drift into showing two different logos.
 
 Requirements: Pillow (`pip install pillow`) and the `sharp` npm package for SVG
@@ -43,7 +43,6 @@ PNG_TARGETS = [
     ("apps/bootstrap-installer/src-tauri/icons/32x32.png", 32, "tile"),
     ("apps/bootstrap-installer/src-tauri/icons/128x128.png", 128, "tile"),
     ("apps/bootstrap-installer/src-tauri/icons/128x128@2x.png", 256, "tile"),
-    ("apps/ios/Robo/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png", 1024, "bleed"),
     ("website/static/img/apple-touch-icon.png", 180, "bleed"),
     ("website/static/img/favicon-16x16.png", 16, "tile"),
     ("website/static/img/favicon-32x32.png", 32, "tile"),

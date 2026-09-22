@@ -3,7 +3,7 @@
 One visual system for every command screen — ``robo setup``, ``robo gateway``,
 ``robo model``, ``robo tools``, ``robo skills``, ``robo doctor`` — so first-run
 configuration looks like the same product as the chat, the desktop app and the
-iPhone app.
+mobile app.
 
 The identity, from the Ignitee Now logo (``assets/brand/BRAND.md``):
 

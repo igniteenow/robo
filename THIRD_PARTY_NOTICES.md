@@ -2,7 +2,7 @@
 
 Robo is developed, branded, and maintained by **Ignitee Now**. The product
 identity, wake models, face, installers, defaults, terminal experience, desktop
-experience, and iOS app are Ignitee Now's own.
+experience are Ignitee Now's own.
 
 This file is the single place where third-party origin and credit are recorded.
 Keeping it here, rather than scattered through source comments, keeps the
@@ -66,7 +66,7 @@ third party. `tests/test_first_party_ui.py` fails the build if that changes.
 ## Fonts
 
 - **Poppins** is Robo's brand typeface across the dashboard, desktop app, docs
-  site, login page and iOS app. It is distributed under the SIL Open Font
+  site and login page. It is distributed under the SIL Open Font
   License 1.1, which permits bundling and embedding in commercial software.
   Its two conditions: the licence text must travel with the font files (it
   does, as `OFL.txt` beside every copy), and the fonts may not be sold on

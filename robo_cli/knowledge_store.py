@@ -5,7 +5,7 @@ Documents are split into overlapping chunks and indexed in SQLite's built-in
 full-text engine (FTS5, BM25 ranking). Nothing is sent anywhere, nothing is
 downloaded, and there is no new dependency: it works offline on every OS Robo
 runs on, and it works the same from the TUI, the desktop app, the dashboard and
-the iPhone app because they all reach the same store through the gateway.
+the mobile app because they all reach the same store through the gateway.
 
 Any size: files are read in blocks and indexed chunk by chunk inside a single
 transaction, so a 2 GB log takes time but never takes memory. The agent then

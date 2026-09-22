@@ -13,7 +13,7 @@
  *   4. Each directive is dispatched to the appropriate callback.
  *
  * Keeping the pipeline here (instead of inline in ChatPage) lets future
- * clients (SwiftUI, Android) implement the same logic by reading the same
+ * clients (mobile apps) implement the same logic by reading the same
  * contract.
  */
 

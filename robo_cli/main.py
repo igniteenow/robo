@@ -10214,7 +10214,7 @@ def _print_mobile_pairing(args) -> None:
     scheme = "https" if getattr(args, "ssl_certfile", None) or getattr(args, "https", False) else "http"
     base = f"{scheme}://{host}:{port}"
     pairing = "robo://pair?" + urlencode({"url": base, "token": token})
-    ui.title("Serve", "Robo iOS pairing", hero_art=True)
+    ui.title("Serve", "Robo mobile pairing", hero_art=True)
     ui.kvs([("Gateway", base), ("Pairing", pairing)])
     try:
         import qrcode  # optional (messaging extra)
@@ -10433,7 +10433,7 @@ def cmd_dashboard(args):
         # below) to disable it even if a stray dist exists. Set it first.
         os.environ["ROBO_SERVE_HEADLESS"] = "1"
         if getattr(args, "pair", False):
-            # Robo iOS pairing: pin the session token for this process so the
+            # Robo mobile pairing: pin the session token for this process so the
             # printed string stays valid, and show it as a QR the phone scans.
             _print_mobile_pairing(args)
     elif "ROBO_WEB_DIST" not in os.environ and not getattr(args, "skip_build", False):

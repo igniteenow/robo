@@ -152,7 +152,7 @@ def build_dashboard_parser(
     serve_parser.add_argument(
         "--pair",
         action="store_true",
-        help="Print a pairing string + QR code for the Robo iOS app (robo://pair?url=…&token=…)",
+        help="Print a pairing string + QR code for the Robo mobile app (robo://pair?url=…&token=…)",
     )
     serve_parser.add_argument(
         "--ssh-session-token-file",
