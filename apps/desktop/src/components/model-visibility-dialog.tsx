@@ -9,12 +9,12 @@ import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { GlyphSpinner } from '@/components/ui/glyph-spinner'
 import { HighlightMatches } from '@/components/ui/highlight-matches'
 import { Switch } from '@/components/ui/switch'
-import type { RoboGateway } from '@/robo'
 import { useI18n } from '@/i18n'
 import { Search } from '@/lib/icons'
 import { modelOptionsQueryKey, requestModelOptions } from '@/lib/model-options'
 import { displayModelName, modelDisplayParts } from '@/lib/model-status-label'
 import { normalize } from '@/lib/text'
+import type { RoboGateway } from '@/robo'
 import {
   $visibleModels,
   collapseModelFamilies,

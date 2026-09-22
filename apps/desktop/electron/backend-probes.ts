@@ -213,9 +213,9 @@ export {
   canImportRoboCli,
   DEFAULT_PROBE_TIMEOUT_MS,
   execProbeSync,
-  roboRuntimeImportProbe,
   PROBE_TIMEOUT_MS,
   resolveProbeTimeoutMs,
+  roboRuntimeImportProbe,
   shouldTrustRoboOverride,
   verifyRoboCli
 }

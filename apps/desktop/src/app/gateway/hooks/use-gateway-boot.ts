@@ -2,10 +2,10 @@ import { isGatewayReauthRequired, resolveGatewayWsUrl } from '@robo/shared'
 import { useEffect, useRef } from 'react'
 
 import type { RoboConnection } from '@/global'
-import { RoboGateway } from '@/robo'
 import { translateNow } from '@/i18n'
 import { desktopDefaultCwd } from '@/lib/desktop-fs'
 import { reconnectBackoffDelayMs } from '@/lib/reconnect-backoff'
+import { RoboGateway } from '@/robo'
 import {
   $desktopBoot,
   applyDesktopBootProgress,

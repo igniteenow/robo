@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { getRoboConfigRecord } from '@/robo'
 import { queryClient, writeCache } from '@/lib/query-client'
+import { getRoboConfigRecord } from '@/robo'
 import type { RoboConfigRecord } from '@/types/robo'
 
 // One shared cache for the whole profile config record (`GET /api/config`).

@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 
-import type { RoboGateway } from '@/robo'
 import type { IconComponent } from '@/lib/icons'
+import type { RoboGateway } from '@/robo'
 import type { EnvVarInfo } from '@/types/robo'
 
 export type SettingsView =

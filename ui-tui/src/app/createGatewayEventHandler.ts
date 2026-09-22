@@ -1,5 +1,4 @@
 import { execFile } from 'child_process'
-import { consumeLocalUserEcho } from './submissionCore.js'
 
 import { forceRedraw, onTerminalBackground, onTerminalForeground } from '@robo/ink'
 
@@ -31,6 +30,7 @@ import { applyDelegationStatus, getDelegationState } from './delegationStore.js'
 import type { GatewayEventHandlerContext } from './interfaces.js'
 import { getOverlayState, patchOverlayState } from './overlayStore.js'
 import { flashGoodVibes, flashPet } from './petFlashStore.js'
+import { consumeLocalUserEcho } from './submissionCore.js'
 import { turnController } from './turnController.js'
 import { getTurnState, patchTurnState } from './turnStore.js'
 import { getUiState, patchUiState } from './uiStore.js'
@@ -790,6 +790,7 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
 
         return
       }
+
       case 'status.update': {
         const p = ev.payload
 

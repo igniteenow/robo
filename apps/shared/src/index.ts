@@ -60,9 +60,9 @@ export {
   GatewayReauthRequiredError,
   type GatewayWsConnection,
   type GatewayWsUrlResult,
-  type RoboWebSocketUrlOptions,
   isGatewayReauthRequired,
   resolveGatewayWsUrl,
   type ResolveGatewayWsUrlDeps,
+  type RoboWebSocketUrlOptions,
   type WebSocketAuthParam
 } from './websocket-url'

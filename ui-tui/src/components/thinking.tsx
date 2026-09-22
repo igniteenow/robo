@@ -1068,8 +1068,10 @@ export const ToolTrail = memo(function ToolTrail({
     // stays one line per turn while still showing what Robo is doing —
     // click (or `/details expanded`) to unfold every call and its result.
     const latest = groups[groups.length - 1]
+
     const liveSuffix =
       !openTools && busy && latest ? `${latest.label}${latest.elapsed ? ` (${latest.elapsed})` : ''}` : undefined
+
     const toolsSuffix = liveSuffix ? (toolTokensLabel ? `${liveSuffix}  ${toolTokensLabel}` : liveSuffix) : toolTokensLabel
 
     panels.push({

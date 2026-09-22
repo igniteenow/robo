@@ -13,9 +13,9 @@ import type {
   DesktopUpdateStatus,
   DesktopVersionInfo
 } from '@/global'
-import { checkRoboUpdate, getActionStatus, updateRobo } from '@/robo'
 import { translateNow } from '@/i18n'
 import { persistString, storedString } from '@/lib/storage'
+import { checkRoboUpdate, getActionStatus, updateRobo } from '@/robo'
 import { dismissNotification, notify } from '@/store/notifications'
 import { $connection } from '@/store/session'
 import type { BackendUpdateCheckResponse } from '@/types/robo'

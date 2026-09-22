@@ -9,14 +9,20 @@ export function emotionForPetState(state: PetState): RoboEmotion {
   switch (state) {
     case 'failed':
       return 'sad'
+
     case 'review':
+
     case 'waiting':
       return 'confused'
+
     case 'run':
       return 'surprised'
+
     case 'jump':
+
     case 'wave':
       return 'happy'
+
     default:
       return 'neutral'
   }

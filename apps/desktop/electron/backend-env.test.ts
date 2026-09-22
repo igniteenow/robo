@@ -7,10 +7,10 @@ import {
   appendUniquePathEntries,
   buildDesktopBackendEnv,
   buildDesktopBackendPath,
-  roboManagedNodePathEntries,
   normalizeRoboHomeRoot,
   pathEnvKey,
-  POSIX_SANE_PATH_ENTRIES
+  POSIX_SANE_PATH_ENTRIES,
+  roboManagedNodePathEntries
 } from './backend-env'
 
 test('desktop backend PATH adds Robo-managed bins and missing POSIX sane entries', () => {

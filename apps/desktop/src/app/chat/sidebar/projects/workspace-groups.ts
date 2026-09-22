@@ -1,6 +1,6 @@
 import type { RoboGitWorktree } from '@/global'
-import type { ProjectInfo, SessionInfo } from '@/robo'
 import { normalize } from '@/lib/text'
+import type { ProjectInfo, SessionInfo } from '@/robo'
 
 // Session grouping is now computed authoritatively on the backend
 // (`tui_gateway/project_tree.py`, exposed via `projects.tree` /

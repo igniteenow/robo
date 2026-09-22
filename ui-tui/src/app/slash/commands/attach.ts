@@ -33,6 +33,7 @@ interface KnowledgeListResponse {
 const unquote = (raw: string): string => {
   const text = raw.trim()
   const quoted = /^(['"])(.*)\1$/.exec(text)
+
   return (quoted ? quoted[2] : text).replace(/\\ /g, ' ')
 }
 
@@ -43,9 +44,11 @@ const runAdd = (path: string, ctx: SlashRunCtx): void => {
     .then(
       ctx.guarded<KnowledgeAddResponse>(r => {
         const doc = r.indexed
+
         if (!doc) {
           return ctx.transcript.sys('attach: nothing was indexed')
         }
+
         const parts = doc.chunks === 1 ? '1 part' : `${doc.chunks ?? 0} parts`
         ctx.transcript.sys(
           `attach: indexed ${doc.title ?? path} · ${doc.size ?? ''} · ${parts}. Ask about it; Robo will quote the passages it uses.`
@@ -61,9 +64,11 @@ const runList = (ctx: SlashRunCtx): void => {
     .then(
       ctx.guarded<KnowledgeListResponse>(r => {
         const docs = r.documents ?? []
+
         if (docs.length === 0) {
           return ctx.transcript.sys('knowledge base: empty. Usage: /attach <file> (drag a file onto the terminal to paste its path)')
         }
+
         const lines = docs.slice(0, 20).map(d => `  ${d.title ?? d.source ?? '?'} · ${d.size ?? ''} · ${d.chunks ?? 0} parts · ${d.added_at ?? ''}`)
         const more = docs.length > 20 ? `\n  … and ${docs.length - 20} more` : ''
         ctx.transcript.sys(`knowledge base: ${docs.length} document${docs.length === 1 ? '' : 's'}\n${lines.join('\n')}${more}`)
@@ -79,9 +84,11 @@ export const attachCommands: SlashCommand[] = [
     name: 'attach',
     run: (arg, ctx) => {
       const path = unquote(arg)
+
       if (!path) {
         return runList(ctx)
       }
+
       runAdd(path, ctx)
     },
     usage: '/attach <path>'

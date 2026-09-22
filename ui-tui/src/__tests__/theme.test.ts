@@ -52,7 +52,7 @@ describe('DEFAULT_THEME', () => {
     const { DEFAULT_THEME } = await importThemeWithCleanEnv()
 
     expect(DEFAULT_THEME.color.primary).toBe('#8E8CE0')
-    expect(DEFAULT_THEME.color.error).toBe('#FF4D5E')
+    expect(DEFAULT_THEME.color.error).toBe('#F0525F')
   })
 })
 

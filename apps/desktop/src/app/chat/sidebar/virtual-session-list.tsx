@@ -3,11 +3,11 @@ import { CSS } from '@dnd-kit/utilities'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { type FC, useCallback, useRef } from 'react'
 
-import type { SessionInfo } from '@/robo'
 import { useI18n } from '@/i18n'
 import { type SidebarListRow } from '@/lib/session-date-groups'
 import { sessionBucketLabel } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import type { SessionInfo } from '@/robo'
 import { sessionPinId } from '@/store/session'
 
 import { SidebarDateDivider } from './chrome'

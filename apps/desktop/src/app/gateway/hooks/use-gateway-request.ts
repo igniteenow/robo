@@ -1,5 +1,5 @@
-import { isGatewayReauthRequired, resolveGatewayWsUrl } from '@robo/shared'
 import { useStore } from '@nanostores/react'
+import { isGatewayReauthRequired, resolveGatewayWsUrl } from '@robo/shared'
 import { useCallback, useEffect, useRef } from 'react'
 
 import type { RoboGateway } from '@/robo'

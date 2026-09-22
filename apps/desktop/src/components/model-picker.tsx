@@ -8,8 +8,8 @@ import { currentPickerSelection } from '@/lib/model-status-label'
 import { normalize } from '@/lib/text'
 import type { ModelOptionProvider, ModelPricing } from '@/types/robo'
 
-import type { RoboGateway } from '../robo'
 import { cn } from '../lib/utils'
+import type { RoboGateway } from '../robo'
 import { startManualOnboarding } from '../store/onboarding'
 
 import { InlineNotice } from './notifications'

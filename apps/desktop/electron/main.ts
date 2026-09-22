@@ -35,7 +35,7 @@ import { classifyActiveRuntime } from './active-runtime-state'
 import { stopBackendChild as stopBackendChildImpl } from './backend-child'
 import { dashboardFallbackArgs, sourceDeclaresServe } from './backend-command'
 import { createBackendConnectionState } from './backend-connection-state'
-import { buildDesktopBackendEnv, roboManagedNodePathEntries, normalizeRoboHomeRoot } from './backend-env'
+import { buildDesktopBackendEnv, normalizeRoboHomeRoot, roboManagedNodePathEntries } from './backend-env'
 import { isReauthRequiredError, waitForRoboReady } from './backend-health'
 import {
   canImportRoboCli,
@@ -217,17 +217,17 @@ import {
 } from './window-state'
 import { hiddenWindowsChildOptions } from './windows-child-options'
 import {
-  buildPathExtCandidates,
-  chooseUpdaterArgs,
-  getVenvSitePackagesEntries,
-  resolveVenvRoboCommand
-} from './windows-robo-path'
-import {
   buildWindowsInteractiveCommand,
   connectWindowsRemote,
   detectRemotePlatform,
   helper
 } from './windows-remote-lifecycle'
+import {
+  buildPathExtCandidates,
+  chooseUpdaterArgs,
+  getVenvSitePackagesEntries,
+  resolveVenvRoboCommand
+} from './windows-robo-path'
 import {
   alreadyHasNoSandbox,
   buildNoSandboxRelaunchArgs,

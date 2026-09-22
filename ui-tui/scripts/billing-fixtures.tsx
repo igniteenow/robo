@@ -227,9 +227,11 @@ const arg = process.argv[2]
 if (!arg || arg === '--list' || arg === '-l') {
   const names = Object.keys(FIXTURES)
   process.stdout.write('Billing/Subscription TUI fixtures:\n\n')
+
   for (const name of names) {
     process.stdout.write(`  ${name.padEnd(18)} ${FIXTURES[name]!.desc}\n`)
   }
+
   process.stdout.write(`\n  ${names.length} fixtures. Run:  npx tsx scripts/billing-fixtures.tsx <name>\n`)
   process.exit(0)
 }

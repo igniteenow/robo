@@ -106,6 +106,7 @@ export function Banner({ maxWidth, t }: { maxWidth?: number; t: Theme }) {
   }
 
   const isRobo = t.brand.name.trim().toLowerCase() === 'robo'
+
   const tagline = (
     <Text wrap="truncate-end">
       <Text color={t.color.muted}>{TAGLINE}</Text>
@@ -267,12 +268,14 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
   const modelShort = info.model.split('/').pop() ?? info.model
   const ruleWidth = Math.max(8, Math.min(w, 100) - 2)
   const half = Math.max(24, Math.floor((Math.min(w, 100) - 4) / 2))
+
   const inventory =
     (info.lazy && !toolsTotal ? '\u2026' : `${toolsTotal}`) +
     ' tools \u00b7 ' +
     (info.lazy && !skillsTotal ? '\u2026' : `${skillsTotal}`) +
     ' skills' +
     (mcpConnected ? ` \u00b7 ${mcpConnected} MCP` : '')
+
   const thinking = contextMax
     ? `${contextMax.toLocaleString()} tokens`
     : info.reasoning_effort

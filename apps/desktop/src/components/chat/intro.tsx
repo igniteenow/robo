@@ -1,7 +1,7 @@
 import { type CSSProperties, useState } from 'react'
 
-import { capitalize, normalize } from '@/lib/text'
 import { RoboLiveFace } from '@/components/robo/robo-face'
+import { capitalize, normalize } from '@/lib/text'
 
 import introCopyJsonl from './intro-copy.jsonl?raw'
 

@@ -197,13 +197,13 @@ export { Textarea } from '@/components/ui/textarea'
 export { Tip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 export type { GatewayEventListener } from '@/contrib/events'
 export type {
-  RoboPlugin,
   PluginContext,
   PluginContribution,
   PluginNativeNotificationInput,
   PluginOs,
   PluginRestOptions,
-  PluginStorage
+  PluginStorage,
+  RoboPlugin
 } from '@/contrib/plugin'
 
 // -- contracts ----------------------------------------------------------------

@@ -14,12 +14,12 @@ import './kanban.css'
 import {
   cn,
   Codicon,
-  type RoboPlugin,
   host,
   type KeybindContribution,
   KEYBINDS_AREA,
   PALETTE_AREA,
   type PaletteContribution,
+  type RoboPlugin,
   type RouteContribution,
   ROUTES_AREA,
   SIDEBAR_NAV_AREA,

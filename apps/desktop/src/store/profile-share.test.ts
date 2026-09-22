@@ -50,14 +50,14 @@ afterEach(() => {
 
 describe('buildDesktopOverlay', () => {
   it('snapshots skin, mode, rail color, and the layout tree for the profile', () => {
-    skinPref.assign('glam', 'mono')
+    skinPref.assign('glam', 'contrast')
     modePref.assign('glam', 'dark')
     setProfileColor('glam', '#e91e63')
 
     const overlay = buildDesktopOverlay('glam')
 
     expect(overlay.version).toBe(1)
-    expect(overlay.skin).toBe('mono')
+    expect(overlay.skin).toBe('contrast')
     expect(overlay.mode).toBe('dark')
     expect(overlay.profileColor).toBe('#e91e63')
     // Built-in skin → no bundled theme definitions.
@@ -112,7 +112,7 @@ describe('applyDesktopOverlay', () => {
 
 describe('exportProfileBundle', () => {
   it('stages desktop.json into the archive through extra_files', async () => {
-    skinPref.assign('glam', 'mono')
+    skinPref.assign('glam', 'contrast')
 
     const archive = await exportProfileBundle('glam', '/tmp/glam.tar.gz')
 
@@ -120,7 +120,7 @@ describe('exportProfileBundle', () => {
     const call = vi.mocked(exportProfileArchive).mock.calls[0]
     expect(call[0]).toBe('glam')
     const overlay = JSON.parse(call[1]?.extraFiles?.['desktop.json'] ?? '{}') as ProfileDesktopOverlay
-    expect(overlay.skin).toBe('mono')
+    expect(overlay.skin).toBe('contrast')
     expect(call[1]?.output).toBe('/tmp/glam.tar.gz')
   })
 })

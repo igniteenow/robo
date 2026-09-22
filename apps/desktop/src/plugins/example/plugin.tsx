@@ -22,12 +22,12 @@ import {
   atom,
   cn,
   haptic,
-  type RoboPlugin,
   host,
   type KeybindContribution,
   KEYBINDS_AREA,
   PALETTE_AREA,
   type PaletteContribution,
+  type RoboPlugin,
   STATUSBAR_AREAS,
   Tip,
   useValue

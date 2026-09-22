@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 
-import { getSessionMessages, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS } from '@/robo'
 import { toChatMessages } from '@/lib/chat-messages'
+import { getSessionMessages, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS } from '@/robo'
 import { publishSessionState, setSessionTileDelegate } from '@/store/session-states'
 import type { SessionResumeResponse } from '@/types/robo'
 
