@@ -289,8 +289,7 @@ fix(security): prevent shell injection in sudo password piping
 
 ## Community
 
-- **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions)
-- **GitHub Discussions**: For design proposals and architecture discussions
+- **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions) — questions, showcasing projects, sharing skills, design proposals and architecture discussions
 - **Skills Hub**: Upload specialized skills and share with the community
 
 ## License

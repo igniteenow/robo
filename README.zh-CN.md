@@ -147,7 +147,6 @@ python -m pytest tests/ -q
 - 💬 [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
 - 📚 [技能中心](https://agentskills.io)
 - 🐛 [问题反馈](https://github.com/igniteenow/robo/issues)
-- 💡 [讨论区](https://github.com/igniteenow/robo/discussions)
 
 ---
 

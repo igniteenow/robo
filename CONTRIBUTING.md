@@ -998,8 +998,7 @@ test(tools): add unit tests for file_operations
 
 ## Community
 
-- **Community**: [GitHub Discussions](https://github.com/igniteenow/robo/discussions) — for questions, showcasing projects, and sharing skills
-- **GitHub Discussions**: For design proposals and architecture discussions
+- **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions) — questions, showcasing projects, sharing skills, design proposals and architecture discussions
 - **Skills Hub**: Upload specialized skills to a registry and share them with the community
 
 ---

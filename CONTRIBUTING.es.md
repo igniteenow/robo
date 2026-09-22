@@ -591,8 +591,7 @@ test(tools): añadir tests unitarios para file_operations
 
 ## Comunidad
 
-- **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions) — para preguntas, mostrar proyectos y compartir habilidades
-- **GitHub Discussions**: Para propuestas de diseño y discusiones de arquitectura
+- **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions) — para preguntas, mostrar proyectos, compartir habilidades, propuestas de diseño y discusiones de arquitectura
 - **Skills Hub**: Sube habilidades especializadas a un registro y compártelas con la comunidad
 
 ---
