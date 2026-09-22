@@ -1,110 +1,105 @@
-# Robo
+What Robo is
 
-**Robo is the AI security engineer that lives on your desktop — built by
-[Ignitee Now](https://igniteenow.com).**
+Robo is an autonomous AI agent focused on security and engineering work. It runs entirely on your computer — nothing is uploaded to any hosted service — and connects to the AI model of your choice (OpenAI, Anthropic, DeepSeek, Kimi, OpenRouter, a local model via Ollama, and more). You bring an API key or a local model; Robo brings the tools, the memory, the voice, and the safety rails.
 
-Say **"Hey Roh Boh"** and it wakes up: a cross-platform desktop robot and
-autonomous engineering workspace that browses, writes and runs code, does deep
-research, reverse-engineers binaries, builds its own tools, and remembers
-everything across long sessions. It combines a professional terminal UI, a
-native desktop app with an animated face, voice, durable conversations, skills,
-memory, automation, and real tool execution.
+Ignitee Now is a cybersecurity company that builds AI-powered penetration testing and proactive defense for small and midsize businesses. Robo is the engineering agent behind that work, released as open source so anyone can run, inspect, and extend it.
 
-Ignitee Now builds AI-powered penetration testing and proactive security for
-small and midsize businesses — defending against attacks before they become
-threats. Robo is the same engineering agent that powers that work, released as
-open source so anyone can download it and run it.
+What Robo does:
+Talks and listens. A hands-free wake word ("Hey Roh Boh"), voice input, and spoken replies. All transcription runs locally by default.
+Reads any file, any size. Attach a PDF, Word doc, spreadsheet, or a multi-gigabyte log with /attach; Robo indexes it locally and answers questions by quoting the exact passages — no upload, no size limit.
+Runs real tools. Terminal commands, file editing, ripgrep search, a full browser, background processes, and code execution — with your approval on anything consequential.
+Does security work. Reconnaissance, threat analysis, reverse-engineering of binaries (static analysis, never executing the target), and exploit research are treated as legitimate engineering tasks, not refused by topic.
+Remembers and improves. Persistent memory across sessions, searchable history, and reusable skills it can create and refine over time.
+Works across surfaces. A polished terminal UI, a native desktop app with an animated face, a web dashboard, and messaging platforms (Telegram, Discord, Slack, and more).
+Automates. Scheduled jobs, parallel sub-agents for isolated workstreams, and multi-model "mixture of agents" mode.
+Install
 
-Robo provides its own product identity, operating behavior, face, wake models,
-installers, defaults, terminal experience, and desktop experience. Required
-third-party license records are kept separately in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+Robo keeps all your data under ~/.robo. An existing .env, config, memory, skill, or asset is never overwritten.
 
-## Robo for iOS
-
-`apps/ios` is a native SwiftUI app (iOS 17+). Run Robo **on the phone** with your own
-API key (web research, files, real JavaScript execution, memory, reminders, calendar;
-same SOUL.md, same deep-thinking posture, same approval barrier), or **pair it with a
-computer** running `robo serve --pair` for the full toolset. See `apps/ios/README.md`.
-
-## What this build does
-
-- Starts with one command: `robo`.
-- Provides a full-screen streaming TUI with progress, tool calls, session
-  steering, history, and dangerous-action approval choices.
-- Provides a native Robo desktop app with the supplied animated face and
-  emotion/state changes for listening, thinking, working, success, approval,
-  and failure.
-- Uses OpenAI, Anthropic/Claude, Kimi, DeepSeek, OpenRouter, Ollama and other
-  OpenAI-compatible local or hosted models through the model wizard.
-- Executes routine reversible engineering actions without repeatedly asking;
-  dangerous or destructive actions use Allow once, Allow for session, permanent
-  allowlist, Deny, and full-command review.
-- Supports long-running sessions, checkpoints, conversation search, memory,
-  reusable skills, task continuation, parallel sub-work, browser and terminal
-  tools, and local/SSH/container/sandbox execution backends.
-- Bundles the exact ONNX and TFLite wake models supplied for “Hey Roh Boh”. The
-  default openWakeWord path is ONNX-only on Linux, avoiding the unavailable
-  `tflite-runtime` dependency that broke Python 3.13 Kali installs.
-
-Robo reports observed results and tool evidence; no LLM can honestly guarantee
-zero hallucinations, so important actions are configured to be verified.
-
-## Install
-
-Unzip the release into a new directory, then follow [`INSTALL.md`](INSTALL.md).
-Robo keeps operator data under `~/.robo` by default. An existing `.env`, config,
-memory, skill, or asset is never overwritten by bootstrap.
-
-### Linux, Kali, macOS, WSL
-
-```bash
+Linux · Kali · macOS · WSL
+bash
 cd robo
 bash install-robo.sh
-robo model
-robo
-```
+robo model      # choose a model and enter its API key
+robo            # start
 
-### Windows PowerShell
+On Linux, microphone capture also needs the system audio library: sudo apt install libportaudio2 (Debian/Kali/Ubuntu).
 
-```powershell
+Windows (PowerShell)
+powershell
 cd robo
 Set-ExecutionPolicy -Scope Process Bypass
 .\install-robo.ps1
 robo model
 robo
-```
 
-## First commands
+The installer sets up Python, a managed Node runtime if needed, and the optional hands-free voice stack. If a voice component has no package for your platform, Robo still installs — run robo doctor afterward to see exactly what, if anything, is missing and how to add it.
 
-```text
-robo                 Open the professional terminal UI
-robo model           Choose a cloud or local model and enter its API key
-robo desktop         Build and launch the native desktop Robo interface
-robo status          Show runtime status
-robo assets          Show the installed face and wake-model paths
-robo --robo-version  Show Robo and pinned runtime versions
-```
+First steps
+Command	What it does
+robo	Open the terminal interface
+robo model	Choose a cloud or local model and enter its API key
+robo desktop	Build and launch the native desktop app
+robo dashboard	Open the web dashboard in your browser
+robo doctor	Check your setup and report anything missing
+robo status	Show runtime status
+robo --robo-version	Show the Robo and runtime versions
 
-Inside the TUI, enter `/wake on` to arm the supplied **Hey Roh Boh** model.
-Press `Ctrl+B` for push-to-talk. Paste with the visible **[PASTE]** control,
-`Ctrl+V`/`Cmd+V`, or right-click in the composer. Use `/help` for the complete
-command list.
+Inside the terminal interface:
 
-## Mission approvals
+/wake on arms "Hey Roh Boh" (off by default, for privacy). Say the phrase, then speak your task.
+/attach <file> adds a document to the knowledge base — drag a file onto the terminal to paste its path. /attach alone lists what's indexed.
+Ctrl+B is push-to-talk.
+/help lists every command.
+Make Robo yours
 
-Robo does not reject security engineering, pentesting, bug-bounty research,
-reconnaissance, or exploit-development tasks merely because of their topic.
-When a concrete operation is consequential, the terminal, desktop UI, and
-spoken interface present the same three choices: **Allow once**, **Allow for
-this session**, or **Deny**. A session grant unlocks later guarded operations
-for that live mission, so Robo can continue without repeatedly interrupting the
-operator. The action feed still shows commands, targets, progress, and results.
+Robo is meant to be shaped. Everything that gives it an identity, a memory of you, and new abilities lives as plain files under ~/.robo/, created for you on first run. Edit them with any text editor.
 
-## Release status
+Identity — ~/.robo/SOUL.md
 
-`3.0.1` is a source release, not a signed public installer. The Python, Robo bootstrap, TUI, desktop renderer, wake-model
-packaging, dependency audit, and isolated Windows installer path are tested.
-Hardware microphone/speaker availability, display drivers, GPU acceleration,
-and package-manager behavior still depend on the target machine and must be
-validated on the actual robot hardware before unattended deployment.
+SOUL.md is Robo's character and operating rules: how it talks, how cautious it is, what it prioritises. It's loaded into every session. Change it and you change who Robo is — a terse security operator, a patient teacher, a house style, whatever you need. A default is written on first run; edit it directly, or ask Robo to "update your SOUL to be more concise" and it will edit the file for you.
+
+What Robo knows about you — ~/.robo/USER.md and ~/.robo/MEMORY.md
+USER.md holds durable facts about you: your name, stack, preferences, the way you like answers. Robo reads it every session so you don't repeat yourself.
+MEMORY.md is Robo's own long-term memory of the environment and the work. Robo writes to it automatically with the memory tool as it learns things worth keeping, and you can edit it by hand too.
+
+You can also just tell Robo "remember that I deploy on Fridays" and it saves it.
+
+Abilities — skills in ~/.robo/skills/
+
+A skill is a folder with a SKILL.md inside it: a reusable procedure Robo follows for a kind of task (a recon checklist, a report format, a deploy routine). Robo loads them automatically and applies the right one when it fits.
+
+Create one:
+
+bash
+robo skills create recon-checklist -d "My standard reconnaissance steps"
+# scaffolds ~/.robo/skills/custom/recon-checklist/SKILL.md — edit it, and Robo will use it
+robo skills list            # see what's installed
+robo skills search <term>   # find community skills
+robo skills install <name>  # add one
+
+You can also just ask Robo to "save this as a skill" after it does something you want repeated, and it writes the SKILL.md for you.
+
+Give Robo a document — the knowledge base
+
+Anything you /attach (see First steps) is indexed under ~/.robo/knowledge/ and searchable forever — your reports, a codebase, a stack of PDFs. Robo pulls the relevant passages into a task instead of you pasting them.
+
+All of these are just files on your machine. Back up ~/.robo/, copy it to another computer, or put it in version control — that's your entire Robo, identity and memory and skills included.
+
+How Robo handles risky actions
+
+Robo does not refuse security tasks by topic. But when a specific operation is consequential — deleting files, running a destructive command, hitting a live target — the terminal, desktop, and voice interfaces all present the same choice: Allow once, Allow for this session, or Deny. A session grant lets a live mission continue without repeated prompts. Every command, target, and result stays visible in the action feed.
+
+No language model can honestly promise zero mistakes, so Robo is built to report what it actually observed and to verify consequential actions rather than assume them.
+
+Release status
+
+3.0.1 is a source release, not a signed public installer. The Python runtime, bootstrap, terminal UI, desktop renderer, wake-model packaging, and the Windows installer path are tested. Microphone and speaker availability, display drivers, GPU acceleration, and package-manager behavior depend on your machine and should be validated there before any unattended deployment. Run robo doctor after installing.
+
+License
+
+Robo is open source under the MIT License.
+
+Robo is built on the MIT-licensed Hermes Agent by Nous Research, refocused for security work by Ignitee Now, with additions including the knowledge base, voice input across surfaces, the brand and design system, and a number of reliability and safety fixes. The Robo name, logo, and first-party code are Ignitee Now's. Required third-party and upstream license records are kept in THIRD_PARTY_NOTICES.md.
+
+The Hermes model, if you use it, carries its own license terms (several Hermes models are built on Meta's Llama); review those before relying on it.
