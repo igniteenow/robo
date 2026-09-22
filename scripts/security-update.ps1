@@ -66,6 +66,8 @@ foreach ($dir in ($lockfiles | ForEach-Object { $_.DirectoryName })) {
     Write-Host "   -- $dir"
     Push-Location $dir
     try {
+        # Apply pin/override changes from package.json to the lockfile first.
+        npm install --package-lock-only --ignore-scripts 2>$null | Out-Null
         npm audit fix --package-lock-only --ignore-scripts 2>$null | Out-Null
         # A second pass picks up fixes that only become possible after the first.
         npm audit fix --package-lock-only --ignore-scripts 2>$null | Out-Null

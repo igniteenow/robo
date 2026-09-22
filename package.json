@@ -46,7 +46,9 @@
     "js-yaml": "4.3.1",
     "node-gyp": {
       "undici": "6.28.0"
-    }
+    },
+    "@vitest/mocker": "4.1.11",
+    "dompurify": "3.4.13"
   },
   "engines": {
     "node": ">=22.22.0",

@@ -74,7 +74,7 @@ Requires-Dist: setuptools==83.0.0; extra == "dev"
 Provides-Extra: messaging
 Requires-Dist: python-telegram-bot[webhooks]==22.6; extra == "messaging"
 Requires-Dist: discord.py[voice]==2.7.1; extra == "messaging"
-Requires-Dist: aiohttp==3.14.1; extra == "messaging"
+Requires-Dist: aiohttp==3.14.3; extra == "messaging"
 Requires-Dist: brotlicffi==1.2.0.1; extra == "messaging"
 Requires-Dist: slack-bolt==1.29.0; extra == "messaging"
 Requires-Dist: slack-sdk==3.43.0; extra == "messaging"
@@ -83,13 +83,13 @@ Provides-Extra: cron
 Provides-Extra: slack
 Requires-Dist: slack-bolt==1.29.0; extra == "slack"
 Requires-Dist: slack-sdk==3.43.0; extra == "slack"
-Requires-Dist: aiohttp==3.14.1; extra == "slack"
+Requires-Dist: aiohttp==3.14.3; extra == "slack"
 Provides-Extra: matrix
 Requires-Dist: mautrix[encryption]==0.21.0; extra == "matrix"
 Requires-Dist: aiosqlite==0.22.1; extra == "matrix"
 Requires-Dist: asyncpg==0.31.0; extra == "matrix"
 Requires-Dist: aiohttp-socks==0.11.0; extra == "matrix"
-Requires-Dist: aiohttp==3.14.1; extra == "matrix"
+Requires-Dist: aiohttp==3.14.3; extra == "matrix"
 Provides-Extra: wecom
 Requires-Dist: defusedxml==0.7.1; extra == "wecom"
 Provides-Extra: cli
@@ -122,12 +122,12 @@ Requires-Dist: mcp==1.28.1; extra == "mcp"
 Requires-Dist: starlette==1.3.1; extra == "mcp"
 Provides-Extra: nemo-relay
 Provides-Extra: homeassistant
-Requires-Dist: aiohttp==3.14.1; extra == "homeassistant"
+Requires-Dist: aiohttp==3.14.3; extra == "homeassistant"
 Provides-Extra: sms
-Requires-Dist: aiohttp==3.14.1; extra == "sms"
+Requires-Dist: aiohttp==3.14.3; extra == "sms"
 Provides-Extra: teams
 Requires-Dist: microsoft-teams-apps==2.0.13.4; extra == "teams"
-Requires-Dist: aiohttp==3.14.1; extra == "teams"
+Requires-Dist: aiohttp==3.14.3; extra == "teams"
 Provides-Extra: computer-use
 Requires-Dist: mcp==1.28.1; extra == "computer-use"
 Requires-Dist: starlette==1.3.1; extra == "computer-use"
