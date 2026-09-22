@@ -50,9 +50,9 @@ _UPDATE_CACHE_FILE = ".update_check"
 # commits cannot be counted" (shallow clones, embedded-revision builds).
 UPDATE_AVAILABLE_NO_COUNT = -1
 
-_UPSTREAM_REPO_URL = "https://github.com/IgniteeNow/robo-engineer.git"
-_OFFICIAL_REPO_CANONICAL = "github.com/igniteenow/robo-engineer"
-_RELEASE_URL_BASE = "https://github.com/IgniteeNow/robo-engineer/releases/tag"
+_UPSTREAM_REPO_URL = "https://github.com/IgniteeNow/Robo.git"
+_OFFICIAL_REPO_CANONICAL = "github.com/IgniteeNow/Robo"
+_RELEASE_URL_BASE = "https://github.com/IgniteeNow/Robo/releases/tag"
 
 _LOCAL_TIMEOUT = 5      # seconds; git commands that only read the local repo
 _NETWORK_TIMEOUT = 15   # seconds; fetch / ls-remote

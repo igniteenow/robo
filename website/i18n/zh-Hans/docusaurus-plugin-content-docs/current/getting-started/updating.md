@@ -123,7 +123,7 @@ tail -f ~/.robo/logs/update.log
 robo version
 ```
 
-与 [GitHub releases 页面](https://github.com/IgniteeNow/robo-engineer/releases) 上的最新版本进行比较。
+与 [GitHub releases 页面](https://github.com/IgniteeNow/Robo/releases) 上的最新版本进行比较。
 
 ### 从消息平台更新
 

@@ -36,7 +36,7 @@ The same OAuth bearer token is also reused by every direct-to-xAI surface in Rob
 - A browser available anywhere you can open the printed verification URL
 
 :::warning xAI may restrict OAuth API access by tier
-xAI's backend enforces its own allowlist on the OAuth API surface and has been seen to reject standard SuperGrok subscribers with `HTTP 403` (see issue [#26847](https://github.com/IgniteeNow/robo-engineer/issues/26847)) even though the in-app subscription is active. If OAuth login succeeds in the browser but inference returns 403, set `XAI_API_KEY` and switch to the API-key path (`provider: xai`) — that surface is not subject to the same gating today.
+xAI's backend enforces its own allowlist on the OAuth API surface and has been seen to reject standard SuperGrok subscribers with `HTTP 403` (see issue [#26847](https://github.com/IgniteeNow/Robo/issues/26847)) even though the in-app subscription is active. If OAuth login succeeds in the browser but inference returns 403, set `XAI_API_KEY` and switch to the API-key path (`provider: xai`) — that surface is not subject to the same gating today.
 :::
 
 ## Quick Start
@@ -205,7 +205,7 @@ For loopback-redirect providers (Spotify, MCP servers), see [OAuth over SSH / Re
 
 OAuth completed in the browser, tokens are saved, but inference or token refresh returns `HTTP 403` with a message similar to *"The caller does not have permission to execute the specified operation"*.
 
-This is **not** a stale-token problem — re-running `robo model` won't change it. xAI's backend has been seen to restrict OAuth API access to specific SuperGrok tiers despite the in-app subscription being active (issue [#26847](https://github.com/IgniteeNow/robo-engineer/issues/26847)).
+This is **not** a stale-token problem — re-running `robo model` won't change it. xAI's backend has been seen to restrict OAuth API access to specific SuperGrok tiers despite the in-app subscription being active (issue [#26847](https://github.com/IgniteeNow/Robo/issues/26847)).
 
 **Fix:** set `XAI_API_KEY` and switch to the API-key path:
 

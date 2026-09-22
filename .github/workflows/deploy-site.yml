@@ -40,7 +40,7 @@ jobs:
         run: curl -fsS --retry 3 --retry-delay 10 -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
 
   deploy-docs:
-    if: github.repository == 'IgniteeNow/robo-engineer'
+    if: github.repository == 'IgniteeNow/Robo'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:

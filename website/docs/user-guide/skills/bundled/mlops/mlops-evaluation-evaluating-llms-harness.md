@@ -483,13 +483,13 @@ code execution.
 
 ## Advanced topics
 
-**Benchmark descriptions**: See [references/benchmark-guide.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/benchmark-guide.md) for detailed description of all 60+ tasks, what they measure, and interpretation.
+**Benchmark descriptions**: See [references/benchmark-guide.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/benchmark-guide.md) for detailed description of all 60+ tasks, what they measure, and interpretation.
 
-**Custom tasks**: See [references/custom-tasks.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/custom-tasks.md) for creating domain-specific evaluation tasks.
+**Custom tasks**: See [references/custom-tasks.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/custom-tasks.md) for creating domain-specific evaluation tasks.
 
-**API evaluation**: See [references/api-evaluation.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/api-evaluation.md) for evaluating OpenAI, Anthropic, and other API models.
+**API evaluation**: See [references/api-evaluation.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/api-evaluation.md) for evaluating OpenAI, Anthropic, and other API models.
 
-**Multi-GPU strategies**: See [references/distributed-eval.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/distributed-eval.md) for data parallel and tensor parallel evaluation.
+**Multi-GPU strategies**: See [references/distributed-eval.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/distributed-eval.md) for data parallel and tensor parallel evaluation.
 
 ## Hardware requirements
 

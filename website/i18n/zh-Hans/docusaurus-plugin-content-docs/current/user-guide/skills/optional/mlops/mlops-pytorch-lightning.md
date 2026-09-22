@@ -334,11 +334,11 @@ trainer = L.Trainer(accelerator='gpu', devices=1)
 
 ## 进阶主题
 
-**回调**：参见 [references/callbacks.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/pytorch-lightning/references/callbacks.md)，了解 EarlyStopping、ModelCheckpoint、自定义回调及回调钩子（hook）。
+**回调**：参见 [references/callbacks.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/pytorch-lightning/references/callbacks.md)，了解 EarlyStopping、ModelCheckpoint、自定义回调及回调钩子（hook）。
 
-**分布式策略**：参见 [references/distributed.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/pytorch-lightning/references/distributed.md)，了解 DDP、FSDP、DeepSpeed ZeRO 集成及多节点配置。
+**分布式策略**：参见 [references/distributed.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/pytorch-lightning/references/distributed.md)，了解 DDP、FSDP、DeepSpeed ZeRO 集成及多节点配置。
 
-**超参数调优**：参见 [references/hyperparameter-tuning.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/pytorch-lightning/references/hyperparameter-tuning.md)，了解与 Optuna、Ray Tune 及 WandB sweeps 的集成。
+**超参数调优**：参见 [references/hyperparameter-tuning.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/pytorch-lightning/references/hyperparameter-tuning.md)，了解与 Optuna、Ray Tune 及 WandB sweeps 的集成。
 
 ## 硬件要求
 

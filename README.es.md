@@ -4,12 +4,12 @@
 
 # Robo Agent ◆
 <p align="center">
-  <a href="https://github.com/IgniteeNow/robo-engineer/tree/main/website/docs">Robo Agent</a> | <a href="https://github.com/IgniteeNow/robo-engineer/tree/main/website/docs">Robo Desktop</a>
+  <a href="https://github.com/IgniteeNow/Robo/tree/main/website/docs">Robo Agent</a> | <a href="https://github.com/IgniteeNow/Robo/tree/main/website/docs">Robo Desktop</a>
 </p>
 <p align="center">
   <a href="website/docs/index.mdx"><img src="https://img.shields.io/badge/Docs-in%20this%20repo-EF8A22?style=for-the-badge" alt="Documentación"></a>
-  <a href="https://github.com/IgniteeNow/robo-engineer/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
-  <a href="https://github.com/IgniteeNow/robo-engineer/blob/main/LICENSE"><img src="https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge" alt="Licencia: MIT"></a>
+  <a href="https://github.com/IgniteeNow/Robo/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
+  <a href="https://github.com/IgniteeNow/Robo/blob/main/LICENSE"><img src="https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge" alt="Licencia: MIT"></a>
   <a href="README.md"><img src="https://img.shields.io/badge/Lang-English-blue?style=for-the-badge" alt="English"></a>
   <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/Lang-中文-red?style=for-the-badge" alt="中文"></a>
   <a href="README.ur-pk.md"><img src="https://img.shields.io/badge/Lang-اردو-green?style=for-the-badge" alt="اردو"></a>
@@ -36,17 +36,17 @@ Usa cualquier modelo que quieras — [OpenRouter](https://openrouter.ai) (más d
 ### Linux, macOS, WSL2, Termux
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
 ```
 
 ### Windows (nativo, PowerShell)
 
-> **Nota:** En Windows nativo, Robo funciona sin WSL — la CLI, el gateway, la TUI y las herramientas funcionan de forma nativa. Si prefieres usar WSL2, el comando de Linux/macOS de arriba también funciona allí. ¿Encontraste un error? Por favor [crea un issue](https://github.com/IgniteeNow/robo-engineer/issues).
+> **Nota:** En Windows nativo, Robo funciona sin WSL — la CLI, el gateway, la TUI y las herramientas funcionan de forma nativa. Si prefieres usar WSL2, el comando de Linux/macOS de arriba también funciona allí. ¿Encontraste un error? Por favor [crea un issue](https://github.com/IgniteeNow/Robo/issues).
 
 Ejecuta esto en PowerShell:
 
 ```powershell
-iex (irm https://github.com/IgniteeNow/robo-engineer)
+iex (irm https://github.com/IgniteeNow/Robo)
 ```
 
 El instalador se encarga de todo: uv, Python 3.11, Node.js, ripgrep, ffmpeg, **y un Git Bash portátil** (MinGit, descomprimido en `%LOCALAPPDATA%\robo\git` — no requiere administrador, completamente aislado de cualquier instalación de Git del sistema). Robo usa este Git Bash incluido para ejecutar comandos de shell.
@@ -135,7 +135,7 @@ Toda la documentación está en **[website/docs](website/docs/index.mdx)**:
 Inicio rápido para colaboradores — clona y comienza con `setup-robo.sh`:
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git
+git clone https://github.com/IgniteeNow/Robo.git
 cd robo-engineer
 ./setup-robo.sh     # instala uv, crea venv, instala .[all], enlaza ~/.local/bin/robo
 ./robo              # detecta automáticamente el venv, no necesitas hacer `source` primero
@@ -155,9 +155,9 @@ scripts/run_tests.sh
 
 ## Comunidad
 
-- 💬 [Discord](https://github.com/IgniteeNow/robo-engineer/discussions)
+- 💬 [Discord](https://github.com/IgniteeNow/Robo/discussions)
 - 📚 [Skills Hub](https://agentskills.io)
-- 🐛 [Issues](https://github.com/IgniteeNow/robo-engineer/issues)
+- 🐛 [Issues](https://github.com/IgniteeNow/Robo/issues)
 - 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — Servidor MCP de control de escritorio Linux para Robo y otros hosts MCP, con árboles de accesibilidad AT-SPI, entrada Wayland/X11, capturas de pantalla y targeting de ventanas del compositor.
 
 ---

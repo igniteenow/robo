@@ -262,6 +262,6 @@ CLI 在执行会丢弃未保存会话状态的斜杠命令前会提示确认。�
 
 对于上述每个命令，CLI 会打开一个三选项弹窗：**Approve Once**（本次执行）、**Always Approve**（执行并持久化 `approvals.destructive_slash_confirm: false`，使未来的破坏性命令无需提示直接运行），或 **Cancel**。
 
-**内联跳过：** 追加 `now`、`--yes` 或 `-y` 可为单次调用绕过弹窗——例如 `/reset now`、`/new --yes my-session`、`/clear -y`、`/undo -y`。适用于弹窗在你的终端无法正常渲染的情况（见 [issue #30768](https://github.com/IgniteeNow/robo-engineer/issues/30768)，原生 Windows PowerShell）或对 CLI 进行脚本化操作时。
+**内联跳过：** 追加 `now`、`--yes` 或 `-y` 可为单次调用绕过弹窗——例如 `/reset now`、`/new --yes my-session`、`/clear -y`、`/undo -y`。适用于弹窗在你的终端无法正常渲染的情况（见 [issue #30768](https://github.com/IgniteeNow/Robo/issues/30768)，原生 Windows PowerShell）或对 CLI 进行脚本化操作时。
 
 在 `~/.robo/config.yaml` 中设置 `approvals.destructive_slash_confirm: false` 可全局禁用提示；设置回 `true` 可重新启用。背景说明见 [安全——破坏性斜杠命令确认](../user-guide/security.md#dangerous-command-approval)。

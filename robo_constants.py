@@ -127,7 +127,7 @@ def get_robo_home() -> Path:
     callers that import this at load time.  Subprocess spawners are
     expected to propagate ``ROBO_HOME`` explicitly (see the systemd
     template in ``robo_cli/gateway.py`` and the kanban dispatcher in
-    ``robo_cli/kanban_db.py``).  See https://github.com/IgniteeNow/robo-engineer/issues/18594.
+    ``robo_cli/kanban_db.py``).  See https://github.com/IgniteeNow/Robo/issues/18594.
     """
     override = get_robo_home_override()
     if override:
@@ -1485,5 +1485,5 @@ def partial_update_hint(exc: BaseException) -> list[str]:
         "and a related one was not.",
         "Re-run the update to bring the whole tree to the same version:",
         "    robo update",
-        "If that also fails, reinstall: https://github.com/IgniteeNow/robo-engineer",
+        "If that also fails, reinstall: https://github.com/IgniteeNow/Robo",
     ]

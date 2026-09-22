@@ -81,7 +81,7 @@ python $ROBO_HOME/skills/devops/watchers/scripts/watch_rss.py \
 
 ```bash
 python $ROBO_HOME/skills/devops/watchers/scripts/watch_github.py \
-  --name robo-issues --repo IgniteeNow/robo-engineer --scope issues
+  --name robo-issues --repo IgniteeNow/Robo --scope issues
 ```
 
 轮询任意 JSON API：

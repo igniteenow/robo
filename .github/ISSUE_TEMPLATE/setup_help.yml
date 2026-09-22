@@ -12,8 +12,8 @@ body:
         - Run `robo debug share` and paste the links in the Debug Report section below
         - If you're in a chat session, you can use `/debug` instead — it does the same thing
         - Try `robo update` to get the latest version
-        - Check the [README troubleshooting section](https://github.com/IgniteeNow/robo-engineer#troubleshooting)
-        - For general questions, consider the [Ignitee Now Discord](https://github.com/IgniteeNow/robo-engineer/discussions) for faster help
+        - Check the [README troubleshooting section](https://github.com/IgniteeNow/Robo#troubleshooting)
+        - For general questions, consider the [Ignitee Now Discord](https://github.com/IgniteeNow/Robo/discussions) for faster help
 
   - type: textarea
     id: description

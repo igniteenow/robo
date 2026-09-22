@@ -334,11 +334,11 @@ trainer = L.Trainer(accelerator='gpu', devices=1)
 
 ## Advanced topics
 
-**Callbacks**: See [references/callbacks.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/pytorch-lightning/references/callbacks.md) for EarlyStopping, ModelCheckpoint, custom callbacks, and callback hooks.
+**Callbacks**: See [references/callbacks.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/pytorch-lightning/references/callbacks.md) for EarlyStopping, ModelCheckpoint, custom callbacks, and callback hooks.
 
-**Distributed strategies**: See [references/distributed.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/pytorch-lightning/references/distributed.md) for DDP, FSDP, DeepSpeed ZeRO integration, multi-node setup.
+**Distributed strategies**: See [references/distributed.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/pytorch-lightning/references/distributed.md) for DDP, FSDP, DeepSpeed ZeRO integration, multi-node setup.
 
-**Hyperparameter tuning**: See [references/hyperparameter-tuning.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/pytorch-lightning/references/hyperparameter-tuning.md) for integration with Optuna, Ray Tune, and WandB sweeps.
+**Hyperparameter tuning**: See [references/hyperparameter-tuning.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/pytorch-lightning/references/hyperparameter-tuning.md) for integration with Optuna, Ray Tune, and WandB sweeps.
 
 ## Hardware requirements
 

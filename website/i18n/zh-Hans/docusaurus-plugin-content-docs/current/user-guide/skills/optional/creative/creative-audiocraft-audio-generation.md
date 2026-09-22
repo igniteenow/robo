@@ -576,8 +576,8 @@ for desc in descriptions:
 
 ## 参考资料
 
-- **[高级用法](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/mlops/models/audiocraft/references/advanced-usage.md)** - 训练、微调、部署
-- **[故障排查](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/mlops/models/audiocraft/references/troubleshooting.md)** - 常见问题与解决方案
+- **[高级用法](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/models/audiocraft/references/advanced-usage.md)** - 训练、微调、部署
+- **[故障排查](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/models/audiocraft/references/troubleshooting.md)** - 常见问题与解决方案
 
 ## 资源
 

@@ -95,7 +95,7 @@ Codex 运行时 worker 内可用的功能：
 - **`kanban_show` / `kanban_list`** — 只读看板查询，供 worker 检查自身上下文。
 - **`kanban_create` / `kanban_unblock` / `kanban_link`** — 仅限编排器的操作。供运行在 Codex 运行时上、需要分发新任务的编排器 agent 使用。
 
-Kanban 工具通过分发器设置的 `ROBO_KANBAN_TASK` 环境变量进行访问控制——该变量会传播到 Codex 子进程（Codex 继承环境变量），再从那里传播到生成的 `robo-tools` MCP server 子进程。因此工具能看到正确的任务 id 并正确进行访问控制。对于 Codex app-server worker，当 `ROBO_KANBAN_TASK` 存在时，Robo 还会传入精细的 app-server 沙箱覆盖配置：保持 `workspace-write` 沙箱，将**看板数据库目录以及分发器固定的所有 Kanban 路径**作为额外可写根目录添加（`ROBO_KANBAN_WORKSPACES_ROOT`、`ROBO_KANBAN_WORKSPACE`、旧版 `ROBO_KANBAN_ROOT`——去重，数据库目录优先），并默认禁用网络。这避免了脆弱的 `:danger-no-sandbox` 变通方案，同时允许 `kanban_complete` / `kanban_block` 更新看板数据库，**并且**允许 worker 在数据库目录之外的工作区挂载点下写入报告/产物（例如独立驱动器上的 `/media/.../kanban-workspaces/...`——[issue #27941](https://github.com/IgniteeNow/robo-engineer/issues/27941)）。
+Kanban 工具通过分发器设置的 `ROBO_KANBAN_TASK` 环境变量进行访问控制——该变量会传播到 Codex 子进程（Codex 继承环境变量），再从那里传播到生成的 `robo-tools` MCP server 子进程。因此工具能看到正确的任务 id 并正确进行访问控制。对于 Codex app-server worker，当 `ROBO_KANBAN_TASK` 存在时，Robo 还会传入精细的 app-server 沙箱覆盖配置：保持 `workspace-write` 沙箱，将**看板数据库目录以及分发器固定的所有 Kanban 路径**作为额外可写根目录添加（`ROBO_KANBAN_WORKSPACES_ROOT`、`ROBO_KANBAN_WORKSPACE`、旧版 `ROBO_KANBAN_ROOT`——去重，数据库目录优先），并默认禁用网络。这避免了脆弱的 `:danger-no-sandbox` 变通方案，同时允许 `kanban_complete` / `kanban_block` 更新看板数据库，**并且**允许 worker 在数据库目录之外的工作区挂载点下写入报告/产物（例如独立驱动器上的 `/media/.../kanban-workspaces/...`——[issue #27941](https://github.com/IgniteeNow/Robo/issues/27941)）。
 
 ### Cron 任务
 
@@ -391,7 +391,7 @@ tool_timeout_sec = 600.0
 - **当 Codex 未跟踪变更集时，审批提示中没有内联 patch 预览。** Codex 的 `fileChange` 审批参数并不总是携带变更集。Robo 会尽可能从对应的 `item/started` 通知中缓存数据，但如果审批在事件项流式传输完成之前到达，提示会回退到 Codex 提供的 `reason`。
 - **亚秒级取消无法保证。** 流式传输中途的中断（Codex 响应时按 Ctrl+C）通过 `turn/interrupt` 发送，但如果 Codex 已经刷新了最终消息，你仍会收到该响应。
 
-如果你发现 bug，请[提交 issue](https://github.com/IgniteeNow/robo-engineer/issues)，附上 `robo logs --since 5m` 的输出。在标题中注明 `codex-runtime` 以便于分类处理。
+如果你发现 bug，请[提交 issue](https://github.com/IgniteeNow/Robo/issues)，附上 `robo logs --since 5m` 的输出。在标题中注明 `codex-runtime` 以便于分类处理。
 
 ## 架构
 
@@ -438,4 +438,4 @@ tool_timeout_sec = 600.0
         └──────────────────────────────────────────────────────────┘
 ```
 
-有关实现细节，请参阅 [PR #24182](https://github.com/IgniteeNow/robo-engineer/pull/24182) 和 [Codex app-server 协议 README](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)。
+有关实现细节，请参阅 [PR #24182](https://github.com/IgniteeNow/Robo/pull/24182) 和 [Codex app-server 协议 README](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)。

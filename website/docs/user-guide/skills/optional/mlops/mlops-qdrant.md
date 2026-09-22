@@ -509,8 +509,8 @@ client = QdrantClient(
 
 ## References
 
-- **[Advanced Usage](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** - Distributed mode, hybrid search, recommendations
-- **[Troubleshooting](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** - Common issues, debugging, performance tuning
+- **[Advanced Usage](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** - Distributed mode, hybrid search, recommendations
+- **[Troubleshooting](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** - Common issues, debugging, performance tuning
 
 ## Resources
 

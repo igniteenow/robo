@@ -214,7 +214,7 @@ If you've worked through this guide and the issue persists:
 
 1. Run the job with `robo cron run <job_id>` (fires on next gateway tick) and watch for errors in the chat output
 2. Check `~/.robo/logs/agent.log` for scheduler messages and `~/.robo/logs/errors.log` for warnings
-3. Open an issue at [github.com/IgniteeNow/robo-engineer](https://github.com/IgniteeNow/robo-engineer) with:
+3. Open an issue at [github.com/IgniteeNow/Robo](https://github.com/IgniteeNow/Robo) with:
    - The job ID and schedule
    - The delivery target
    - What you expected vs. what happened

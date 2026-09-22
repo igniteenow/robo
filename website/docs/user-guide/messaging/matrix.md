@@ -582,7 +582,7 @@ such as `!important` remain normal chat messages.
 
 ### Bot joins rooms but silently drops every message (clock skew)
 
-**Cause**: The host's system clock is set ahead of real time. The Matrix adapter applies a 5-second startup-grace filter (`event_ts < startup_ts - 5`) to ignore events replayed from initial sync. When the wall clock is ahead, every incoming event looks "older than startup" and is dropped before reaching the message handler — the bot appears connected but never replies. See [#12614](https://github.com/IgniteeNow/robo-engineer/issues/12614).
+**Cause**: The host's system clock is set ahead of real time. The Matrix adapter applies a 5-second startup-grace filter (`event_ts < startup_ts - 5`) to ignore events replayed from initial sync. When the wall clock is ahead, every incoming event looks "older than startup" and is dropped before reaching the message handler — the bot appears connected but never replies. See [#12614](https://github.com/IgniteeNow/Robo/issues/12614).
 
 **Symptom**: Gateway log shows `Matrix: dropped N live events as 'too old' more than 30s after startup`.
 

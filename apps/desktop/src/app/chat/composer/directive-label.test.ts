@@ -117,12 +117,12 @@ describe('one label per reference, on every surface', () => {
   })
 
   it('a url still reads host + path on every surface', () => {
-    const item = backendRow('@url:https://github.com/IgniteeNow/robo-engineer/pull/74533', '', '')
+    const item = backendRow('@url:https://github.com/IgniteeNow/Robo/pull/74533', '', '')
     const { editor, result } = typed('@gith')
 
     act(() => result.current.replaceTriggerWithChip(item))
 
-    const expected = 'github.com/IgniteeNow/robo-engineer/pull/74533'
+    const expected = 'github.com/IgniteeNow/Robo/pull/74533'
 
     expect(item.label).toBe(expected)
     expect(editor.querySelector('[data-ref-text]')?.textContent).toBe(expected)

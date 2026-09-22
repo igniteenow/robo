@@ -12,7 +12,7 @@ It exists so that skills created via the [self-improvement loop](/user-guide/fea
 
 By default (`prune_builtins: true`) the curator can archive **unused bundled built-in skills** (shipped with the repo) after `archive_after_days` of non-use, alongside the agent-created skills it primarily manages. Hub-installed skills (from [agentskills.io](https://agentskills.io)) are always off-limits. Set `curator.prune_builtins: false` to restore the old agent-created-only behavior, where bundled skills are never touched. The curator also **never auto-deletes** — the worst outcome is archival into `~/.robo/skills/.archive/`, which is recoverable.
 
-Tracks [issue #7816](https://github.com/IgniteeNow/robo-engineer/issues/7816).
+Tracks [issue #7816](https://github.com/IgniteeNow/Robo/issues/7816).
 
 ## How it runs
 
@@ -355,4 +355,4 @@ The curator also refuses to run if `min_idle_hours` hasn't elapsed, so on an act
 - [Skills System](/user-guide/features/skills) — how skills work in general and the self-improvement loop that creates them
 - [Memory](/user-guide/features/memory) — a parallel background review that maintains long-term memory
 - [Bundled Skills Catalog](/reference/skills-catalog)
-- [Issue #7816](https://github.com/IgniteeNow/robo-engineer/issues/7816) — original proposal and design discussion
+- [Issue #7816](https://github.com/IgniteeNow/Robo/issues/7816) — original proposal and design discussion

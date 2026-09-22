@@ -1,6 +1,6 @@
 """Harness: `docker run <image> gateway run` redirects to supervised mode.
 
-Before the s6 migration, ``docker run igniteenow/robo-engineer gateway
+Before the s6 migration, ``docker run IgniteeNow/Robo gateway
 run`` was the standard pattern — the gateway ran as the container's
 main process, container exit code matched gateway exit code, no
 supervision. With s6 as PID 1, the same invocation now auto-redirects

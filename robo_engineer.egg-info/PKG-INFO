@@ -4,9 +4,9 @@ Version: 3.0.1
 Summary: Robo cross-platform desktop robot and autonomous engineering workspace
 Author: Ignitee Now
 License-Expression: MIT
-Project-URL: Homepage, https://github.com/IgniteeNow/robo-engineer
-Project-URL: Repository, https://github.com/IgniteeNow/robo-engineer
-Project-URL: Issues, https://github.com/IgniteeNow/robo-engineer/issues
+Project-URL: Homepage, https://github.com/IgniteeNow/Robo
+Project-URL: Repository, https://github.com/IgniteeNow/Robo
+Project-URL: Issues, https://github.com/IgniteeNow/Robo/issues
 Requires-Python: <3.14,>=3.11
 Description-Content-Type: text/markdown
 License-File: LICENSE

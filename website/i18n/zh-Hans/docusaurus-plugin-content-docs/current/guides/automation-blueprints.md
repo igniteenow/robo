@@ -34,9 +34,9 @@ description: "开箱即用的自动化蓝图——定时任务、GitHub 事件�
 
 ```bash
 robo cron create "0 2 * * *" \
-  "You are a project manager triaging the IgniteeNow/robo-engineer GitHub repo.
+  "You are a project manager triaging the IgniteeNow/Robo GitHub repo.
 
-1. Run: gh issue list --repo IgniteeNow/robo-engineer --state open --json number,title,labels,author,createdAt --limit 30
+1. Run: gh issue list --repo IgniteeNow/Robo --state open --json number,title,labels,author,createdAt --limit 30
 2. Identify issues opened in the last 24 hours
 3. For each new issue:
    - Suggest a priority label (P0-critical, P1-high, P2-medium, P3-low)
@@ -116,9 +116,9 @@ platforms:
 
 ```bash
 robo cron create "0 9 * * 1" \
-  "Scan the IgniteeNow/robo-engineer repo for documentation drift.
+  "Scan the IgniteeNow/Robo repo for documentation drift.
 
-1. Run: gh pr list --repo IgniteeNow/robo-engineer --state merged --json number,title,files,mergedAt --limit 30
+1. Run: gh pr list --repo IgniteeNow/Robo --state merged --json number,title,files,mergedAt --limit 30
 2. Filter to PRs merged in the last 7 days
 3. For each merged PR, check if it modified:
    - Tool schemas (tools/*.py) — may need docs/reference/tools-reference.md update

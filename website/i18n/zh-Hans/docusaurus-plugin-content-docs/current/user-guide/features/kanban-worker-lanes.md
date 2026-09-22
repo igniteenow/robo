@@ -7,7 +7,7 @@
 - **运维人员**：选择将哪些通道接入看板（创建哪些 profile，使用哪些 assignee）。
 - **插件/集成作者**：希望添加新的通道形态（封装 Codex / Claude Code / OpenCode 的 CLI worker、容器化审查 worker、通过 API 拉取任务的非 Robo 服务）。
 
-如果你编写的是 worker 代码本身——即运行在通道*内部*的 agent——kanban 生命周期与参考细节会自动注入到 worker 的系统提示中（[`agent/prompt_builder.py`](https://github.com/IgniteeNow/robo-engineer/blob/main/agent/prompt_builder.py) 中的 `KANBAN_GUIDANCE` 块）。
+如果你编写的是 worker 代码本身——即运行在通道*内部*的 agent——kanban 生命周期与参考细节会自动注入到 worker 的系统提示中（[`agent/prompt_builder.py`](https://github.com/IgniteeNow/Robo/blob/main/agent/prompt_builder.py) 中的 `KANBAN_GUIDANCE` 块）。
 
 ## 层级结构
 
@@ -94,7 +94,7 @@ profile 通道的特化形态：orchestrator 是一个 Robo profile，其工具�
 
 如果你考虑添加 CLI 通道，请提交一个 issue，描述具体的 CLI 以及你希望实现的工作流。上述契约是任何此类通道必须满足的约束；实现形态（每个 CLI 一个插件，还是通过配置参数化的通用 CLI 运行器插件）尚未确定。
 
-相关历史 issue 为 [#19931](https://github.com/IgniteeNow/robo-engineer/issues/19931)，以及已关闭未合并的 Codex 专项 PR [#19924](https://github.com/IgniteeNow/robo-engineer/pull/19924)——这些描述了原始架构提案，但未落地运行器。
+相关历史 issue 为 [#19931](https://github.com/IgniteeNow/Robo/issues/19931)，以及已关闭未合并的 Codex 专项 PR [#19924](https://github.com/IgniteeNow/Robo/pull/19924)——这些描述了原始架构提案，但未落地运行器。
 
 ## 调度器处理的失败模式
 
@@ -110,4 +110,4 @@ profile 通道的特化形态：orchestrator 是一个 Robo profile，其工具�
 
 - [Kanban 概览](./kanban) — 面向用户的介绍。
 - [Kanban 教程](./kanban-tutorial) — 开启仪表板的完整演练。
-- [`KANBAN_GUIDANCE`](https://github.com/IgniteeNow/robo-engineer/blob/main/agent/prompt_builder.py) — 注入到每个 kanban worker 系统提示中的 worker + orchestrator 生命周期。
+- [`KANBAN_GUIDANCE`](https://github.com/IgniteeNow/Robo/blob/main/agent/prompt_builder.py) — 注入到每个 kanban worker 系统提示中的 worker + orchestrator 生命周期。

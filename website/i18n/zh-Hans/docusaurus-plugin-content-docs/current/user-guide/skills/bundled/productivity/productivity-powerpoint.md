@@ -36,8 +36,8 @@ description: "创建、读取、编辑"
 | 任务 | 指南 |
 |------|-------|
 | 读取/分析内容 | `python -m markitdown presentation.pptx` |
-| 基于模板编辑或创建 | 阅读 [editing.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/productivity/powerpoint/editing.md) |
-| 从零创建 | 阅读 [pptxgenjs.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/productivity/powerpoint/pptxgenjs.md) |
+| 基于模板编辑或创建 | 阅读 [editing.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/powerpoint/editing.md) |
+| 从零创建 | 阅读 [pptxgenjs.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/powerpoint/pptxgenjs.md) |
 
 ---
 
@@ -58,7 +58,7 @@ python scripts/office/unpack.py presentation.pptx unpacked/
 
 ## 编辑工作流
 
-**完整细节请阅读 [editing.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/productivity/powerpoint/editing.md)。**
+**完整细节请阅读 [editing.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/powerpoint/editing.md)。**
 
 1. 使用 `thumbnail.py` 分析模板
 2. 解包 → 操作幻灯片 → 编辑内容 → 清理 → 打包
@@ -67,7 +67,7 @@ python scripts/office/unpack.py presentation.pptx unpacked/
 
 ## 从零创建
 
-**完整细节请阅读 [pptxgenjs.md](https://github.com/IgniteeNow/robo-engineer/blob/main/skills/productivity/powerpoint/pptxgenjs.md)。**
+**完整细节请阅读 [pptxgenjs.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/powerpoint/pptxgenjs.md)。**
 
 在没有模板或参考演示文稿时使用。
 

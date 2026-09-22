@@ -333,7 +333,7 @@ class OpenRouterCompatImageProvider(ImageGenProvider):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             # OpenRouter attribution headers.
-            "HTTP-Referer": "https://github.com/IgniteeNow/robo-engineer",
+            "HTTP-Referer": "https://github.com/IgniteeNow/Robo",
             "X-Title": "Robo Agent",
         }
         last_error: Optional[Dict[str, Any]] = None

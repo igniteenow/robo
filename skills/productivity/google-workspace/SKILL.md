@@ -13,7 +13,7 @@ required_credential_files:
 metadata:
   robo:
     tags: [Google, Gmail, Calendar, Drive, Sheets, Docs, Contacts, Email, OAuth]
-    homepage: https://github.com/IgniteeNow/robo-engineer
+    homepage: https://github.com/IgniteeNow/Robo
     related_skills: [himalaya]
 ---
 

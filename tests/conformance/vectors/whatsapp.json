@@ -1,7 +1,7 @@
 {
   "$comment": "GENERATED — do not hand-edit. Regenerate with robo-engineer scripts/generate_conformance_vectors.py; the native renderers are the oracle (executable spec).",
   "oracle": {
-    "repo": "IgniteeNow/robo-engineer",
+    "repo": "IgniteeNow/Robo",
     "commit": "40eebc7d70f3d8e95c429c8aa482f31ba6c867f6",
     "generator": "scripts/generate_conformance_vectors.py",
     "generator_version": 1

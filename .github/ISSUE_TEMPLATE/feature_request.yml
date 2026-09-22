@@ -8,8 +8,8 @@ body:
       value: |
         Thanks for the suggestion! Before submitting, please consider:
 
-        - **Is this a new skill?** Most capabilities should be [skills, not tools](https://github.com/IgniteeNow/robo-engineer/blob/main/CONTRIBUTING.md#should-it-be-a-skill-or-a-tool). If it's a specialized integration (crypto, NFT, niche SaaS), it belongs on the Skills Hub, not bundled.
-        - **Search [existing issues](https://github.com/IgniteeNow/robo-engineer/issues)** — someone may have already proposed this.
+        - **Is this a new skill?** Most capabilities should be [skills, not tools](https://github.com/IgniteeNow/Robo/blob/main/CONTRIBUTING.md#should-it-be-a-skill-or-a-tool). If it's a specialized integration (crypto, NFT, niche SaaS), it belongs on the Skills Hub, not bundled.
+        - **Search [existing issues](https://github.com/IgniteeNow/Robo/issues)** — someone may have already proposed this.
 
   - type: textarea
     id: problem

@@ -35,11 +35,11 @@ Robo Agent 提供了一个 Nix flake，支持三个层级的集成：
 
 ```bash
 # 直接运行（首次使用时构建，之后使用缓存）
-nix run github:IgniteeNow/robo-engineer -- setup
-nix run github:IgniteeNow/robo-engineer -- chat
+nix run github:IgniteeNow/Robo -- setup
+nix run github:IgniteeNow/Robo -- chat
 
 # 或持久化安装
-nix profile install github:IgniteeNow/robo-engineer
+nix profile install github:IgniteeNow/Robo
 robo setup
 robo chat
 ```
@@ -50,7 +50,7 @@ robo chat
 <summary><strong>从本地克隆构建</strong></summary>
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git
+git clone https://github.com/IgniteeNow/Robo.git
 cd robo-engineer
 nix build
 ./result/bin/robo setup
@@ -75,7 +75,7 @@ nix build
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    robo-engineer.url = "github:IgniteeNow/robo-engineer";
+    robo-engineer.url = "github:IgniteeNow/Robo";
   };
 
   outputs = { nixpkgs, robo-engineer, ... }: {
@@ -685,7 +685,7 @@ services.robo-engineer = {
 
 ```nix
 {
-  inputs.robo-engineer.url = "github:IgniteeNow/robo-engineer";
+  inputs.robo-engineer.url = "github:IgniteeNow/Robo";
   outputs = { robo-engineer, nixpkgs, ... }: {
     nixpkgs.overlays = [ robo-engineer.overlays.default ];
     # 然后：

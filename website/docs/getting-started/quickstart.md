@@ -48,21 +48,21 @@ Pick the row that matches your goal:
 
 ## 1. Install Robo Agent
 ### With the Robo Desktop installer on macOS or Windows (recommended)
-To easily install the command-line and desktop applications, [download the Robo Desktop installer](https://github.com/IgniteeNow/robo-engineer/tree/main/website/docs) from our website and run it.
+To easily install the command-line and desktop applications, [download the Robo Desktop installer](https://github.com/IgniteeNow/Robo/tree/main/website/docs) from our website and run it.
 
 ### Without Robo Desktop:
 For a command-line only install without Robo Desktop, run:
 
 #### Linux / macOS / WSL2 / Android (Termux)
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
 ```
 
 #### Windows (native)
 
 Run in powershell:
 ```powershell
-iex (irm https://github.com/IgniteeNow/robo-engineer) 
+iex (irm https://github.com/IgniteeNow/Robo) 
 ```
 
 :::tip Android / Termux

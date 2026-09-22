@@ -8,8 +8,8 @@
 
 <p align="center">
   <a href="website/docs/index.mdx"><img src="https://img.shields.io/badge/Docs-in%20this%20repo-EF8A22?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://github.com/IgniteeNow/robo-engineer/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
-  <a href="https://github.com/IgniteeNow/robo-engineer/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
+  <a href="https://github.com/IgniteeNow/Robo/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
+  <a href="https://github.com/IgniteeNow/Robo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
   <a href="README.md"><img src="https://img.shields.io/badge/Lang-English-lightgrey?style=for-the-badge" alt="English"></a>
   <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/Lang-中文-red?style=for-the-badge" alt="中文"></a>
 </p>
@@ -37,21 +37,21 @@
 <div dir="ltr">
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
 ```
 
 </div>
 
 ### ونڈوز (نیٹو، پاور شیل)
 
-> **توجہ فرمائیں:** مقامی ونڈوز (Native Windows) پر روبو بغیر WSL کے چلتا ہے — CLI، گیٹ وے، TUI، اور ٹولز سب مقامی طور پر کام کرتے ہیں۔ اگر آپ WSL2 استعمال کرنا پسند کرتے ہیں، تو اوپر دی گئی لینکس/میک او ایس کی کمانڈ وہاں بھی کام کرے گی۔ کوئی مسئلہ نظر آیا؟ براہ کرم [مسائل (issues) درج کریں](https://github.com/IgniteeNow/robo-engineer/issues)۔
+> **توجہ فرمائیں:** مقامی ونڈوز (Native Windows) پر روبو بغیر WSL کے چلتا ہے — CLI، گیٹ وے، TUI، اور ٹولز سب مقامی طور پر کام کرتے ہیں۔ اگر آپ WSL2 استعمال کرنا پسند کرتے ہیں، تو اوپر دی گئی لینکس/میک او ایس کی کمانڈ وہاں بھی کام کرے گی۔ کوئی مسئلہ نظر آیا؟ براہ کرم [مسائل (issues) درج کریں](https://github.com/IgniteeNow/Robo/issues)۔
 
 اسے پاور شیل (PowerShell) میں چلائیں:
 
 <div dir="ltr">
 
 ```powershell
-iex (irm https://github.com/IgniteeNow/robo-engineer)
+iex (irm https://github.com/IgniteeNow/Robo)
 ```
 
 </div>
@@ -163,7 +163,7 @@ robo doctor       # کسی بھی مسئلے کی تشخیص کریں
 <div dir="ltr">
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git
+git clone https://github.com/IgniteeNow/Robo.git
 cd robo-engineer
 ./setup-robo.sh     # uv کو انسٹال کرتا ہے، venv بناتا ہے، .[all] کو انسٹال کرتا ہے، اور ~/.local/bin/robo کا سیم لنک (symlink) بناتا ہے
 ./robo              # خود بخود venv کی شناخت کرتا ہے، پہلے `source` کرنے کی ضرورت نہیں
@@ -189,9 +189,9 @@ scripts/run_tests.sh
 
 ## کمیونٹی (Community)
 
-- 💬 [ڈسکارڈ (Discord)](https://github.com/IgniteeNow/robo-engineer/discussions)
+- 💬 [ڈسکارڈ (Discord)](https://github.com/IgniteeNow/Robo/discussions)
 - 📚 [سکلز ہب (Skills Hub)](https://agentskills.io)
-- 🐛 [مسائل (Issues)](https://github.com/IgniteeNow/robo-engineer/issues)
+- 🐛 [مسائل (Issues)](https://github.com/IgniteeNow/Robo/issues)
 - 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — روبو اور دیگر MCP ہوسٹس کے لیے لینکس (Linux) ڈیسک ٹاپ کنٹرول MCP سرور، جس میں AT-SPI ایکسیسیبلٹی ٹریز، Wayland/X11 ان پٹ، سکرین شاٹس، اور کمپوزیٹر ونڈو ٹارگیٹنگ شامل ہے۔
 
 ---

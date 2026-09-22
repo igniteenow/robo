@@ -531,8 +531,8 @@ image = pipe(prompt, num_inference_steps=20).images[0]
 
 ## References
 
-- **[Advanced Usage](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/stable-diffusion/references/advanced-usage.md)** - Custom pipelines, fine-tuning, deployment
-- **[Troubleshooting](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/stable-diffusion/references/troubleshooting.md)** - Common issues and solutions
+- **[Advanced Usage](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/stable-diffusion/references/advanced-usage.md)** - Custom pipelines, fine-tuning, deployment
+- **[Troubleshooting](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/stable-diffusion/references/troubleshooting.md)** - Common issues and solutions
 
 ## Resources
 

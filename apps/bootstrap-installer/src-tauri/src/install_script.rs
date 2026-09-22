@@ -324,7 +324,7 @@ fn upgrade_cached_script(kind: ScriptKind, cached: &Path, emit_log: &impl Fn(&st
 /// falling back to the cached script.
 async fn download(kind: ScriptKind, commit_or_ref: &str, dest_path: &Path) -> Result<()> {
     let url = format!(
-        "https://raw.githubusercontent.com/IgniteeNow/robo-engineer/{}/scripts/{}",
+        "https://raw.githubusercontent.com/IgniteeNow/Robo/{}/scripts/{}",
         commit_or_ref,
         kind.filename()
     );

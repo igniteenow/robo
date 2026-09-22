@@ -501,8 +501,8 @@ client = QdrantClient(
 
 ## 参考资料
 
-- **[高级用法](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** — 分布式模式、混合搜索、推荐系统
-- **[故障排查](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** — 常见问题、调试、性能调优
+- **[高级用法](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/qdrant/references/advanced-usage.md)** — 分布式模式、混合搜索、推荐系统
+- **[故障排查](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/qdrant/references/troubleshooting.md)** — 常见问题、调试、性能调优
 
 ## 资源
 

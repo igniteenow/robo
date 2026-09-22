@@ -445,7 +445,7 @@ def detect_install_method(project_root: Optional[Path] = None) -> str:
     The supported installs self-identify via the code-scoped stamp:
       - the curl installer (scripts/install.sh, the README/website install
         command) git-clones the repo and stamps ``git`` next to the code;
-      - the published ``igniteenow/robo-engineer`` image bakes a ``docker``
+      - the published ``IgniteeNow/Robo`` image bakes a ``docker``
         stamp into ``/opt/robo`` at build time.
     An unsupported manual install dropped into a container (no stamp) falls
     through to the ``.git`` checks and behaves like any off-path install.
@@ -545,7 +545,7 @@ def recommended_update_command_for_method(method: str) -> str:
     if method in {"nix", "nixos"}:
         return _NIX_UPDATE_MSG
     if method == "docker":
-        return "docker pull igniteenow/robo-engineer:latest"
+        return "docker pull IgniteeNow/Robo:latest"
     return "robo update"
 
 
@@ -576,23 +576,23 @@ def recommended_update_command() -> str:
 _DOCKER_UPDATE_MESSAGE = """\
 ✗ ``robo update`` doesn't apply inside the Docker container.
 
-Robo runs as a published image (igniteenow/robo-engineer), not a
+Robo runs as a published image (IgniteeNow/Robo), not a
 git checkout — the container has no working tree to pull into.  Update by
 pulling a fresh image and restarting your container instead:
 
-  docker pull igniteenow/robo-engineer:latest
+  docker pull IgniteeNow/Robo:latest
   # then restart whatever started the container, e.g.:
   docker compose up -d --force-recreate robo-engineer
   # or, for ad-hoc runs, exit the current container and `docker run` again
 
 Verify the new version after restart:
-  docker run --rm igniteenow/robo-engineer:latest --version
+  docker run --rm IgniteeNow/Robo:latest --version
 
 Notes:
   • If you pinned a specific tag (e.g. ``:v0.14.0``) the ``:latest`` tag
     won't move your container — pull the newer tag you actually want, or
     switch to ``:latest`` / ``:main`` for rolling updates.  See available
-    tags at https://hub.docker.com/r/igniteenow/robo-engineer/tags
+    tags at https://hub.docker.com/r/IgniteeNow/Robo/tags
   • Your config and session history live under ``$ROBO_HOME`` (``/opt/data``
     in the container, typically bind-mounted from the host) and persist
     across image upgrades — re-pulling doesn't lose any state.

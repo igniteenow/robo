@@ -362,8 +362,8 @@ Plugin id 对于扁平 plugin 是 manifest 中的 `name:` 字段，对于嵌套 
 
 ## 参考资料
 
-* 实现：[`agent/plugin_llm.py`](https://github.com/IgniteeNow/robo-engineer/blob/main/agent/plugin_llm.py)
-* 测试：[`tests/agent/test_plugin_llm.py`](https://github.com/IgniteeNow/robo-engineer/blob/main/tests/agent/test_plugin_llm.py)
+* 实现：[`agent/plugin_llm.py`](https://github.com/IgniteeNow/Robo/blob/main/agent/plugin_llm.py)
+* 测试：[`tests/agent/test_plugin_llm.py`](https://github.com/IgniteeNow/Robo/blob/main/tests/agent/test_plugin_llm.py)
 * 参考 plugin（配套仓库）：
   * [`plugin-llm-example`](https://github.com/IgniteeNow/robo-example-plugins/tree/main/plugin-llm-example) — 带图像输入的同步结构化提取
   * [`plugin-llm-async-example`](https://github.com/IgniteeNow/robo-example-plugins/tree/main/plugin-llm-async-example) — 使用 `asyncio.gather()` 的异步示例

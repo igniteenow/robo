@@ -727,7 +727,7 @@ class TestOptionalSkillSourceMetadata:
         meta = src.inspect("official/finance/3-statement-model")
 
         assert meta is not None
-        assert meta.repo == "IgniteeNow/robo-engineer"
+        assert meta.repo == "IgniteeNow/Robo"
         assert meta.path == "optional-skills/finance/3-statement-model"
 
     def test_scan_all_accepts_install_prefix_but_rejects_nested_support_skills(self, tmp_path):

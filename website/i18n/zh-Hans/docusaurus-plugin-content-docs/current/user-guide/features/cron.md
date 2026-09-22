@@ -722,7 +722,7 @@ cronjob(action="create", name="summarize-new-msgs",
 Robo 自身的 `~/.robo/state.db` 是内部 schema，会在版本间变更。不要从预运行门控中查询它——指向你自己的数据库或 feed。
 :::
 
-致谢：此方案集由 @iankar8 在 [#2654](https://github.com/IgniteeNow/robo-engineer/pull/2654) 中的探索所启发，该 PR 提议将 sql/file/command 触发器作为并行机制添加。`script` + `wakeAgent` 门控已以零成本覆盖了所有三种情况，因此该工作以文档形式落地。
+致谢：此方案集由 @iankar8 在 [#2654](https://github.com/IgniteeNow/Robo/pull/2654) 中的探索所启发，该 PR 提议将 sql/file/command 触发器作为并行机制添加。`script` + `wakeAgent` 门控已以零成本覆盖了所有三种情况，因此该工作以文档形式落地。
 
 ### 串联任务：`context_from`
 

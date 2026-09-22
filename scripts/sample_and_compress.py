@@ -29,9 +29,9 @@ load_dotenv()
 # Default datasets to sample from
 DEFAULT_DATASETS = [
     "IgniteeNow/swe-terminus-agent-glm-kimi-minimax",
-    "IgniteeNow/robo-engineer-megascience-sft1",
-    "IgniteeNow/robo-engineer-Thinking-GLM-4.7-SFT2",
-    "IgniteeNow/robo-engineer-Thinking-GLM-4.7-SFT1",
+    "IgniteeNow/Robo-megascience-sft1",
+    "IgniteeNow/Robo-Thinking-GLM-4.7-SFT2",
+    "IgniteeNow/Robo-Thinking-GLM-4.7-SFT1",
     "IgniteeNow/terminal-tasks-glm-robo-engineer"
 ]
 

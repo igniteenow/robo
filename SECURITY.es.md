@@ -6,7 +6,7 @@ alcance para los informes de vulnerabilidades.
 
 ## 1. Reportar una Vulnerabilidad
 
-Reporta de forma privada a través de [GitHub Security Advisories](https://github.com/IgniteeNow/robo-engineer/security/advisories/new)
+Reporta de forma privada a través de [GitHub Security Advisories](https://github.com/IgniteeNow/Robo/security/advisories/new)
 o **security@igniteenow.com**. No abras issues públicos para
 vulnerabilidades de seguridad. **Robo Agent no opera un programa de
 recompensas por errores.**

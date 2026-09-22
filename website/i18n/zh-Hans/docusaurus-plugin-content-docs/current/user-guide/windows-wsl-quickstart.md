@@ -100,7 +100,7 @@ wsl --shutdown
 打开 WSL2 shell 后执行：
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
 source ~/.bashrc
 robo
 ```

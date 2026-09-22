@@ -912,7 +912,7 @@ A subscription removes itself automatically once the task reaches `done` or `arc
 
 In a one-gateway-per-profile deployment (one dispatcher, separate gateway
 processes for `writer`, `admin`, etc. — see the [multi-gateway
-guide](https://github.com/IgniteeNow/robo-engineer/blob/main/docs/kanban/multi-gateway.md)),
+guide](https://github.com/IgniteeNow/Robo/blob/main/docs/kanban/multi-gateway.md)),
 dispatch and delivery have separate owners:
 
 - **Dispatch stays single-owner.** Exactly one gateway keeps

@@ -41,17 +41,17 @@ No clone needed. Nix fetches, builds, and runs everything:
 
 ```bash
 # Run the desktop app
-nix run github:IgniteeNow/robo-engineer#desktop
+nix run github:IgniteeNow/Robo#desktop
 
 # Or install persistently
-nix profile install github:IgniteeNow/robo-engineer#desktop
+nix profile install github:IgniteeNow/Robo#desktop
 
 # run the tui
-nix run github:IgniteeNow/robo-engineer -- setup
-nix run github:IgniteeNow/robo-engineer -- --tui
+nix run github:IgniteeNow/Robo -- setup
+nix run github:IgniteeNow/Robo -- --tui
 
 # or install it in your profile
-nix profile install github:IgniteeNow/robo-engineer
+nix profile install github:IgniteeNow/Robo
 robo setup
 robo --tui
 ```
@@ -69,7 +69,7 @@ The `default` package adds ~700 MB to the closure. If you only need messaging pl
 <summary><strong>Running from a local clone</strong></summary>
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git
+git clone https://github.com/IgniteeNow/Robo.git
 cd robo-engineer
 nix develop
 robo setup
@@ -94,7 +94,7 @@ This module requires NixOS. For non-NixOS systems (macOS, other Linux distros), 
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    robo-engineer.url = "github:IgniteeNow/robo-engineer";
+    robo-engineer.url = "github:IgniteeNow/Robo";
   };
 
   outputs = { nixpkgs, robo-engineer, ... }: {
@@ -733,7 +733,7 @@ External flakes can override the package directly:
 
 ```nix
 {
-  inputs.robo-engineer.url = "github:IgniteeNow/robo-engineer";
+  inputs.robo-engineer.url = "github:IgniteeNow/Robo";
   outputs = { robo-engineer, nixpkgs, ... }: {
     nixpkgs.overlays = [ robo-engineer.overlays.default ];
     # Then:

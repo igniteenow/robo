@@ -1,7 +1,7 @@
 """Regression: the Windows installer must not spawn a bare ``powershell``.
 
 A user on Windows reported the installer getting stuck; running
-``git clone https://github.com/IgniteeNow/robo-engineer.git robo; cd robo; .\install-robo.ps1`` failed at the
+``git clone https://github.com/IgniteeNow/Robo.git robo; cd robo; .\install-robo.ps1`` failed at the
 uv step with::
 
     [X] Failed to install uv: The term 'powershell' is not recognized as the

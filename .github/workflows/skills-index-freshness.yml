@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   check-freshness:
-    if: github.repository == 'IgniteeNow/robo-engineer'
+    if: github.repository == 'IgniteeNow/Robo'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: trusted-automation

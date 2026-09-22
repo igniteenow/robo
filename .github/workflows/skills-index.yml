@@ -12,7 +12,7 @@ permissions:
 jobs:
   build-index:
     # Only run on the upstream repository, not on forks
-    if: github.repository == 'IgniteeNow/robo-engineer'
+    if: github.repository == 'IgniteeNow/Robo'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: trusted-automation

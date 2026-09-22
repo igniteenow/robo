@@ -69,7 +69,7 @@ robo
 Test with a simple command:
 
 ```
-Run: gh pr list --repo IgniteeNow/robo-engineer --state open --limit 3
+Run: gh pr list --repo IgniteeNow/Robo --state open --limit 3
 ```
 
 You should see a list of open PRs. If this works, you're ready.
@@ -84,7 +84,7 @@ Still in the chat, ask Robo to review a real PR:
 Review this pull request. Read the diff, check for bugs, security issues,
 and code quality. Be specific about line numbers and quote problematic code.
 
-Run: gh pr diff 3888 --repo IgniteeNow/robo-engineer
+Run: gh pr diff 3888 --repo IgniteeNow/Robo
 ```
 
 Robo will:

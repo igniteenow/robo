@@ -359,9 +359,9 @@ Flash Attention 使用 float16/bfloat16 以提升速度，不支持 float32。
 
 ## 高级主题
 
-**与 HuggingFace Transformers 集成**：参见 [references/transformers-integration.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/flash-attention/references/transformers-integration.md)，了解如何在 BERT、GPT、Llama 模型中启用 Flash Attention。
+**与 HuggingFace Transformers 集成**：参见 [references/transformers-integration.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/flash-attention/references/transformers-integration.md)，了解如何在 BERT、GPT、Llama 模型中启用 Flash Attention。
 
-**性能基准测试**：参见 [references/benchmarks.md](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/flash-attention/references/benchmarks.md)，查看跨 GPU 和序列长度的详细速度与内存对比。
+**性能基准测试**：参见 [references/benchmarks.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/flash-attention/references/benchmarks.md)，查看跨 GPU 和序列长度的详细速度与内存对比。
 
 ## 硬件要求
 

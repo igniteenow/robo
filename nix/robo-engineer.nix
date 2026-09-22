@@ -262,7 +262,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   meta = with lib; {
     description = "AI agent with advanced tool-calling capabilities";
-    homepage = "https://github.com/IgniteeNow/robo-engineer";
+    homepage = "https://github.com/IgniteeNow/Robo";
     mainProgram = "robo";
     license = licenses.mit;
     platforms = platforms.unix;

@@ -15,21 +15,21 @@ platform-gated features are supported), see **[Platform Support](./platform-supp
 
 ## Quick Install
 ### With the Robo Desktop installer on macOS or Windows (recommended)
-To easily install the command-line and desktop applications, [download the Robo Desktop installer](https://github.com/IgniteeNow/robo-engineer/tree/main/website/docs) from our website and run it.
+To easily install the command-line and desktop applications, [download the Robo Desktop installer](https://github.com/IgniteeNow/Robo/tree/main/website/docs) from our website and run it.
 
 ### Without Robo Desktop:
 For a command-line only install without Robo Desktop, run:
 
 #### Linux / macOS / WSL2 / Android (Termux)
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
 ```
 
 #### Windows (native)
 
 Run in powershell:
 ```powershell
-iex (irm https://github.com/IgniteeNow/robo-engineer) 
+iex (irm https://github.com/IgniteeNow/Robo) 
 ```
 
 If you want to install & run Robo Desktop after a command-line only install, simply run
@@ -124,12 +124,12 @@ Running Robo as a dedicated unprivileged user (e.g. a `robo` systemd service acc
 
 2. **As the unprivileged service user**, run the regular installer. It will detect the missing sudo, skip `--with-deps`, and install Chromium into the user's local Playwright cache:
    ```bash
-   git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+   git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
    ```
 
    If you want to skip the Playwright step entirely — for example because you're running headless and don't need browser automation — pass `--skip-browser`:
    ```bash
-   git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+   git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
    ```
 
 3. **Make `robo` available to the service user's shells.** The installer writes the launcher to `~/.local/bin/robo`. System service accounts often have a minimal PATH that doesn't include `~/.local/bin`. Either add it to the user's environment, or symlink the launcher into a system location:

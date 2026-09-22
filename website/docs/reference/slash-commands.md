@@ -304,6 +304,6 @@ The CLI prompts before running slash commands that throw away unsaved session st
 
 For each of these the CLI opens a three-choice modal: **Approve Once** (proceed this time), **Always Approve** (proceed and persist `approvals.destructive_slash_confirm: false` so future destructive commands run without prompting), or **Cancel**.
 
-**Inline skip:** append `now`, `--yes`, or `-y` to bypass the modal for a single invocation — e.g. `/reset now`, `/new --yes my-session`, `/clear -y`, `/undo -y`. Useful when the modal doesn't render correctly on your terminal (see [issue #30768](https://github.com/IgniteeNow/robo-engineer/issues/30768) for native Windows PowerShell) or when scripting against the CLI.
+**Inline skip:** append `now`, `--yes`, or `-y` to bypass the modal for a single invocation — e.g. `/reset now`, `/new --yes my-session`, `/clear -y`, `/undo -y`. Useful when the modal doesn't render correctly on your terminal (see [issue #30768](https://github.com/IgniteeNow/Robo/issues/30768) for native Windows PowerShell) or when scripting against the CLI.
 
 Set `approvals.destructive_slash_confirm: false` in `~/.robo/config.yaml` to disable the prompts globally; set it back to `true` to re-enable. See [Security — Destructive slash command confirmation](../user-guide/security.md#dangerous-command-approval) for context.

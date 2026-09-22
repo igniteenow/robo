@@ -20,7 +20,7 @@ If you prefer a real POSIX environment (for the dashboard's embedded terminal, `
 Open **PowerShell** (or Windows Terminal) and run:
 
 ```powershell
-iex (irm https://raw.githubusercontent.com/IgniteeNow/robo-engineer/main/scripts/install.ps1)
+iex (irm https://raw.githubusercontent.com/IgniteeNow/Robo/main/scripts/install.ps1)
 ```
 
 No admin rights required. The installer goes to `%LOCALAPPDATA%\robo\` and adds `robo` to your **User PATH** — open a new terminal after it finishes.
@@ -28,7 +28,7 @@ No admin rights required. The installer goes to `%LOCALAPPDATA%\robo\` and adds 
 **Installer options** (requires the scriptblock form to pass parameters):
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/IgniteeNow/robo-engineer/main/scripts/install.ps1))) -NoVenv -SkipSetup -Branch main
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/IgniteeNow/Robo/main/scripts/install.ps1))) -NoVenv -SkipSetup -Branch main
 ```
 
 | Parameter | Default | Purpose |

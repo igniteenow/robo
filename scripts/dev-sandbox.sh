@@ -115,7 +115,7 @@ INSTALLER_PATH=""
 # reachable from main -- so "can a user two releases back still update?" is
 # expressible. --from-main is shorthand for refs/heads/main.
 INSTALL_REF=""
-UPSTREAM_URL="${ROBO_DEV_SANDBOX_UPSTREAM:-https://github.com/IgniteeNow/robo-engineer.git}"
+UPSTREAM_URL="${ROBO_DEV_SANDBOX_UPSTREAM:-https://github.com/IgniteeNow/Robo.git}"
 
 if [ "${1:-}" = install ]; then
   INSTALL_SHORTCUT=true
@@ -275,7 +275,7 @@ if [ "$INSTALL_SHORTCUT" = true ]; then
   fi
   set -- bash -c '
     set +e
-    git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+    git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
     install_status=$?
     if [ "$install_status" -eq 0 ] && [ -f /work/promote-main ]; then
       next_main=$(cat /work/promote-main)

@@ -46,7 +46,7 @@ python -m pip install -e '.[termux]' -c constraints-termux.txt
 Robo 现已内置 Termux 感知的安装路径：
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
 ```
 
 在 Termux 上，安装程序会自动：
@@ -80,7 +80,7 @@ pkg install -y git python clang rust make pkg-config libffi openssl nodejs ripgr
 ### 2. 克隆 Robo
 
 ```bash
-git clone https://github.com/IgniteeNow/robo-engineer.git
+git clone https://github.com/IgniteeNow/Robo.git
 cd robo-engineer
 ```
 

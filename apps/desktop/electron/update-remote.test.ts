@@ -30,14 +30,14 @@ import {
 } from './update-remote'
 
 test('canonicalGitHubRemote normalizes SSH and HTTPS forms to the same value', () => {
-  const ssh = canonicalGitHubRemote('git@github.com:IgniteeNow/robo-engineer.git')
-  assert.equal(canonicalGitHubRemote('git@github.com:IgniteeNow/robo-engineer'), ssh)
-  assert.equal(canonicalGitHubRemote('ssh://git@github.com/IgniteeNow/robo-engineer.git'), ssh)
-  assert.equal(canonicalGitHubRemote('https://github.com/IgniteeNow/robo-engineer.git'), ssh)
+  const ssh = canonicalGitHubRemote('git@github.com:IgniteeNow/Robo.git')
+  assert.equal(canonicalGitHubRemote('git@github.com:IgniteeNow/Robo'), ssh)
+  assert.equal(canonicalGitHubRemote('ssh://git@github.com/IgniteeNow/Robo.git'), ssh)
+  assert.equal(canonicalGitHubRemote('https://github.com/IgniteeNow/Robo.git'), ssh)
   // Case-insensitive: an uppercased owner still canonicalizes to the same repo.
   assert.equal(canonicalGitHubRemote('git@github.com:Your-Org/robo-engineer.git'), ssh)
   // Trailing slashes are stripped.
-  assert.equal(canonicalGitHubRemote('https://github.com/IgniteeNow/robo-engineer/'), ssh)
+  assert.equal(canonicalGitHubRemote('https://github.com/IgniteeNow/Robo/'), ssh)
 })
 
 test('canonicalGitHubRemote is empty for falsy input', () => {
@@ -47,9 +47,9 @@ test('canonicalGitHubRemote is empty for falsy input', () => {
 })
 
 test('isSshRemote detects scp-like and ssh:// forms only', () => {
-  assert.equal(isSshRemote('git@github.com:IgniteeNow/robo-engineer.git'), true)
-  assert.equal(isSshRemote('ssh://git@github.com/IgniteeNow/robo-engineer.git'), true)
-  assert.equal(isSshRemote('https://github.com/IgniteeNow/robo-engineer.git'), false)
+  assert.equal(isSshRemote('git@github.com:IgniteeNow/Robo.git'), true)
+  assert.equal(isSshRemote('ssh://git@github.com/IgniteeNow/Robo.git'), true)
+  assert.equal(isSshRemote('https://github.com/IgniteeNow/Robo.git'), false)
   assert.equal(isSshRemote(''), false)
   assert.equal(isSshRemote(null), false)
 })
@@ -60,18 +60,18 @@ test('isOfficialSshRemote never matches when no ROBO_UPDATE_REPO_URL is configur
   // upstream. With nothing configured, no remote can be "official".
   assert.equal(OFFICIAL_REPO_HTTPS_URL, '')
   assert.equal(OFFICIAL_REPO_CANONICAL, '')
-  assert.equal(isOfficialSshRemote('git@github.com:IgniteeNow/robo-engineer.git'), false)
-  assert.equal(isOfficialSshRemote('ssh://git@github.com/IgniteeNow/robo-engineer.git'), false)
+  assert.equal(isOfficialSshRemote('git@github.com:IgniteeNow/Robo.git'), false)
+  assert.equal(isOfficialSshRemote('ssh://git@github.com/IgniteeNow/Robo.git'), false)
 })
 
 test('isOfficialSshRemote does NOT match forks, other hosts, or HTTPS even with a configured value', () => {
   // Simulate an operator having set ROBO_UPDATE_REPO_URL by comparing
   // canonicalGitHubRemote's own normalization directly, since the module
   // constant is fixed at import time from the (empty-in-tests) env var.
-  const official = canonicalGitHubRemote('https://github.com/IgniteeNow/robo-engineer.git')
+  const official = canonicalGitHubRemote('https://github.com/IgniteeNow/Robo.git')
   assert.notEqual(canonicalGitHubRemote('git@github.com:someuser/robo-engineer.git'), official)
   // Same repo name on a different host is not the official repo.
-  assert.notEqual(canonicalGitHubRemote('git@gitlab.com:IgniteeNow/robo-engineer.git'), official)
+  assert.notEqual(canonicalGitHubRemote('git@gitlab.com:IgniteeNow/Robo.git'), official)
   assert.equal(isOfficialSshRemote(''), false)
   assert.equal(isOfficialSshRemote(null), false)
 })

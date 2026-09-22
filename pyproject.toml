@@ -356,9 +356,9 @@ requires = ["setuptools==83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project.urls]
-Homepage = "https://github.com/IgniteeNow/robo-engineer"
-Repository = "https://github.com/IgniteeNow/robo-engineer"
-Issues = "https://github.com/IgniteeNow/robo-engineer/issues"
+Homepage = "https://github.com/IgniteeNow/Robo"
+Repository = "https://github.com/IgniteeNow/Robo"
+Issues = "https://github.com/IgniteeNow/Robo/issues"
 
 [project.scripts]
 robo = "robo_runtime.cli:main"

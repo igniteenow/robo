@@ -351,8 +351,8 @@ if __name__ == "__main__":
 
 ## 参考资料
 
-- **[高级用法](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/modal/references/advanced-usage.md)** - 多 GPU、分布式训练、成本优化
-- **[故障排查](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/modal/references/troubleshooting.md)** - 常见问题与解决方案
+- **[高级用法](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/modal/references/advanced-usage.md)** - 多 GPU、分布式训练、成本优化
+- **[故障排查](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/modal/references/troubleshooting.md)** - 常见问题与解决方案
 
 ## 资源
 

@@ -1,7 +1,7 @@
 # Core-Toolset A/B Eval Harness
 
 The hard A/B evaluation used for the August 2026 core-toolset performance
-batch (tracker: [#77056](https://github.com/IgniteeNow/robo-engineer/issues/77056)).
+batch (tracker: [#77056](https://github.com/IgniteeNow/Robo/issues/77056)).
 It measures whether a set of tool-layer changes actually reduces model waste —
 LLM turns, tool calls, tool errors, retries, result bytes, wall clock — on a
 battery of **error-inducing tasks**, each derived from a waste class measured

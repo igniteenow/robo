@@ -195,9 +195,9 @@ outputs = llm.generate(
 
 ## 参考文档
 
-- **[优化指南](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/tensorrt-llm/references/optimization.md)** — 量化、批处理、KV cache 调优
-- **[多 GPU 配置](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/tensorrt-llm/references/multi-gpu.md)** — 张量/流水线并行、多节点
-- **[服务指南](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/tensorrt-llm/references/serving.md)** — 生产部署、监控、自动扩缩容
+- **[优化指南](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/tensorrt-llm/references/optimization.md)** — 量化、批处理、KV cache 调优
+- **[多 GPU 配置](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/tensorrt-llm/references/multi-gpu.md)** — 张量/流水线并行、多节点
+- **[服务指南](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/tensorrt-llm/references/serving.md)** — 生产部署、监控、自动扩缩容
 
 ## 资源
 

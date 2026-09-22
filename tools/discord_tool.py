@@ -100,7 +100,7 @@ def _discord_request(
         headers={
             "Authorization": f"Bot {token}",
             "Content-Type": "application/json",
-            "User-Agent": "robo-engineer (https://github.com/IgniteeNow/robo-engineer)",
+            "User-Agent": "robo-engineer (https://github.com/IgniteeNow/Robo)",
         },
     )
 

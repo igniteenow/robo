@@ -357,8 +357,8 @@ if __name__ == "__main__":
 
 ## References
 
-- **[Advanced Usage](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/modal/references/advanced-usage.md)** - Multi-GPU, distributed training, cost optimization
-- **[Troubleshooting](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/mlops/modal/references/troubleshooting.md)** - Common issues and solutions
+- **[Advanced Usage](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/modal/references/advanced-usage.md)** - Multi-GPU, distributed training, cost optimization
+- **[Troubleshooting](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/modal/references/troubleshooting.md)** - Common issues and solutions
 
 ## Resources
 

@@ -188,7 +188,7 @@ stdenv.mkDerivation {
 
   meta = with lib; {
     description = "Native Electron desktop shell for Robo Agent";
-    homepage = "https://github.com/IgniteeNow/robo-engineer";
+    homepage = "https://github.com/IgniteeNow/Robo";
     license = licenses.mit;
     platforms = platforms.unix;
     mainProgram = "robo-desktop";

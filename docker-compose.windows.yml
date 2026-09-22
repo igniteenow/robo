@@ -11,7 +11,7 @@
 #
 services:
   gateway:
-    image: igniteenow/robo-engineer:latest
+    image: IgniteeNow/Robo:latest
     container_name: robo
     restart: unless-stopped
     volumes:
@@ -22,7 +22,7 @@ services:
     command: ["gateway", "run"]
 
   dashboard:
-    image: igniteenow/robo-engineer:latest
+    image: IgniteeNow/Robo:latest
     container_name: robo-dashboard
     restart: unless-stopped
     depends_on:

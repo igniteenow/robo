@@ -69,7 +69,7 @@ robo
 用一个简单命令测试：
 
 ```
-Run: gh pr list --repo IgniteeNow/robo-engineer --state open --limit 3
+Run: gh pr list --repo IgniteeNow/Robo --state open --limit 3
 ```
 
 你应该能看到一个开放 PR 的列表。如果成功，就可以继续了。
@@ -84,7 +84,7 @@ Run: gh pr list --repo IgniteeNow/robo-engineer --state open --limit 3
 Review this pull request. Read the diff, check for bugs, security issues,
 and code quality. Be specific about line numbers and quote problematic code.
 
-Run: gh pr diff 3888 --repo IgniteeNow/robo-engineer
+Run: gh pr diff 3888 --repo IgniteeNow/Robo
 ```
 
 Robo 将会：

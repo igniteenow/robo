@@ -159,7 +159,7 @@ You no longer need to wrap `robo update` in `screen` or `tmux` to survive a term
 robo version
 ```
 
-Compare against the latest release at the [GitHub releases page](https://github.com/IgniteeNow/robo-engineer/releases).
+Compare against the latest release at the [GitHub releases page](https://github.com/IgniteeNow/Robo/releases).
 
 ### Updating from Messaging Platforms
 

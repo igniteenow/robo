@@ -576,8 +576,8 @@ for desc in descriptions:
 
 ## References
 
-- **[Advanced Usage](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/creative/audiocraft-audio-generation/references/advanced-usage.md)** - Training, fine-tuning, deployment
-- **[Troubleshooting](https://github.com/IgniteeNow/robo-engineer/blob/main/optional-skills/creative/audiocraft-audio-generation/references/troubleshooting.md)** - Common issues and solutions
+- **[Advanced Usage](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/creative/audiocraft-audio-generation/references/advanced-usage.md)** - Training, fine-tuning, deployment
+- **[Troubleshooting](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/creative/audiocraft-audio-generation/references/troubleshooting.md)** - Common issues and solutions
 
 ## Resources
 

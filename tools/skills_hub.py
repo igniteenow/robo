@@ -3273,7 +3273,7 @@ class OptionalSkillSource(SkillSource):
     (search / install / inspect) and labelled "official" with "builtin" trust.
     """
 
-    OFFICIAL_REPO = "IgniteeNow/robo-engineer"
+    OFFICIAL_REPO = "IgniteeNow/Robo"
 
     def __init__(self):
         from robo_constants import get_optional_skills_dir
