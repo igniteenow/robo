@@ -99,7 +99,7 @@
     "cmdk": "1.1.1",
     "d3-force": "3.0.0",
     "dnd-core": "14.0.1",
-    "dompurify": "3.4.12",
+    "dompurify": "3.4.13",
     "emojibase-data": "16.0.3",
     "fflate": "0.8.3",
     "frimousse": "0.3.0",
@@ -107,7 +107,7 @@
     "hast-util-to-text": "4.0.2",
     "ignore": "7.0.6",
     "katex": "0.16.47",
-    "mermaid": "11.16.1",
+    "mermaid": "12.0.0",
     "motion": "12.42.2",
     "nanostores": "1.4.0",
     "node-pty": "1.1.0",
@@ -156,7 +156,7 @@
     "tsx": "4.23.1",
     "typescript": "6.0.3",
     "vite": "8.2.0",
-    "vitest": "4.1.10",
+    "vitest": "4.1.11",
     "wait-on": "9.0.10"
   },
   "build": {
