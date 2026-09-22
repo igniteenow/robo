@@ -144,7 +144,7 @@ python -m pytest tests/ -q
 
 ## 社区
 
-- 💬 [Discord](https://github.com/igniteenow/robo/discussions)
+- 💬 [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
 - 📚 [技能中心](https://agentskills.io)
 - 🐛 [问题反馈](https://github.com/igniteenow/robo/issues)
 - 💡 [讨论区](https://github.com/igniteenow/robo/discussions)

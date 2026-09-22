@@ -136,7 +136,7 @@ Inicio rápido para colaboradores — clona y comienza con `setup-robo.sh`:
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 ./setup-robo.sh     # instala uv, crea venv, instala .[all], enlaza ~/.local/bin/robo
 ./robo              # detecta automáticamente el venv, no necesitas hacer `source` primero
 ```
@@ -155,7 +155,7 @@ scripts/run_tests.sh
 
 ## Comunidad
 
-- 💬 [Discord](https://github.com/igniteenow/robo/discussions)
+- 💬 [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
 - 📚 [Skills Hub](https://agentskills.io)
 - 🐛 [Issues](https://github.com/igniteenow/robo/issues)
 - 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — Servidor MCP de control de escritorio Linux para Robo y otros hosts MCP, con árboles de accesibilidad AT-SPI, entrada Wayland/X11, capturas de pantalla y targeting de ventanas del compositor.

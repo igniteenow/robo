@@ -66,7 +66,7 @@ scripts/run_tests.sh
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 
 # 使用 Python 3.11 创建虚拟环境
 uv venv venv --python 3.11

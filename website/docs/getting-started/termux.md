@@ -88,7 +88,7 @@ Why these packages?
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 ```
 
 ### 3. Create a virtual environment

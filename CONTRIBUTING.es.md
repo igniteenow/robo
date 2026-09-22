@@ -45,7 +45,7 @@ Las habilidades incluidas (en `skills/`) se envían con cada instalación de Rob
 
 Si tu habilidad es oficial y útil pero no universalmente necesaria (ej., una integración de servicio de pago, una dependencia pesada), ponla en **`optional-skills/`** — se envía con el repositorio pero no está activada por defecto. Los usuarios pueden descubrirla a través de `robo skills browse` (etiquetada como "oficial") e instalarla con `robo skills install` (sin advertencia de terceros, confianza integrada).
 
-Si tu habilidad es especializada, contribuida por la comunidad o de nicho, es mejor para un **Skills Hub** — súbela a un registro de habilidades y compártela en el [Discord de Ignitee Now](https://github.com/igniteenow/robo/discussions). Los usuarios pueden instalarla con `robo skills install`.
+Si tu habilidad es especializada, contribuida por la comunidad o de nicho, es mejor para un **Skills Hub** — súbela a un registro de habilidades y compártela en el [GitHub Discussions de Ignitee Now](https://github.com/igniteenow/robo/discussions). Los usuarios pueden instalarla con `robo skills install`.
 
 ---
 
@@ -82,7 +82,7 @@ Esto no es una barra de calidad — es una decisión de acoplamiento y mantenimi
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 
 # Crear venv con Python 3.11
 uv venv venv --python 3.11
@@ -591,7 +591,7 @@ test(tools): añadir tests unitarios para file_operations
 
 ## Comunidad
 
-- **Discord**: [GitHub Discussions](https://github.com/igniteenow/robo/discussions) — para preguntas, mostrar proyectos y compartir habilidades
+- **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions) — para preguntas, mostrar proyectos y compartir habilidades
 - **GitHub Discussions**: Para propuestas de diseño y discusiones de arquitectura
 - **Skills Hub**: Sube habilidades especializadas a un registro y compártelas con la comunidad
 

@@ -16,7 +16,7 @@ Clone Robo and create its supported editable development environment:
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 uv sync
 ```
 

@@ -96,7 +96,7 @@ Publish these as a **standalone plugin repo** instead:
 - Implement the relevant ABC and use the existing plugin discovery path (`~/.robo/plugins/`, project `.robo/plugins/`, or a pip entry point) — see [the plugin developer guide](website/docs/developer-guide/plugins/)
 - Register lifecycle hooks (`pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`), tools (`ctx.register_tool`), and CLI subcommands (`ctx.register_cli_command`) through the surface we already expose — no core changes needed
 - If your plugin needs a capability the framework doesn't expose, that's a feature request to **widen the generic plugin surface** (a new hook or `ctx` method) — never special-case your plugin in core
-- Promote it in the [Ignitee Now GitHub Discussions](https://github.com/igniteenow/robo/discussions) `#plugins-skills-and-skins` channel so users can find and install it
+- Promote it in the [Ignitee Now GitHub Discussions](https://github.com/igniteenow/robo/discussions) so users can find and install it
 
 A well-built third-party-product plugin can clear automated review and still be closed for this reason — it's a placement decision, not a verdict on the code. PRs that add such a directory under `plugins/` will be closed with a pointer to publish it as its own repo.
 
@@ -157,7 +157,7 @@ tree means no relative path from the workspace resolves to it.
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 
 # Create venv with Python 3.11, OUTSIDE the source tree
 uv venv ~/.robo/venvs/robo-dev --python 3.11

@@ -81,7 +81,7 @@ pkg install -y git python clang rust make pkg-config libffi openssl nodejs ripgr
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 ```
 
 ### 3. 创建虚拟环境

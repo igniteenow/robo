@@ -51,7 +51,7 @@ robo chat
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 nix build
 ./result/bin/robo setup
 ```
@@ -719,7 +719,7 @@ services.robo-engineer.settings.plugins.enabled = [
 该 flake 提供了一个包含 Python 3.12、uv、Node.js 和所有运行时工具的开发 shell：
 
 ```bash
-cd robo-engineer
+cd robo
 nix develop
 
 # Shell 提供：
@@ -736,7 +736,7 @@ robo chat
 包含的 `.envrc` 会自动激活开发 shell：
 
 ```bash
-cd robo-engineer
+cd robo
 direnv allow    # 仅需一次
 # 后续进入几乎即时（戳记文件跳过依赖安装）
 ```

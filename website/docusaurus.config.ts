@@ -155,7 +155,7 @@ const config: Config = {
           position: 'left',
         },
         {
-          href: 'https://robo.igniteenow.com/',
+          href: 'https://github.com/igniteenow/robo/releases',
           label: 'Download',
           position: 'left',
         },
@@ -175,7 +175,7 @@ const config: Config = {
         },
         {
           href: 'https://github.com/igniteenow/robo/discussions',
-          label: 'Discord',
+          label: 'Discussions',
           position: 'right',
         },
       ],
@@ -195,7 +195,7 @@ const config: Config = {
         {
           title: 'Community',
           items: [
-            { label: 'Discord', href: 'https://github.com/igniteenow/robo/discussions' },
+            { label: 'Discussions', href: 'https://github.com/igniteenow/robo/discussions' },
             { label: 'GitHub Issues', href: 'https://github.com/igniteenow/robo/issues' },
             { label: 'Skills Hub', href: 'https://agentskills.io' },
           ],
@@ -203,7 +203,7 @@ const config: Config = {
         {
           title: 'More',
           items: [
-            { label: 'Desktop Download', href: 'https://robo.igniteenow.com/' },
+            { label: 'Download', href: 'https://github.com/igniteenow/robo/releases' },
             { label: 'GitHub', href: 'https://github.com/igniteenow/robo' },
             { label: 'Ignitee Now', href: 'https://igniteenow.com' },
           ],

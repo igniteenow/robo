@@ -164,7 +164,7 @@ robo doctor       # کسی بھی مسئلے کی تشخیص کریں
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 ./setup-robo.sh     # uv کو انسٹال کرتا ہے، venv بناتا ہے، .[all] کو انسٹال کرتا ہے، اور ~/.local/bin/robo کا سیم لنک (symlink) بناتا ہے
 ./robo              # خود بخود venv کی شناخت کرتا ہے، پہلے `source` کرنے کی ضرورت نہیں
 ```
@@ -189,7 +189,7 @@ scripts/run_tests.sh
 
 ## کمیونٹی (Community)
 
-- 💬 [ڈسکارڈ (Discord)](https://github.com/igniteenow/robo/discussions)
+- 💬 [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
 - 📚 [سکلز ہب (Skills Hub)](https://agentskills.io)
 - 🐛 [مسائل (Issues)](https://github.com/igniteenow/robo/issues)
 - 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — روبو اور دیگر MCP ہوسٹس کے لیے لینکس (Linux) ڈیسک ٹاپ کنٹرول MCP سرور، جس میں AT-SPI ایکسیسیبلٹی ٹریز، Wayland/X11 ان پٹ، سکرین شاٹس، اور کمپوزیٹر ونڈو ٹارگیٹنگ شامل ہے۔

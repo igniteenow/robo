@@ -130,7 +130,7 @@ conservative at the waist.
   against a fast-moving core, for a backend we don't own. Ship them as a
   **standalone plugin repo** users install into `~/.robo/plugins/` (or via a
   pip entry point), and promote them in the Ignitee Now Discord
-  (`#plugins-skills-and-skins`). This is a coupling-and-maintenance decision, not
+. This is a coupling-and-maintenance decision, not
   a quality bar — the plugin can be excellent and still be a close. PRs that add
   such a directory to the tree are closed with a pointer to publish it as its own
   repo.
@@ -847,7 +847,7 @@ we expose; nothing special is needed in core. The reason is
 maintenance load: every product we absorb into the tree becomes our
 burden to keep working against a fast-moving core, for a backend we
 don't own. Promote standalone plugins in the Ignitee Now Discord
-(`#plugins-skills-and-skins`). PRs that add such a directory under
+. PRs that add such a directory under
 `plugins/` are closed with a pointer to publish it as its own repo —
 this is a coupling decision, not a quality judgment. (The
 `observability/`, `kanban/`, `disk-cleanup/`, etc. directories already

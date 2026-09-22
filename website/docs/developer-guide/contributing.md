@@ -90,7 +90,7 @@ tree means no relative path from the workspace resolves to it.
 
 ```bash
 git clone https://github.com/igniteenow/robo.git
-cd robo-engineer
+cd robo
 
 # Create venv with Python 3.11, OUTSIDE the source tree
 uv venv ~/.robo/venvs/robo-dev --python 3.11
@@ -289,7 +289,7 @@ fix(security): prevent shell injection in sudo password piping
 
 ## Community
 
-- **Discord**: [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
+- **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions)
 - **GitHub Discussions**: For design proposals and architecture discussions
 - **Skills Hub**: Upload specialized skills and share with the community
 
