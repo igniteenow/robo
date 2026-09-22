@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Robo</title>
+<style>
+  :root{ --ink:#ffe9d6; --dim:#a9aecf; --line:rgba(255,255,255,.12); --ember:#ef8a22; --amber:#df5a30; }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:
+      radial-gradient(70% 55% at 50% 42%, rgba(239,138,34,.14) 0%, rgba(239,138,34,0) 62%),
+      radial-gradient(130% 100% at 50% 10%, #1e255c 0%, #0e1437 55%, #0a1030 100%);
+    color:var(--ink);
+    font-family:ui-rounded,"SF Pro Rounded","Segoe UI Variable Display",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden;-webkit-tap-highlight-color:transparent;
+  }
+  canvas{display:block;width:100%;height:100%}
+  .status{position:fixed;top:14px;left:16px;
+    display:flex;align-items:center;gap:9px;font-size:13px;font-weight:600;color:var(--dim);pointer-events:none}
+  .dot{width:8px;height:8px;border-radius:50%;background:#3fbf7f;box-shadow:0 0 12px #3fbf7f}
+  .status b{color:var(--ink);font-weight:700}
+  .panel{position:fixed;left:0;right:0;bottom:0;padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    background:linear-gradient(to top,rgba(10,16,48,.92),rgba(10,16,48,0));
+    transition:opacity .25s,transform .25s}
+  .panel.off{opacity:0;transform:translateY(12px);pointer-events:none}
+  .row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+  button{font:inherit;font-size:14px;font-weight:600;color:var(--dim);
+    background:rgba(255,255,255,.05);border:1.5px solid var(--line);border-radius:999px;
+    padding:9px 15px;cursor:pointer;
+    transition:color .18s,border-color .18s,background .18s,transform .14s}
+  button:hover{color:var(--ink);border-color:rgba(255,255,255,.32);transform:translateY(-1px)}
+  button:active{transform:translateY(0) scale(.97)}
+  button.on{color:#fff;border-color:var(--ember);background:rgba(239,138,34,.16)}
+  .hint{font-size:12px;color:#6f7480;text-align:center;max-width:430px;line-height:1.5}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;color:#c3c7ea;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="status"><span class="dot"></span><span>Robo · <b id="state">happy</b></span></div>
+<canvas id="c"></canvas>
+<div class="panel" id="panel">
+  <div class="row" id="buttons"></div>
+  <div class="hint">Keys <code>1–7</code> · <code>window.RobotFace.set('happy')</code> · <code>postMessage({emotion:'sad'})</code> · <code>?emotion=&amp;ui=0&amp;fps=30&amp;accent=3de0ff</code></div>
+</div>
+
+<script src="three.r128.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ---------------------------- emotion table ---------------------------- */
+  // Every parameter is normalised 0..1-ish and lerped every frame, so any
+  // transition between any two states is smooth without keyframes.
+  //   eyeH     eye panel height (1 = open)      eyeW  eye width
+  //   lidTop   how far the upper lid drops       squint lower-lid rise (smile eyes)
+  //   lookX/Y  pupil glow offset                 browL/R  brow-line tilt (radians)
+  //   mouth    curvature (+ smile, - frown)      open   vertical opening
+  //   mouthW   width scale                       skew   asymmetry (confused)
+  //   tiltX/Y/Z head rotation                    glow   ember intensity
+  var EMOTIONS = {
+    neutral:   { eyeH:1.00, eyeW:1.00, lidTop:.06, squint:.00, lookX:0,   lookY:0,   browL: .00, browR: .00, mouth: .18, open:.00, mouthW:1.00, skew:0,   tiltX:0,   tiltY:0,   tiltZ:0,   glow:1.00, pulse:.35 },
+    happy:     { eyeH:.62,  eyeW:1.06, lidTop:.00, squint:.55, lookX:0,   lookY:.05, browL:-.10, browR: .10, mouth: .95, open:.18, mouthW:1.25, skew:0,   tiltX:-.06,tiltY:0,   tiltZ:0,   glow:1.35, pulse:.55 },
+    sad:       { eyeH:.82,  eyeW:.94,  lidTop:.30, squint:.00, lookX:0,   lookY:.22, browL: .38, browR:-.38, mouth:-.60, open:.02, mouthW:.80,  skew:0,   tiltX:.14, tiltY:0,   tiltZ:0,   glow:.65,  pulse:.15 },
+    confused:  { eyeH:.90,  eyeW:1.00, lidTop:.12, squint:.00, lookX:.30, lookY:.10, browL:-.30, browR: .18, mouth:-.05, open:.08, mouthW:.75,  skew:.55, tiltX:-.03,tiltY:.14, tiltZ:.22, glow:.95,  pulse:.8 },
+    surprised: { eyeH:1.30, eyeW:1.10, lidTop:.00, squint:.00, lookX:0,   lookY:-.05,browL:-.22, browR: .22, mouth: .05, open:.70, mouthW:.70,  skew:0,   tiltX:-.10,tiltY:0,   tiltZ:0,   glow:1.50, pulse:1.0 },
+    grumpy:    { eyeH:.55,  eyeW:1.00, lidTop:.40, squint:.10, lookX:0,   lookY:.00, browL: .42, browR:-.42, mouth:-.35, open:.00, mouthW:.85,  skew:0,   tiltX:.08, tiltY:0,   tiltZ:0,   glow:.85,  pulse:.9 },
+    sleepy:    { eyeH:.18,  eyeW:1.00, lidTop:.70, squint:.00, lookX:0,   lookY:.30, browL: .05, browR:-.05, mouth: .05, open:.04, mouthW:.70,  skew:0,   tiltX:.22, tiltY:0,   tiltZ:.08, glow:.35,  pulse:.08 }
+  };
+  var ALIASES = {
+    success:'happy', ok:'happy', done:'happy', complete:'happy', pass:'happy', yay:'happy',
+    fail:'sad', failed:'sad', error:'sad', fault:'sad', sorry:'sad',
+    confuse:'confused', unsure:'confused', thinking:'confused', unknown:'confused', huh:'confused',
+    wow:'surprised', alert:'surprised', detect:'surprised', found:'surprised', listening:'surprised',
+    angry:'grumpy', mad:'grumpy', stop:'grumpy', busy:'grumpy', working:'grumpy',
+    idle:'neutral', ready:'neutral', standby:'neutral',
+    sleep:'sleepy', off:'sleepy', charging:'sleepy'
+  };
+  var BUTTONS = [
+    ['happy','Happy','1'], ['sad','Sad','2'], ['confused','Confused','3'],
+    ['surprised','Surprised','4'], ['grumpy','Grumpy','5'],
+    ['sleepy','Sleepy','6'], ['neutral','Neutral','7']
+  ];
+
+  /* ------------------------------ colours ------------------------------- */
+  // Eye/mouth glow: Ignitee cyan by default. ?accent=RRGGBB (or legacy ?hat=) to change.
+  var ACCENT = 0x3de0ff;
+  var FLAME = 0xf07a2a, INDIGO = 0x7c7ef0;
+  (function () {
+    var q = new URLSearchParams(location.search);
+    var h = q.get('accent') || q.get('hat');
+    if (h && /^#?[0-9a-f]{6}$/i.test(h)) ACCENT = parseInt(h.replace('#',''), 16);
+  })();
+  var SHELL = 0xe9ecf5, SHELL_D = 0xc9cee0, GLASS = 0x0a1936, SEAM = 0x8a90b3;
+
+  /* ------------------------------- scene -------------------------------- */
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(30, 1, .1, 50);
+  camera.position.set(0, .05, 7.2);
+
+  scene.add(new THREE.HemisphereLight(0xeaf0ff, 0x0a1936, .6));
+  var key = new THREE.DirectionalLight(0xffffff, .9); key.position.set(2.2, 3.0, 4.2); scene.add(key);
+  var rim = new THREE.DirectionalLight(0x3de0ff, .5); rim.position.set(-2.6, 1.4, -3.0); scene.add(rim);
+  var fill = new THREE.PointLight(0x7c7ef0, .30, 20); fill.position.set(-1.5, -1.6, 3.5); scene.add(fill);
+
+  /* ----------------------------- materials ------------------------------ */
+  var mBody  = new THREE.MeshStandardMaterial({ color: SHELL,   roughness: .42, metalness: .15 });
+  var mBodyD = new THREE.MeshStandardMaterial({ color: SHELL_D, roughness: .5,  metalness: .15 });
+  var mGlass = new THREE.MeshStandardMaterial({ color: GLASS, roughness: .16, metalness: .8 });
+  var mSeam  = new THREE.MeshStandardMaterial({ color: SEAM, roughness: .5, metalness: .3 });
+  var mEmber = new THREE.MeshStandardMaterial({ color: ACCENT, emissive: ACCENT, emissiveIntensity: 1.6, roughness: .35, metalness: 0 });
+  var mEmberSoft = new THREE.MeshStandardMaterial({ color: INDIGO, emissive: INDIGO, emissiveIntensity: .9, roughness: .5, metalness: 0, transparent: true, opacity: .9 });
+  var mFlame = new THREE.MeshStandardMaterial({ color: FLAME, emissive: FLAME, emissiveIntensity: 1.6, roughness: .35, metalness: 0 });
+
+  /* ---------------------------- geometry helpers ------------------------- */
+  function roundedRect(w, h, r) {
+    var s = new THREE.Shape(), x = -w/2, y = -h/2;
+    s.moveTo(x + r, y);
+    s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+    s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+    s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+    return s;
+  }
+  function roundedBox(w, h, d, r, bevel, mat) {
+    var g = new THREE.ExtrudeGeometry(roundedRect(w, h, r), {
+      depth: d - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 6, curveSegments: 16
+    });
+    g.center();
+    return new THREE.Mesh(g, mat);
+  }
+
+  /* -------------------------------- head -------------------------------- */
+  var head = new THREE.Group(); scene.add(head);
+
+  var shell = roundedBox(3.0, 2.55, 1.9, .62, .14, mBody);
+  head.add(shell);
+
+  // Visor: an inset dark-glass panel on the front face.
+  var visor = roundedBox(2.45, 1.55, .22, .48, .05, mGlass);
+  visor.position.set(0, .12, .90);
+  head.add(visor);
+
+  // Seam line under the visor (a subtle "chin" plate).
+  var chin = roundedBox(2.1, .28, .10, .12, .02, mBodyD);
+  chin.position.set(0, -.95, .92);
+  head.add(chin);
+
+  // Side audio pods.
+  [-1, 1].forEach(function (side) {
+    var pod = new THREE.Mesh(new THREE.CylinderGeometry(.34, .34, .22, 32), mBodyD);
+    pod.rotation.z = Math.PI / 2; pod.position.set(side * 1.58, -.02, 0); head.add(pod);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(.20, .035, 12, 40), mEmberSoft);
+    ring.rotation.y = Math.PI / 2; ring.position.set(side * 1.70, -.02, 0); head.add(ring);
+  });
+
+  // Antenna with an ember tip that pulses.
+  var stem = new THREE.Mesh(new THREE.CylinderGeometry(.045, .06, .55, 16), mSeam);
+  stem.position.set(0, 1.52, 0); head.add(stem);
+  var tip = new THREE.Mesh(new THREE.SphereGeometry(.13, 24, 18), mFlame);
+  tip.position.set(0, 1.86, 0); head.add(tip);
+  var tipGlow = new THREE.PointLight(FLAME, .6, 4); tipGlow.position.copy(tip.position); head.add(tipGlow);
+
+  /* -------------------------------- eyes -------------------------------- */
+  // Each eye is a glowing rounded panel behind the glass with a lid (dark
+  // plate) that slides down, and a lower "squint" plate that slides up.
+  var EYE = { w: .62, h: .50, r: .16, gap: .74, y: .20, z: 1.03 };
+  function makeEye(side) {
+    var g = new THREE.Group();
+    g.position.set(side * EYE.gap, EYE.y, EYE.z);
+    var panel = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(EYE.w, EYE.h, EYE.r), 12), mEmber);
+    g.add(panel);
+    var core = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(EYE.w * .42, EYE.h * .42, EYE.r * .4), 10),
+      new THREE.MeshBasicMaterial({ color: 0xf4fdff }));
+    core.position.z = .004; g.add(core);
+    var lid = new THREE.Mesh(new THREE.PlaneGeometry(EYE.w + .1, EYE.h + .1), mGlass.clone());
+    lid.material.color.setHex(GLASS); lid.position.z = .008; g.add(lid);
+    var squint = new THREE.Mesh(new THREE.PlaneGeometry(EYE.w + .1, EYE.h + .1), mGlass.clone());
+    squint.position.z = .008; g.add(squint);
+    var brow = new THREE.Mesh(new THREE.BoxGeometry(EYE.w + .16, .06, .04), mSeam);
+    brow.position.set(0, EYE.h * .5 + .17, .01); g.add(brow);
+    return { g: g, panel: panel, core: core, lid: lid, squint: squint, brow: brow, side: side };
+  }
+  var eyeL = makeEye(-1), eyeR = makeEye(1);
+  head.add(eyeL.g); head.add(eyeR.g);
+
+  /* -------------------------------- mouth ------------------------------- */
+  // An LED strip: N emissive dots repositioned along a parabola each frame.
+  var MOUTH = { n: 11, w: .86, y: -.62, z: 1.03, dot: .045 };
+  var mouthGroup = new THREE.Group(); mouthGroup.position.set(0, MOUTH.y, MOUTH.z); head.add(mouthGroup);
+  var upper = [], lower = [];
+  for (var i = 0; i < MOUTH.n; i++) {
+    var d = new THREE.Mesh(new THREE.SphereGeometry(MOUTH.dot, 14, 10), mEmber); mouthGroup.add(d); upper.push(d);
+    var e = new THREE.Mesh(new THREE.SphereGeometry(MOUTH.dot, 14, 10), mEmber); mouthGroup.add(e); lower.push(e);
+  }
+  function layoutMouth(p) {
+    var half = MOUTH.w * p.mouthW * .5;
+    for (var i = 0; i < MOUTH.n; i++) {
+      var t = MOUTH.n === 1 ? 0 : (i / (MOUTH.n - 1)) * 2 - 1;          // -1..1
+      var x = t * half;
+      // +y is up in Three.js: a smile is a U, so the centre dips for mouth > 0.
+      var curve = -p.mouth * .28 * (1 - t * t) + p.skew * .10 * t;        // parabola + skew
+      var y = curve + p.mouth * .12;
+      upper[i].position.set(x, y + p.open * .16 * (1 - t * t) * 1.2, 0);
+      lower[i].position.set(x, y - p.open * .22 * (1 - t * t), 0);
+      lower[i].visible = p.open > .03;
+      var s = .8 + .4 * (1 - Math.abs(t));
+      upper[i].scale.setScalar(s); lower[i].scale.setScalar(s * .9);
+    }
+  }
+
+  /* ------------------------------ animation ----------------------------- */
+  var current = 'happy', cur = {}, tgt = {};
+  Object.keys(EMOTIONS.neutral).forEach(function (k) { cur[k] = EMOTIONS.neutral[k]; tgt[k] = cur[k]; });
+
+  function norm(n) { n = String(n || '').toLowerCase().trim(); return EMOTIONS[n] ? n : (ALIASES[n] || null); }
+  function setEmotion(name) {
+    var n = norm(name); if (!n) return false;
+    current = n; var e = EMOTIONS[n];
+    Object.keys(e).forEach(function (k) { tgt[k] = e[k]; });
+    document.getElementById('state').textContent = n;
+    var bs = document.querySelectorAll('#buttons button');
+    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i].dataset.e === n);
+    return true;
+  }
+
+  var blinkT = 2.2 + Math.random() * 2, blinkPhase = 0, lookT = 1.5, lookX = 0, lookY = 0;
+  var clock = new THREE.Clock(), acc = 0, FPS = 60;
+
+  function frame() {
+    requestAnimationFrame(frame);
+    var dt = Math.min(clock.getDelta(), .05);
+    acc += dt; if (acc < 1 / FPS) return; acc = 0;
+    var t = clock.elapsedTime;
+
+    // Lerp toward target state.
+    var k = 1 - Math.pow(.0009, dt);
+    for (var key in tgt) cur[key] += (tgt[key] - cur[key]) * k;
+
+    // Blink.
+    blinkT -= dt;
+    if (blinkT <= 0 && blinkPhase === 0) blinkPhase = .001;
+    var blink = 0;
+    if (blinkPhase > 0) {
+      blinkPhase += dt * 9;
+      blink = Math.sin(Math.min(blinkPhase, Math.PI));
+      if (blinkPhase >= Math.PI) { blinkPhase = 0; blinkT = 2.5 + Math.random() * 3.5; }
+    }
+
+    // Occasional micro-look.
+    lookT -= dt;
+    if (lookT <= 0) { lookX = (Math.random() - .5) * .18; lookY = (Math.random() - .5) * .10; lookT = 1.2 + Math.random() * 2.4; }
+
+    // Eyes.
+    [eyeL, eyeR].forEach(function (E) {
+      var openness = Math.max(.06, cur.eyeH * (1 - blink * .95));
+      E.panel.scale.set(cur.eyeW, openness, 1);
+      E.core.position.x = (cur.lookX + lookX) * .12 * E.side * (E.side > 0 ? 1 : 1);
+      E.core.position.y = (cur.lookY + lookY) * -.10;
+      E.core.scale.set(cur.eyeW * .9, Math.max(.05, openness * .9), 1);
+      E.core.material.opacity = .95;
+      // lid slides down from top; squint slides up from bottom
+      var lidDrop = cur.lidTop + blink * .6;
+      E.lid.position.y = EYE.h * .5 + (EYE.h + .1) * .5 - lidDrop * (EYE.h + .1);
+      var sq = cur.squint;
+      E.squint.position.y = -EYE.h * .5 - (EYE.h + .1) * .5 + sq * (EYE.h + .1) * .9;
+      E.brow.rotation.z = E.side < 0 ? cur.browL : cur.browR;
+      E.brow.position.y = EYE.h * .5 + .17 - Math.abs(E.side < 0 ? cur.browL : cur.browR) * .06;
+    });
+
+    // Mouth.
+    layoutMouth(cur);
+
+    // Glow + antenna pulse.
+    var pulse = .5 + .5 * Math.sin(t * (2 + cur.pulse * 6));
+    mEmber.emissiveIntensity = 1.1 * cur.glow + .35 * pulse * cur.pulse;
+    tipGlow.intensity = .35 + .9 * pulse * cur.pulse * cur.glow;
+    tip.scale.setScalar(1 + .12 * pulse * cur.pulse);
+
+    // Head motion: target tilt + gentle idle bob/sway.
+    head.rotation.x = cur.tiltX + Math.sin(t * .9) * .015;
+    head.rotation.y = cur.tiltY + Math.sin(t * .6) * .04;
+    head.rotation.z = cur.tiltZ + Math.sin(t * .7) * .01;
+    head.position.y = Math.sin(t * 1.1) * .035;
+
+    renderer.render(scene, camera);
+  }
+
+  /* ------------------------------ resize/UI ------------------------------ */
+  function resize() {
+    var w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    camera.position.z = w / h < .9 ? 8.6 : 7.2;
+  }
+  window.addEventListener('resize', resize); resize();
+
+  var panel = document.getElementById('panel'), btns = document.getElementById('buttons');
+  BUTTONS.forEach(function (b) {
+    var el = document.createElement('button'); el.textContent = b[1]; el.dataset.e = b[0]; el.title = 'Key ' + b[2];
+    el.addEventListener('click', function () { setEmotion(b[0]); }); btns.appendChild(el);
+  });
+  window.addEventListener('keydown', function (e) {
+    var b = BUTTONS.filter(function (x) { return x[2] === e.key; })[0]; if (b) setEmotion(b[0]);
+  });
+
+  /* -------------------------------- API --------------------------------- */
+  window.RobotFace = {
+    set: setEmotion,
+    success: function () { return setEmotion('happy'); },
+    fail:    function () { return setEmotion('sad'); },
+    confuse: function () { return setEmotion('confused'); },
+    reset:   function () { return setEmotion('neutral'); },
+    sleep:   function () { return setEmotion('sleepy'); },
+    get:     function () { return current; },
+    states:  function () { return Object.keys(EMOTIONS); },
+    showUI:  function (on) { panel.classList.toggle('off', on === false); }
+  };
+  window.addEventListener('message', function (e) {
+    var d = e.data; if (!d) return;
+    if (typeof d === 'string') setEmotion(d); else if (d.emotion) setEmotion(d.emotion);
+  });
+
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('ui') === '0') { panel.classList.add('off'); document.querySelector('.status').style.display = 'none'; }
+  FPS = Math.max(15, Math.min(60, parseInt(qs.get('fps'), 10) || 60));
+  setEmotion(qs.get('emotion') || location.hash.slice(1) || 'happy');
+  frame();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,286 @@
+/**
+ * Robo Agent — Custom Docusaurus Theme
+ * Ignitee Now branding: ember on deep navy (see assets/brand/BRAND.md)
+ * Colors from landingpage/style.css
+ */
+
+/* Import fonts to match landing page */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Ignitee Now brand typeface: Poppins (SIL OFL 1.1), self-hosted from ./fonts. */
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/Poppins-Regular.woff') format('woff'); }
+@font-face { font-family: 'Poppins'; font-style: italic; font-weight: 400; font-display: swap; src: url('./fonts/Poppins-Italic.woff') format('woff'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 500; font-display: swap; src: url('./fonts/Poppins-Medium.woff') format('woff'); }
+@font-face { font-family: 'Poppins'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/Poppins-Bold.woff') format('woff'); }
+
+:root {
+  /* Burnt-ember palette for light mode. The bright ember #EF8A22 is too light
+     for body links on white, so light mode uses deeper tones that pass 4.5:1. */
+  --ifm-color-primary: #B5470F;
+  --ifm-color-primary-dark: #9E3D0C;
+  --ifm-color-primary-darker: #8F370B;
+  --ifm-color-primary-darkest: #752D09;
+  --ifm-color-primary-light: #C8511A;
+  --ifm-color-primary-lighter: #D8601C;
+  --ifm-color-primary-lightest: #E5742E;
+
+  --ifm-font-family-base: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  --ifm-code-font-size: 90%;
+  --ifm-heading-font-weight: 600;
+
+  --ifm-link-color: #9E3D0C;
+  --ifm-link-hover-color: #752D09;
+}
+
+/* Dark mode — the PRIMARY mode, matches landing page */
+[data-theme='dark'] {
+  --ifm-color-primary: #EF8A22;
+  --ifm-color-primary-dark: #E07C16;
+  --ifm-color-primary-darker: #D47514;
+  --ifm-color-primary-darkest: #AE6010;
+  --ifm-color-primary-light: #F19A40;
+  --ifm-color-primary-lighter: #F3A555;
+  --ifm-color-primary-lightest: #F7C088;
+
+  --ifm-background-color: #0A1030;
+  --ifm-background-surface-color: #0E1437;
+  --ifm-navbar-background-color: #0A1030EE;
+  --ifm-footer-background-color: #070B24;
+  --ifm-color-emphasis-100: #141A45;
+  --ifm-color-emphasis-200: #1E255C;
+
+  --ifm-font-color-base: #F1E9E1;
+  --ifm-font-color-secondary: #A9AECF;
+
+  --ifm-link-color: #EF8A22;
+  --ifm-link-hover-color: #F5A13A;
+
+  --ifm-code-background: #0E1437;
+
+  --ifm-toc-border-color: rgba(239, 138, 34, 0.08);
+  --ifm-hr-border-color: rgba(239, 138, 34, 0.08);
+
+  --docusaurus-highlighted-code-line-bg: rgba(239, 138, 34, 0.08);
+}
+
+/* Subtle dot grid background matching landing page */
+[data-theme='dark'] .main-wrapper {
+  background-image: radial-gradient(rgba(239, 138, 34, 0.02) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Navbar styling */
+.navbar {
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(239, 138, 34, 0.08);
+}
+
+/* backdrop-filter creates a stacking context that hides
+   .navbar-sidebar menu content (Docusaurus #6996). Remove it
+   while the mobile sidebar is open — both classes live on the
+   same <nav> element. */
+.navbar.navbar-sidebar--show {
+  backdrop-filter: none;
+}
+
+.navbar__title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Sidebar tweaks */
+[data-theme='dark'] .menu {
+  background-color: transparent;
+}
+
+[data-theme='dark'] .menu__link--active:not(.menu__link--sublist) {
+  background-color: rgba(239, 138, 34, 0.08);
+  border-left: 3px solid #EF8A22;
+  padding-left: calc(var(--ifm-menu-link-padding-horizontal) - 3px);
+}
+
+/* Light mode sidebar active */
+[data-theme='light'] .menu__link--active:not(.menu__link--sublist) {
+  background-color: rgba(139, 101, 8, 0.08);
+  border-left: 3px solid #B5470F;
+  padding-left: calc(var(--ifm-menu-link-padding-horizontal) - 3px);
+}
+
+/* Code blocks */
+[data-theme='dark'] .prism-code {
+  background-color: #0a0a12 !important;
+  border: 1px solid rgba(239, 138, 34, 0.06);
+}
+
+/* Text diagrams: preserve spacing, disable ligatures, and prefer box-drawing-safe fonts */
+pre.prism-code.language-text,
+pre.prism-code.language-plaintext,
+pre.prism-code.language-txt,
+pre.prism-code.language-ascii {
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.35;
+  font-family: 'JetBrains Mono', 'Cascadia Mono', 'Cascadia Code', 'Fira Code', 'SFMono-Regular', 'DejaVu Sans Mono', 'Liberation Mono', monospace;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  text-rendering: optimizeSpeed;
+}
+
+pre.prism-code.language-text code,
+pre.prism-code.language-plaintext code,
+pre.prism-code.language-txt code,
+pre.prism-code.language-ascii code {
+  white-space: pre;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+.theme-mermaid {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.theme-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.docs-terminal-figure {
+  display: block;
+  width: 100%;
+  max-width: 900px;
+  margin: 1.25rem auto 0.5rem;
+  border: 1px solid rgba(239, 138, 34, 0.08);
+  border-radius: 12px;
+  background: #0a0a12;
+}
+
+.docs-figure-caption {
+  margin-top: 0.35rem;
+  text-align: center;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.95rem;
+}
+
+/* Admonitions — ember-tinted */
+[data-theme='dark'] .alert--info {
+  --ifm-alert-background-color: rgba(239, 138, 34, 0.05);
+  --ifm-alert-border-color: rgba(239, 138, 34, 0.15);
+}
+
+/* Table styling */
+[data-theme='dark'] table {
+  border-collapse: collapse;
+}
+
+[data-theme='dark'] table th {
+  background-color: rgba(239, 138, 34, 0.06);
+  border-color: rgba(239, 138, 34, 0.12);
+}
+
+[data-theme='dark'] table td {
+  border-color: rgba(239, 138, 34, 0.06);
+}
+
+/* Light mode table styling */
+[data-theme='light'] table th {
+  background-color: rgba(139, 101, 8, 0.06);
+  border-color: rgba(139, 101, 8, 0.15);
+}
+
+[data-theme='light'] table td {
+  border-color: rgba(139, 101, 8, 0.10);
+}
+
+/* Footer */
+.footer {
+  border-top: 1px solid rgba(239, 138, 34, 0.08);
+}
+
+.footer a {
+  color: #A9AECF;
+  transition: color 0.2s;
+}
+
+[data-theme='dark'] .footer a:hover {
+  color: #EF8A22;
+  text-decoration: none;
+}
+
+[data-theme='light'] .footer a:hover {
+  color: #9E3D0C;
+  text-decoration: none;
+}
+
+/* Scrollbar */
+[data-theme='dark'] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-track {
+  background: #0A1030;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #1E255C;
+  border-radius: 4px;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: #2a2a40;
+}
+
+/* Search bar */
+[data-theme='dark'] .DocSearch-Button {
+  background-color: #0E1437;
+  border: 1px solid rgba(239, 138, 34, 0.08);
+}
+
+/* ─── Mobile sidebar improvements ─────────────────────────────────────────── */
+
+/* Larger touch targets on mobile */
+@media (max-width: 996px) {
+  .menu__link {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .menu__list-item-collapsible > .menu__link {
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.75rem 0.75rem;
+    border-bottom: 1px solid rgba(239, 138, 34, 0.06);
+  }
+
+  /* Category caret — more visible */
+  .menu__caret::before {
+    background-size: 1.5rem 1.5rem;
+  }
+
+  /* Indent subcategories clearly */
+  .menu__list .menu__list {
+    padding-left: 0.75rem;
+    border-left: 1px solid rgba(239, 138, 34, 0.06);
+    margin-left: 0.5rem;
+  }
+
+  /* Sidebar overlay — slightly more opaque for readability */
+  .navbar-sidebar__backdrop {
+    background-color: rgba(0, 0, 0, 0.6);
+  }
+
+  /* Sidebar width on mobile — use more of the screen */
+  .navbar-sidebar {
+    width: 85vw;
+    max-width: 360px;
+  }
+}
+
+/* Hero banner for docs landing if needed */
+.hero--robo {
+  background: linear-gradient(135deg, #0A1030 0%, #0E1437 100%);
+  padding: 4rem 0;
+}

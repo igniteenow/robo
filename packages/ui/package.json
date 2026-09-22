@@ -1,0 +1,24 @@
+{
+  "name": "@igniteenow/ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Robo's shared UI components. Written by Ignitee Now from docs/ui-kit/SPEC.md. No runtime dependencies beyond React.",
+  "license": "MIT",
+  "author": "Ignitee Now",
+  "type": "module",
+  "sideEffects": ["**/*.css"],
+  "exports": {
+    "./ui/components/*": "./src/ui/components/*.tsx",
+    "./hooks/*": "./src/hooks/*.ts",
+    "./lib/*": "./src/lib/*.ts",
+    "./styles/*": "./src/styles/*"
+  },
+  "files": ["src", "LICENSE", "README.md"],
+  "scripts": {
+    "test": "tsx test/smoke.test.tsx"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  }
+}
