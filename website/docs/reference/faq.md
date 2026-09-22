@@ -205,7 +205,7 @@ source ~/.bashrc
 # If you previously installed with sudo, clean up:
 sudo rm /usr/local/bin/robo
 # Then re-run the standard installer
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 ```
 
 ---
@@ -745,7 +745,7 @@ Skills with very long descriptions are truncated to 40 characters in the Telegra
 
 1. Install Robo Agent on the new machine:
    ```bash
-   git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+   git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
    ```
 
 2. On the **source machine**, create a full backup:
@@ -849,6 +849,6 @@ If using OpenRouter, make sure your API key has credits. A 400 from OpenRouter o
 
 If your issue isn't covered here:
 
-1. **Search existing issues:** [GitHub Issues](https://github.com/IgniteeNow/Robo/issues)
-2. **Ask the community:** [Robo Discord](https://github.com/IgniteeNow/Robo/discussions)
+1. **Search existing issues:** [GitHub Issues](https://github.com/igniteenow/robo/issues)
+2. **Ask the community:** [Robo Discord](https://github.com/igniteenow/robo/discussions)
 3. **File a bug report:** Include your OS, Python version (`python3 --version`), Robo version (`robo --version`), and the full error message

@@ -181,7 +181,7 @@ Open WebUI 目前即使在 Responses 模式下也在客户端管理对话历史�
 
 你的 agent 可以访问该 API 服务器 Robo 实例所拥有的相同工具和能力。如果 API 服务器是远程的，这些工具也是远程的。
 
-如果你今天需要工具在**本地**工作区运行，请在本地运行 Robo 并将其指向纯 LLM 提供商或纯 OpenAI 兼容模型代理（例如 vLLM、LiteLLM、Ollama、llama.cpp、OpenAI、OpenRouter 等）。"远程大脑、本地执行"的分离运行时模式正在 [#18715](https://github.com/IgniteeNow/Robo/issues/18715) 中跟踪；这不是当前 API 服务器的行为。
+如果你今天需要工具在**本地**工作区运行，请在本地运行 Robo 并将其指向纯 LLM 提供商或纯 OpenAI 兼容模型代理（例如 vLLM、LiteLLM、Ollama、llama.cpp、OpenAI、OpenRouter 等）。"远程大脑、本地执行"的分离运行时模式正在 [#18715](https://github.com/igniteenow/robo/issues/18715) 中跟踪；这不是当前 API 服务器的行为。
 
 :::tip 工具进度
 启用流式传输（默认）后，工具运行时你会看到简短的内联指示——工具 emoji 及其关键参数。这些内容在 agent 最终答案之前出现在响应流中，让你了解后台正在发生的事情。

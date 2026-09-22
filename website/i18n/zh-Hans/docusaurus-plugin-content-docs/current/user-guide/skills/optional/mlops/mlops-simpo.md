@@ -208,11 +208,11 @@ gradient_checkpointing: true
 
 ## 进阶主题
 
-**损失函数**：参见 [references/loss-functions.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/simpo/references/loss-functions.md)，了解 sigmoid 与 hinge 损失、数学公式及各自适用场景。
+**损失函数**：参见 [references/loss-functions.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/simpo/references/loss-functions.md)，了解 sigmoid 与 hinge 损失、数学公式及各自适用场景。
 
-**超参数调优**：参见 [references/hyperparameters.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/simpo/references/hyperparameters.md)，了解 beta、gamma、学习率选择指南及针对不同模型规模的建议。
+**超参数调优**：参见 [references/hyperparameters.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/simpo/references/hyperparameters.md)，了解 beta、gamma、学习率选择指南及针对不同模型规模的建议。
 
-**数据集准备**：参见 [references/datasets.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/simpo/references/datasets.md)，了解偏好数据格式、质量过滤及自定义数据集创建方法。
+**数据集准备**：参见 [references/datasets.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/simpo/references/datasets.md)，了解偏好数据格式、质量过滤及自定义数据集创建方法。
 
 ## 硬件要求
 

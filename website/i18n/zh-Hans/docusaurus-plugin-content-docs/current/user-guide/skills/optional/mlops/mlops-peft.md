@@ -440,8 +440,8 @@ TrainingArguments(learning_rate=1e-4)
 
 ## 参考资料
 
-- **[高级用法](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/peft/references/advanced-usage.md)** — DoRA、LoftQ、秩稳定化、自定义模块
-- **[故障排查](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/peft/references/troubleshooting.md)** — 常见错误、调试、优化
+- **[高级用法](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/peft/references/advanced-usage.md)** — DoRA、LoftQ、秩稳定化、自定义模块
+- **[故障排查](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/peft/references/troubleshooting.md)** — 常见错误、调试、优化
 
 ## 资源
 

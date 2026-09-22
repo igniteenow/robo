@@ -100,7 +100,7 @@ The `metadata` mount option above is important — without it, files on `/mnt/c/
 Once you have a WSL2 shell open:
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 source ~/.bashrc
 robo
 ```

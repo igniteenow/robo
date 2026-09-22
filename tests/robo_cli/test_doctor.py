@@ -30,7 +30,7 @@ class TestDoctorPlatformHints:
 
         hint = doctor._sqlite_upgrade_hint()
 
-        assert "docker pull IgniteeNow/Robo:latest" in hint
+        assert "docker pull igniteenow/robo:latest" in hint
         assert "recreate all Robo containers" in hint
         assert "robo update" not in hint
 

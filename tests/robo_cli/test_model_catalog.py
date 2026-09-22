@@ -139,7 +139,7 @@ class TestFallbackChain:
 
     PRIMARY = "https://robo.igniteenow.com/docs/api/model-catalog.json"
     FALLBACK = (
-        "https://raw.githubusercontent.com/IgniteeNow/Robo"
+        "https://raw.githubusercontent.com/igniteenow/robo"
         "/main/website/static/api/model-catalog.json"
     )
 

@@ -12,7 +12,7 @@ Curator 是针对 **agent 创建的技能**的后台维护流程。它跟踪每�
 
 默认情况下（`prune_builtins: true`），Curator 在 `archive_after_days` 天未使用后，可以归档**未使用的捆绑内置技能**（随仓库附带），与它主要管理的 agent 自创技能一并处理。通过 [agentskills.io](https://agentskills.io) 安装的 hub 技能始终不受影响。设置 `curator.prune_builtins: false` 可恢复旧的“仅 agent 自创”行为，此时捆绑技能绝不会被触碰。Curator 也**绝不自动删除**——最坏的结果是归档到 `~/.robo/skills/.archive/`，这是可恢复的。
 
-跟踪 [issue #7816](https://github.com/IgniteeNow/Robo/issues/7816)。
+跟踪 [issue #7816](https://github.com/igniteenow/robo/issues/7816)。
 
 ## 运行方式
 
@@ -245,4 +245,4 @@ Curator 在 `min_idle_hours` 未经过时也会拒绝运行，因此在活跃的
 - [技能系统](/user-guide/features/skills)——技能的总体工作原理及创建技能的自我改进循环
 - [内存](/user-guide/features/memory)——维护长期记忆的并行后台审查
 - [捆绑技能目录](/reference/skills-catalog)
-- [Issue #7816](https://github.com/IgniteeNow/Robo/issues/7816)——原始提案与设计讨论
+- [Issue #7816](https://github.com/igniteenow/robo/issues/7816)——原始提案与设计讨论

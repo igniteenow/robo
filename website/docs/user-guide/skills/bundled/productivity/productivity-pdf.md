@@ -47,7 +47,7 @@ which qpdf || sudo apt install -y qpdf                 # CLI merge/split/decrypt
 
 macOS: `brew install poppler qpdf`. OCR extras: `pip install pytesseract pdf2image` + `sudo apt install -y tesseract-ocr`.
 
-> Script paths below are relative to this skill's directory. Form filling has its own workflow — read [forms.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/pdf/forms.md) and follow it. Advanced library usage (pypdfium2, pdf-lib) and troubleshooting: [reference.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/pdf/reference.md).
+> Script paths below are relative to this skill's directory. Form filling has its own workflow — read [forms.md](https://github.com/igniteenow/robo/blob/main/skills/productivity/pdf/forms.md) and follow it. Advanced library usage (pypdfium2, pdf-lib) and troubleshooting: [reference.md](https://github.com/igniteenow/robo/blob/main/skills/productivity/pdf/reference.md).
 
 ## Quick Reference
 
@@ -60,7 +60,7 @@ macOS: `brew install poppler qpdf`. OCR extras: `pip install pytesseract pdf2ima
 | Create PDFs | reportlab | Canvas or Platypus |
 | Command-line merge/split | qpdf | `qpdf --empty --pages ...` |
 | OCR scanned PDFs | pytesseract | Convert to images first (or use `ocr-and-documents`) |
-| Fill PDF forms | see [forms.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/pdf/forms.md) | `scripts/fill_fillable_fields.py` etc. |
+| Fill PDF forms | see [forms.md](https://github.com/igniteenow/robo/blob/main/skills/productivity/pdf/forms.md) | `scripts/fill_fillable_fields.py` etc. |
 | Edit existing text | `nano-pdf` skill | `nano-pdf edit file.pdf <page> "<instruction>"` |
 
 ## Common operations
@@ -165,7 +165,7 @@ For batch/structured extraction from scans, the `ocr-and-documents` skill (pymup
 
 ## Form filling
 
-Read [forms.md](https://github.com/IgniteeNow/Robo/blob/main/skills/productivity/pdf/forms.md) first — it distinguishes fillable (AcroForm) PDFs from flat scanned forms and walks through the helper scripts:
+Read [forms.md](https://github.com/igniteenow/robo/blob/main/skills/productivity/pdf/forms.md) first — it distinguishes fillable (AcroForm) PDFs from flat scanned forms and walks through the helper scripts:
 
 - `scripts/check_fillable_fields.py` — does the PDF have AcroForm fields?
 - `scripts/extract_form_field_info.py` / `scripts/extract_form_structure.py` — enumerate fields

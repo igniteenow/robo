@@ -6,8 +6,8 @@
 
 <p align="center">
   <a href="website/docs/index.mdx"><img src="https://img.shields.io/badge/Docs-in%20this%20repo-EF8A22?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://github.com/IgniteeNow/Robo/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
-  <a href="https://github.com/IgniteeNow/Robo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
+  <a href="https://github.com/igniteenow/robo/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
+  <a href="https://github.com/igniteenow/robo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
   <a href="README.md"><img src="https://img.shields.io/badge/Lang-English-lightgrey?style=for-the-badge" alt="English"></a>
   <a href="README.ur-pk.md"><img src="https://img.shields.io/badge/Lang-اردو-green?style=for-the-badge" alt="اردو"></a>
 </p>
@@ -31,7 +31,7 @@
 ## 快速安装
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 ```
 
 支持 Linux、macOS、WSL2 和 Android (Termux)。安装程序会自动处理平台特定的配置。
@@ -40,7 +40,7 @@ git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install
 >
 > **Windows：** 在 PowerShell 中运行：
 > ```powershell
-> iex (irm https://github.com/IgniteeNow/Robo)
+> iex (irm https://github.com/igniteenow/robo)
 > ```
 > 安装完成后，可能需要重启终端，然后运行 `robo` 开始对话。
 
@@ -124,7 +124,7 @@ Robo 有两种入口：用 `robo` 启动终端 UI，或运行网关从 Telegram�
 `robo update`、托管 venv、lazy dependencies、gateway 和 docs tooling 使用的布局。
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 cd "${ROBO_HOME:-$HOME/.robo}/robo-engineer"
 uv pip install -e ".[all,dev]"
 scripts/run_tests.sh
@@ -144,10 +144,10 @@ python -m pytest tests/ -q
 
 ## 社区
 
-- 💬 [Discord](https://github.com/IgniteeNow/Robo/discussions)
+- 💬 [Discord](https://github.com/igniteenow/robo/discussions)
 - 📚 [技能中心](https://agentskills.io)
-- 🐛 [问题反馈](https://github.com/IgniteeNow/Robo/issues)
-- 💡 [讨论区](https://github.com/IgniteeNow/Robo/discussions)
+- 🐛 [问题反馈](https://github.com/igniteenow/robo/issues)
+- 💡 [讨论区](https://github.com/igniteenow/robo/discussions)
 
 ---
 

@@ -270,7 +270,7 @@ trl dpo \
 
 以最小内存占用进行强化学习训练。
 
-关于深入的 GRPO 指导——奖励函数设计、关键训练洞察（损失行为、模式崩溃、调参）以及高级多阶段模式——请参阅 **[references/grpo-training.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md)**。生产就绪的训练脚本位于 **[templates/basic_grpo_training.py](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py)**。
+关于深入的 GRPO 指导——奖励函数设计、关键训练洞察（损失行为、模式崩溃、调参）以及高级多阶段模式——请参阅 **[references/grpo-training.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md)**。生产就绪的训练脚本位于 **[templates/basic_grpo_training.py](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py)**。
 
 复制此检查清单：
 
@@ -440,15 +440,15 @@ config = PPOConfig(
 
 ## 高级主题
 
-**SFT 训练指南**：参阅 [references/sft-training.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/sft-training.md)，了解数据集格式、chat template、packing 策略及多 GPU 训练。
+**SFT 训练指南**：参阅 [references/sft-training.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/sft-training.md)，了解数据集格式、chat template、packing 策略及多 GPU 训练。
 
-**DPO 变体**：参阅 [references/dpo-variants.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/dpo-variants.md)，了解 IPO、cDPO、RPO 及其他 DPO 损失函数与推荐超参数。
+**DPO 变体**：参阅 [references/dpo-variants.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/dpo-variants.md)，了解 IPO、cDPO、RPO 及其他 DPO 损失函数与推荐超参数。
 
-**奖励建模**：参阅 [references/reward-modeling.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/reward-modeling.md)，了解结果奖励与过程奖励、Bradley-Terry 损失及奖励模型评估。
+**奖励建模**：参阅 [references/reward-modeling.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/reward-modeling.md)，了解结果奖励与过程奖励、Bradley-Terry 损失及奖励模型评估。
 
-**在线 RL 方法**：参阅 [references/online-rl.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/online-rl.md)，了解 PPO、GRPO、RLOO 及 OnlineDPO 的详细配置。
+**在线 RL 方法**：参阅 [references/online-rl.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/online-rl.md)，了解 PPO、GRPO、RLOO 及 OnlineDPO 的详细配置。
 
-**GRPO 深度解析**：参阅 [references/grpo-training.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md)，获取专家级 GRPO 模式——奖励函数设计理念、训练洞察（为何损失上升、模式崩溃检测）、超参数调优、多阶段训练及故障排查。生产就绪模板位于 [templates/basic_grpo_training.py](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py)。
+**GRPO 深度解析**：参阅 [references/grpo-training.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/references/grpo-training.md)，获取专家级 GRPO 模式——奖励函数设计理念、训练洞察（为何损失上升、模式崩溃检测）、超参数调优、多阶段训练及故障排查。生产就绪模板位于 [templates/basic_grpo_training.py](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/training/trl-fine-tuning/templates/basic_grpo_training.py)。
 
 ## 硬件要求
 

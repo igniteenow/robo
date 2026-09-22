@@ -5,7 +5,7 @@
 # Uses uv for fast Python provisioning and package management.
 #
 # Usage:
-#   iex (irm https://github.com/IgniteeNow/Robo)
+#   iex (irm https://github.com/igniteenow/robo)
 #
 # Or download and run with options:
 #   .\install.ps1 -NoVenv -SkipSetup
@@ -373,8 +373,8 @@ $script:ResolvedPathReport = @{
 # Configuration
 # ============================================================================
 
-$RepoUrlSsh = "git@github.com:IgniteeNow/Robo.git"
-$RepoUrlHttps = "https://github.com/IgniteeNow/Robo.git"
+$RepoUrlSsh = "git@github.com:igniteenow/robo.git"
+$RepoUrlHttps = "https://github.com/igniteenow/robo.git"
 $PythonVersion = "3.11"
 # Minor versions the installer accepts when the requested $PythonVersion isn't
 # available, in preference order.  uv discovers both uv-managed and system
@@ -2062,13 +2062,13 @@ function Install-Repository {
                 # for.  GitHub supports archive URLs for commits, tags, and
                 # branches; we honour Commit > Tag > Branch.
                 if ($Commit) {
-                    $zipUrl = "https://github.com/IgniteeNow/Robo/archive/$Commit.zip"
+                    $zipUrl = "https://github.com/igniteenow/robo/archive/$Commit.zip"
                     $zipLabel = $Commit
                 } elseif ($Tag) {
-                    $zipUrl = "https://github.com/IgniteeNow/Robo/archive/refs/tags/$Tag.zip"
+                    $zipUrl = "https://github.com/igniteenow/robo/archive/refs/tags/$Tag.zip"
                     $zipLabel = $Tag
                 } else {
-                    $zipUrl = "https://github.com/IgniteeNow/Robo/archive/refs/heads/$Branch.zip"
+                    $zipUrl = "https://github.com/igniteenow/robo/archive/refs/heads/$Branch.zip"
                     $zipLabel = $Branch
                 }
                 $zipPath = "$env:TEMP\robo-engineer-$zipLabel.zip"
@@ -4256,7 +4256,7 @@ try {
     Write-Err "Installation failed: $_"
     Write-Host ""
     Write-Info "If the error is unclear, try downloading and running the script directly:"
-    Write-Host "  Invoke-WebRequest -Uri 'https://github.com/IgniteeNow/Robo' -OutFile install.ps1" -ForegroundColor Yellow
+    Write-Host "  Invoke-WebRequest -Uri 'https://github.com/igniteenow/robo' -OutFile install.ps1" -ForegroundColor Yellow
     Write-Host "  .\install.ps1" -ForegroundColor Yellow
     Write-Host ""
 }

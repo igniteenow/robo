@@ -49,7 +49,7 @@ development environment on the same layout the CLI, updater, lazy dependency
 installer, gateway, and docs assume.
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 cd "${ROBO_HOME:-$HOME/.robo}/robo-engineer"
 
 # Add dev/test extras on top of the standard install.
@@ -89,7 +89,7 @@ which silently destroys the running runtime mid-session. Keeping it outside the
 tree means no relative path from the workspace resolves to it.
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git
+git clone https://github.com/igniteenow/robo.git
 cd robo-engineer
 
 # Create venv with Python 3.11, OUTSIDE the source tree
@@ -143,7 +143,7 @@ scripts/run_tests.sh
 - **Comments**: Only when explaining non-obvious intent, trade-offs, or API quirks
 - **Error handling**: Catch specific exceptions. Use `logger.warning()`/`logger.error()` with `exc_info=True` for unexpected errors
 - **Cross-platform**: Never assume Unix (see below)
-- **Profile-safe paths**: Never hardcode `~/.robo` — use `get_robo_home()` from `robo_constants` for code paths and `display_robo_home()` for user-facing messages. See [AGENTS.md](https://github.com/IgniteeNow/Robo/blob/main/AGENTS.md#profiles-multi-instance-support) for full rules.
+- **Profile-safe paths**: Never hardcode `~/.robo` — use `get_robo_home()` from `robo_constants` for code paths and `display_robo_home()` for user-facing messages. See [AGENTS.md](https://github.com/igniteenow/robo/blob/main/AGENTS.md#profiles-multi-instance-support) for full rules.
 
 ## Cross-Platform Compatibility
 
@@ -281,7 +281,7 @@ fix(security): prevent shell injection in sudo password piping
 
 ## Reporting Issues
 
-- Use [GitHub Issues](https://github.com/IgniteeNow/Robo/issues)
+- Use [GitHub Issues](https://github.com/igniteenow/robo/issues)
 - Include: OS, Python version, Robo version (`robo version`), full error traceback
 - Include steps to reproduce
 - Check existing issues before creating duplicates
@@ -289,10 +289,10 @@ fix(security): prevent shell injection in sudo password piping
 
 ## Community
 
-- **Discord**: [GitHub Discussions](https://github.com/IgniteeNow/Robo/discussions)
+- **Discord**: [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
 - **GitHub Discussions**: For design proposals and architecture discussions
 - **Skills Hub**: Upload specialized skills and share with the community
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](https://github.com/IgniteeNow/Robo/blob/main/LICENSE).
+By contributing, you agree that your contributions will be licensed under the [MIT License](https://github.com/igniteenow/robo/blob/main/LICENSE).

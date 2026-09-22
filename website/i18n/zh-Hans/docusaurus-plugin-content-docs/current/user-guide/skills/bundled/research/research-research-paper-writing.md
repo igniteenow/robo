@@ -358,7 +358,7 @@ def doi_to_bibtex(doi: str) -> str:
 
 **务必告知科学家**："我已将 [X] 条引用标记为需要核实的占位符。"
 
-完整 API 文档和 `CitationManager` 类请参见 [references/citation-workflow.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/citation-workflow.md)。
+完整 API 文档和 `CitationManager` 类请参见 [references/citation-workflow.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/citation-workflow.md)。
 
 ### 步骤 1.4：整理相关工作
 
@@ -440,7 +440,7 @@ analyze_results.py             # Statistical analysis
 make_charts.py                 # Visualization
 ```
 
-完整设计模式、cron 监控和错误恢复请参见 [references/experiment-patterns.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/experiment-patterns.md)。
+完整设计模式、cron 监控和错误恢复请参见 [references/experiment-patterns.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/experiment-patterns.md)。
 
 ### 步骤 2.5：设计人工评估（如适用）
 
@@ -479,7 +479,7 @@ make_charts.py                 # Visualization
 - 标注界面描述或截图（附录）
 - 总标注时间
 
-完整指南（含人工评估数据的统计检验、众包质量控制模式和 IRB 指导）请参见 [references/human-evaluation.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/human-evaluation.md)。
+完整指南（含人工评估数据的统计检验、众包质量控制模式和 IRB 指导）请参见 [references/human-evaluation.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/human-evaluation.md)。
 
 ---
 
@@ -609,7 +609,7 @@ for strategy, tasks in results.items():
 - **成对检验**：McNemar 检验用于比较两种方法
 - **效应量**：Cohen's d 或 h 用于实际显著性
 
-McNemar 检验、自举 CI 和 Cohen's h 的完整实现请参见 [references/experiment-patterns.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/experiment-patterns.md)。
+McNemar 检验、自举 CI 和 Cohen's h 的完整实现请参见 [references/experiment-patterns.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/experiment-patterns.md)。
 
 ### 步骤 4.3：找出故事主线
 
@@ -789,7 +789,7 @@ Frontier (S4.6)   │ Excellent  │ Good      │ Small  │ Only with constrai
 | 过拟合（代码） | 公开测试通过率高，私有测试通过率低 | 使用结构化分析，而非仅依赖测试反馈 |
 | 评判者损坏 | 解析失败导致小组人数低于 3 | 先修复解析器再继续 |
 
-完整 prompt（提示词）、Borda 计分细节、模型选择指南、范围约束设计模式和计算预算参考请参见 [references/autoreason-methodology.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/autoreason-methodology.md)。
+完整 prompt（提示词）、Borda 计分细节、模型选择指南、范围约束设计模式和计算预算参考请参见 [references/autoreason-methodology.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/autoreason-methodology.md)。
 
 ---
 
@@ -855,8 +855,8 @@ Frontier (S4.6)   │ Excellent  │ Good      │ Small  │ Only with constrai
 | **Andrej Karpathy** | 单一贡献聚焦 | 各类讲座 |
 
 **深入了解任何一项，请参见：**
-- [references/writing-guide.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/writing-guide.md) — 含示例的完整说明
-- [references/sources.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/sources.md) — 完整参考书目
+- [references/writing-guide.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/writing-guide.md) — 含示例的完整说明
+- [references/sources.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/sources.md) — 完整参考书目
 
 ### 时间分配
 
@@ -1165,7 +1165,7 @@ Model Card (Appendix):
 - 全文术语一致
 - 避免渐进式词汇："develop（开发）"，而非"combine（结合）"
 
-**含示例的完整写作指南**：参见 [references/writing-guide.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/writing-guide.md)
+**含示例的完整写作指南**：参见 [references/writing-guide.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/writing-guide.md)
 
 ### 使用 LaTeX 模板
 
@@ -1256,7 +1256,7 @@ latexmk -pdf main.tex
 
 **通用规则**：双盲审稿，参考文献不计入页数，附录不限页数，必须使用 LaTeX。
 
-模板位于 `templates/` 目录。编译设置（VS Code、CLI、Overleaf、其他 IDE）请参见 [templates/README.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/templates/README.md)。
+模板位于 `templates/` 目录。编译设置（VS Code、CLI、Overleaf、其他 IDE）请参见 [templates/README.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/templates/README.md)。
 
 ### 表格与图形
 
@@ -1617,7 +1617,7 @@ Reviews:
 
 **审稿模型选择**：审稿最好使用最强的可用模型，即使你用更便宜的模型写了论文。审稿模型应独立于写作模型选择。
 
-**少样本校准**：如果可用，包含 1-2 份来自目标会议的真实已发表审稿意见作为示例。这会显著提升分数校准。示例审稿意见请参见 [references/reviewer-guidelines.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/reviewer-guidelines.md)。
+**少样本校准**：如果可用，包含 1-2 份来自目标会议的真实已发表审稿意见作为示例。这会显著提升分数校准。示例审稿意见请参见 [references/reviewer-guidelines.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/reviewer-guidelines.md)。
 
 ### 步骤 6.1b：视觉审阅（VLM）
 
@@ -1718,7 +1718,7 @@ paper/
 
 每个会议都有强制性清单。仔细完成——清单不完整可能导致直接拒稿。
 
-参见 [references/checklists.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/checklists.md)，包含：
+参见 [references/checklists.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/checklists.md)，包含：
 - NeurIPS 16 项论文清单
 - ICML 更广泛影响 + 可复现性
 - ICLR LLM 披露政策
@@ -2078,7 +2078,7 @@ ACL 系列会议有不同的投稿类型：
 
 ## 超越实证 ML 的论文类型
 
-上述主要流水线针对实证 ML 论文。其他论文类型需要不同的结构和证据标准。每种类型的详细指导请参见 [references/paper-types.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/paper-types.md)。
+上述主要流水线针对实证 ML 论文。其他论文类型需要不同的结构和证据标准。每种类型的详细指导请参见 [references/paper-types.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/paper-types.md)。
 
 ### 理论论文
 
@@ -2338,7 +2338,7 @@ Next step: <what happens next>
 - 2：拒绝——技术缺陷
 - 1：强烈拒绝——已知结果或伦理问题
 
-详细指南、常见关切和答辩策略请参见 [references/reviewer-guidelines.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/reviewer-guidelines.md)。
+详细指南、常见关切和答辩策略请参见 [references/reviewer-guidelines.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/reviewer-guidelines.md)。
 
 ---
 
@@ -2354,9 +2354,9 @@ Next step: <what happens next>
 | 实验范围蔓延 | 每个实验必须映射到一个具体论点。删除不映射的实验。 |
 | 论文被拒，需要重投 | 参见阶段 7 中的会议重投。解决审稿人关切，不要引用之前的审稿意见。 |
 | 缺少更广泛影响声明 | 参见步骤 5.10。大多数会议要求此声明。"无负面影响"几乎从不可信。 |
-| 人工评估被批评为薄弱 | 参见步骤 2.5 和 [references/human-evaluation.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/human-evaluation.md)。报告一致性指标、标注员详情、报酬。 |
+| 人工评估被批评为薄弱 | 参见步骤 2.5 和 [references/human-evaluation.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/human-evaluation.md)。报告一致性指标、标注员详情、报酬。 |
 | 审稿人质疑可复现性 | 发布代码（步骤 7.9），记录所有超参数，包含随机种子和计算细节。 |
-| 理论论文缺乏直觉 | 在正式证明之前添加含通俗语言解释的证明草图。参见 [references/paper-types.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/paper-types.md)。 |
+| 理论论文缺乏直觉 | 在正式证明之前添加含通俗语言解释的证明草图。参见 [references/paper-types.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/paper-types.md)。 |
 | 结果为负面/零结果 | 参见阶段 4.3 关于处理负面结果的内容。考虑研讨会、TMLR 或重新框架为分析。 |
 
 ---
@@ -2365,21 +2365,21 @@ Next step: <what happens next>
 
 | 文档 | 内容 |
 |------|------|
-| [references/writing-guide.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/writing-guide.md) | Gopen & Swan 7 条原则、Perez 微观技巧、Lipton 词语选择、Steinhardt 精确性、图形设计 |
-| [references/citation-workflow.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/citation-workflow.md) | 引用 API、Python 代码、CitationManager 类、BibTeX 管理 |
-| [references/checklists.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/checklists.md) | NeurIPS 16 项、ICML、ICLR、ACL 要求、通用投稿前清单 |
-| [references/reviewer-guidelines.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/reviewer-guidelines.md) | 评估标准、评分、常见关切、答辩模板 |
-| [references/sources.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/sources.md) | 所有写作指南、会议指南、API 的完整参考书目 |
-| [references/experiment-patterns.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/experiment-patterns.md) | 实验设计模式、评估协议、监控、错误恢复 |
-| [references/autoreason-methodology.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/autoreason-methodology.md) | Autoreason 循环、策略选择、模型指南、prompt（提示词）、范围约束、Borda 计分 |
-| [references/human-evaluation.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/human-evaluation.md) | 人工评估设计、标注指南、一致性指标、众包质量控制、IRB 指导 |
-| [references/paper-types.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/references/paper-types.md) | 理论论文（证明写作、定理结构）、综述论文、基准测试论文、立场论文 |
+| [references/writing-guide.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/writing-guide.md) | Gopen & Swan 7 条原则、Perez 微观技巧、Lipton 词语选择、Steinhardt 精确性、图形设计 |
+| [references/citation-workflow.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/citation-workflow.md) | 引用 API、Python 代码、CitationManager 类、BibTeX 管理 |
+| [references/checklists.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/checklists.md) | NeurIPS 16 项、ICML、ICLR、ACL 要求、通用投稿前清单 |
+| [references/reviewer-guidelines.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/reviewer-guidelines.md) | 评估标准、评分、常见关切、答辩模板 |
+| [references/sources.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/sources.md) | 所有写作指南、会议指南、API 的完整参考书目 |
+| [references/experiment-patterns.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/experiment-patterns.md) | 实验设计模式、评估协议、监控、错误恢复 |
+| [references/autoreason-methodology.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/autoreason-methodology.md) | Autoreason 循环、策略选择、模型指南、prompt（提示词）、范围约束、Borda 计分 |
+| [references/human-evaluation.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/human-evaluation.md) | 人工评估设计、标注指南、一致性指标、众包质量控制、IRB 指导 |
+| [references/paper-types.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/references/paper-types.md) | 理论论文（证明写作、定理结构）、综述论文、基准测试论文、立场论文 |
 
 ### LaTeX 模板
 
 `templates/` 中的模板：**NeurIPS 2025**、**ICML 2026**、**ICLR 2026**、**ACL**、**AAAI 2026**、**COLM 2025**。
 
-编译说明请参见 [templates/README.md](https://github.com/IgniteeNow/Robo/blob/main/skills/research/research-paper-writing/templates/README.md)。
+编译说明请参见 [templates/README.md](https://github.com/igniteenow/robo/blob/main/skills/research/research-paper-writing/templates/README.md)。
 
 ### 关键外部资源
 

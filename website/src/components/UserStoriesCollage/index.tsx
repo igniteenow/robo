@@ -301,14 +301,14 @@ export default function UserStoriesCollage(): JSX.Element {
       <div className={styles.footer}>
         Built something with Robo?{' '}
         <a
-          href="https://github.com/IgniteeNow/Robo/edit/main/website/src/data/userStories.json"
+          href="https://github.com/igniteenow/robo/edit/main/website/src/data/userStories.json"
           target="_blank"
           rel="noopener noreferrer"
         >
           Add your story to this page
         </a>{' '}
         by editing <code>userStories.json</code>, or post it in the{' '}
-        <a href="https://github.com/IgniteeNow/Robo/discussions" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/igniteenow/robo/discussions" target="_blank" rel="noopener noreferrer">
           GitHub Discussions
         </a>{' '}
         and we&apos;ll pick it up.

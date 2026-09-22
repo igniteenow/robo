@@ -81,7 +81,7 @@ Watch a GitHub repo (set `GITHUB_TOKEN` in `${ROBO_HOME:-~/.robo}/.env` to avoid
 
 ```bash
 python $ROBO_HOME/skills/devops/watchers/scripts/watch_github.py \
-  --name robo-issues --repo IgniteeNow/Robo --scope issues
+  --name robo-issues --repo igniteenow/robo --scope issues
 ```
 
 Poll an arbitrary JSON API:

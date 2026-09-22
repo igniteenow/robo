@@ -52,7 +52,7 @@ Robo 的差异化特性：
 
 ```bash
 # 安装
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 
 # 交互式聊天（默认）
 robo

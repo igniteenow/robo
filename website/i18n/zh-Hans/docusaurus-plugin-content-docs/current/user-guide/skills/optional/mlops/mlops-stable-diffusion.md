@@ -531,8 +531,8 @@ image = pipe(prompt, num_inference_steps=20).images[0]
 
 ## 参考资料
 
-- **[高级用法](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/stable-diffusion/references/advanced-usage.md)** - 自定义 pipeline、微调、部署
-- **[故障排查](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/stable-diffusion/references/troubleshooting.md)** - 常见问题与解决方案
+- **[高级用法](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/stable-diffusion/references/advanced-usage.md)** - 自定义 pipeline、微调、部署
+- **[故障排查](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/stable-diffusion/references/troubleshooting.md)** - 常见问题与解决方案
 
 ## 资源
 

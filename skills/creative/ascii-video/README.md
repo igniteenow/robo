@@ -2,7 +2,7 @@
 
 Renders any content as colored ASCII character video. Audio, video, images, text, or pure math in, MP4/GIF/PNG sequence out. Full RGB color per character cell, 1080p 24fps default. No GPU.
 
-Built for [Robo Agent](https://github.com/IgniteeNow/Robo). Usable in any coding agent. Canonical source lives here; synced to [`IgniteeNow/Robo/skills/creative/ascii-video`](https://github.com/IgniteeNow/Robo/tree/main/skills/creative/ascii-video) via PR.
+Built for [Robo Agent](https://github.com/igniteenow/robo). Usable in any coding agent. Canonical source lives here; synced to [`igniteenow/robo/skills/creative/ascii-video`](https://github.com/igniteenow/robo/tree/main/skills/creative/ascii-video) via PR.
 
 ## What this is
 

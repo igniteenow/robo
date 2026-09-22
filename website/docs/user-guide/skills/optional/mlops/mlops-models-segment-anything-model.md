@@ -92,7 +92,7 @@ import numpy as np
 from segment_anything import sam_model_registry, SamPredictor
 
 # Load model
-sam = sam_model_registry["vit_h"](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/models/segment-anything-model/checkpoint="sam_vit_h_4b8939.pth")
+sam = sam_model_registry["vit_h"](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/models/segment-anything-model/checkpoint="sam_vit_h_4b8939.pth")
 sam.to(device="cuda")
 
 # Create predictor
@@ -478,7 +478,7 @@ decoded_mask = mask_utils.decode(rle)
 
 ```python
 # Use smaller model for limited VRAM
-sam = sam_model_registry["vit_b"](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/models/segment-anything-model/checkpoint="sam_vit_b_01ec64.pth")
+sam = sam_model_registry["vit_b"](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/models/segment-anything-model/checkpoint="sam_vit_b_01ec64.pth")
 
 # Process images in batches
 # Clear CUDA cache between large batches
@@ -513,8 +513,8 @@ mask_generator = SamAutomaticMaskGenerator(
 
 ## References
 
-- **[Advanced Usage](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/models/segment-anything-model/references/advanced-usage.md)** - Batching, fine-tuning, integration
-- **[Troubleshooting](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/models/segment-anything-model/references/troubleshooting.md)** - Common issues and solutions
+- **[Advanced Usage](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/models/segment-anything-model/references/advanced-usage.md)** - Batching, fine-tuning, integration
+- **[Troubleshooting](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/models/segment-anything-model/references/troubleshooting.md)** - Common issues and solutions
 
 ## Resources
 

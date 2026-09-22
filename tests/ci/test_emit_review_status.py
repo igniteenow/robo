@@ -22,15 +22,15 @@ def test_ci_review_status_links_to_each_sensitive_file_change():
         supply_chain=False,
         label_present=False,
         ci_review_files='[".github/workflows/ci.yml", "apps/desktop/eslint.config.mjs"]',
-        repo_url="https://github.com/IgniteeNow/Robo",
+        repo_url="https://github.com/igniteenow/robo",
         base_sha="base456",
         head_sha="abc123",
     )
 
     assert results[0]["detail"] == (
         "**Sensitive files changed:**\n"
-        "- [`.github/workflows/ci.yml`](https://github.com/IgniteeNow/Robo/compare/base456...abc123#diff-b803fcb7f17ed9235f1e5cb1fcd2f5d3b2838429d4368ae4c57ce4436577f03f)\n"
-        "- [`apps/desktop/eslint.config.mjs`](https://github.com/IgniteeNow/Robo/compare/base456...abc123#diff-a45471520795db6e46840d1ba2a82c1f8a2841039bd60fb50624488c5f192438)"
+        "- [`.github/workflows/ci.yml`](https://github.com/igniteenow/robo/compare/base456...abc123#diff-b803fcb7f17ed9235f1e5cb1fcd2f5d3b2838429d4368ae4c57ce4436577f03f)\n"
+        "- [`apps/desktop/eslint.config.mjs`](https://github.com/igniteenow/robo/compare/base456...abc123#diff-a45471520795db6e46840d1ba2a82c1f8a2841039bd60fb50624488c5f192438)"
     )
 
 
@@ -41,7 +41,7 @@ def test_approved_ci_review_is_visible_info():
         supply_chain=False,
         label_present=True,
         ci_review_files='[".github/workflows/ci.yml"]',
-        repo_url="https://github.com/IgniteeNow/Robo",
+        repo_url="https://github.com/igniteenow/robo",
         base_sha="base456",
         head_sha="abc123",
     )
@@ -55,6 +55,6 @@ def test_approved_ci_review_is_visible_info():
         ),
         "detail": (
             "**Sensitive files changed:**\n"
-            "- [`.github/workflows/ci.yml`](https://github.com/IgniteeNow/Robo/compare/base456...abc123#diff-b803fcb7f17ed9235f1e5cb1fcd2f5d3b2838429d4368ae4c57ce4436577f03f)"
+            "- [`.github/workflows/ci.yml`](https://github.com/igniteenow/robo/compare/base456...abc123#diff-b803fcb7f17ed9235f1e5cb1fcd2f5d3b2838429d4368ae4c57ce4436577f03f)"
         ),
     }]

@@ -21,7 +21,7 @@ export function SidebarFooter({ status }: SidebarFooterProps) {
       </Typography>
 
       <a
-        href="https://github.com/IgniteeNow/Robo"
+        href="https://github.com/igniteenow/robo"
         target="_blank"
         rel="noopener noreferrer"
         className={cn(

@@ -521,10 +521,10 @@ with Pool(8) as pool:
 
 ## 参考资料
 
-- **[训练指南](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/training.md)** — 训练自定义 tokenizer、配置训练器、处理大型数据集
-- **[算法深度解析](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/algorithms.md)** — BPE、WordPiece、Unigram 详细说明
-- **[流水线组件](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/pipeline.md)** — 归一化器、预分词器、后处理器、解码器
-- **[Transformers 集成](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/integration.md)** — AutoTokenizer、PreTrainedTokenizerFast、特殊 token
+- **[训练指南](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/training.md)** — 训练自定义 tokenizer、配置训练器、处理大型数据集
+- **[算法深度解析](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/algorithms.md)** — BPE、WordPiece、Unigram 详细说明
+- **[流水线组件](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/pipeline.md)** — 归一化器、预分词器、后处理器、解码器
+- **[Transformers 集成](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/huggingface-tokenizers/references/integration.md)** — AutoTokenizer、PreTrainedTokenizerFast、特殊 token
 
 ## 资源
 

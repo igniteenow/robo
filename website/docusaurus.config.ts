@@ -114,7 +114,7 @@ const config: Config = {
         docs: {
           routeBasePath: '/',  // Docs at the root of /docs/
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/IgniteeNow/Robo/edit/main/website/',
+          editUrl: 'https://github.com/igniteenow/robo/edit/main/website/',
         },
         blog: false,
         theme: {
@@ -169,12 +169,12 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/IgniteeNow/Robo',
+          href: 'https://github.com/igniteenow/robo',
           label: 'GitHub',
           position: 'right',
         },
         {
-          href: 'https://github.com/IgniteeNow/Robo/discussions',
+          href: 'https://github.com/igniteenow/robo/discussions',
           label: 'Discord',
           position: 'right',
         },
@@ -195,8 +195,8 @@ const config: Config = {
         {
           title: 'Community',
           items: [
-            { label: 'Discord', href: 'https://github.com/IgniteeNow/Robo/discussions' },
-            { label: 'GitHub Issues', href: 'https://github.com/IgniteeNow/Robo/issues' },
+            { label: 'Discord', href: 'https://github.com/igniteenow/robo/discussions' },
+            { label: 'GitHub Issues', href: 'https://github.com/igniteenow/robo/issues' },
             { label: 'Skills Hub', href: 'https://agentskills.io' },
           ],
         },
@@ -204,7 +204,7 @@ const config: Config = {
           title: 'More',
           items: [
             { label: 'Desktop Download', href: 'https://robo.igniteenow.com/' },
-            { label: 'GitHub', href: 'https://github.com/IgniteeNow/Robo' },
+            { label: 'GitHub', href: 'https://github.com/igniteenow/robo' },
             { label: 'Ignitee Now', href: 'https://igniteenow.com' },
           ],
         },

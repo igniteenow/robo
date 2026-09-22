@@ -6,7 +6,7 @@ Usage (via cron with --no-agent):
     robo cron create robo-issues \\
       --schedule "*/5 * * * *" --no-agent \\
       --script "$ROBO_HOME/skills/devops/watchers/scripts/watch_github.py" \\
-      --script-args "--name robo-issues --repo IgniteeNow/Robo --scope issues"
+      --script-args "--name robo-issues --repo igniteenow/robo --scope issues"
 
 Set GITHUB_TOKEN (or GH_TOKEN) in the Robo .env file
 (``${ROBO_HOME:-~/.robo}/.env``) to avoid the 60 req/hr

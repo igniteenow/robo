@@ -81,7 +81,7 @@ def _action_result_from(
     ``structuredContent`` (or any individual field) leaves the corresponding
     ActionResult attribute ``None``, so callers and tests see unchanged
     behavior on old drivers. See the action response shape in
-    cua-driver's mcp-tool-notes and IgniteeNow/Robo#67052.
+    cua-driver's mcp-tool-notes and igniteenow/robo#67052.
     """
     sc = structured if isinstance(structured, dict) else {}
 
@@ -890,7 +890,7 @@ def _parse_elements_from_tree(markdown: str) -> List[UIElement]:
 
 
 def _parse_elements_from_structured(raw_elements: List[Dict[str, Any]]) -> List[UIElement]:
-    """Surface 2 of IgniteeNow/Robo#47072: read the canonical
+    """Surface 2 of igniteenow/robo#47072: read the canonical
     ``structuredContent.elements`` array cua-driver-rs emits on every
     ``get_window_state`` response (trycua/cua#1961).
 

@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: 💬 Ignitee Now Discord
-    url: https://github.com/IgniteeNow/Robo/discussions
+    url: https://github.com/igniteenow/robo/discussions
     about: For quick questions, showcasing projects, sharing skills, and community chat.
   - name: 📖 Documentation
-    url: https://github.com/IgniteeNow/Robo/blob/main/README.md
+    url: https://github.com/igniteenow/robo/blob/main/README.md
     about: Check the README and docs before opening an issue.
   - name: 🤝 Contributing Guide
-    url: https://github.com/IgniteeNow/Robo/blob/main/CONTRIBUTING.md
+    url: https://github.com/igniteenow/robo/blob/main/CONTRIBUTING.md
     about: Read this before submitting a PR.

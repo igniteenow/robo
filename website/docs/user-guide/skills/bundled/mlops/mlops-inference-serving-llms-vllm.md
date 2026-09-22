@@ -363,13 +363,13 @@ vllm serve MODEL \
 
 ## Advanced topics
 
-**Server deployment patterns**: See [references/server-deployment.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/server-deployment.md) for Docker, Kubernetes, and load balancing configurations.
+**Server deployment patterns**: See [references/server-deployment.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/server-deployment.md) for Docker, Kubernetes, and load balancing configurations.
 
-**Performance optimization**: See [references/optimization.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/optimization.md) for PagedAttention tuning, continuous batching details, and benchmark results.
+**Performance optimization**: See [references/optimization.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/optimization.md) for PagedAttention tuning, continuous batching details, and benchmark results.
 
-**Quantization guide**: See [references/quantization.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/quantization.md) for AWQ/GPTQ/FP8 setup, model preparation, and accuracy comparisons.
+**Quantization guide**: See [references/quantization.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/quantization.md) for AWQ/GPTQ/FP8 setup, model preparation, and accuracy comparisons.
 
-**Troubleshooting**: See [references/troubleshooting.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/troubleshooting.md) for detailed error messages, debugging steps, and performance diagnostics.
+**Troubleshooting**: See [references/troubleshooting.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/inference/serving-llms-vllm/references/troubleshooting.md) for detailed error messages, debugging steps, and performance diagnostics.
 
 ## Hardware requirements
 

@@ -362,13 +362,13 @@ python -m torch.distributed.checkpoint.format_utils \
 
 ## 进阶主题
 
-**FSDP2 配置**：参见 [references/fsdp.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/torchtitan/references/fsdp.md)，了解 FSDP2 与 FSDP1 的详细对比及 ZeRO 等价关系。
+**FSDP2 配置**：参见 [references/fsdp.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/torchtitan/references/fsdp.md)，了解 FSDP2 与 FSDP1 的详细对比及 ZeRO 等价关系。
 
-**Float8 训练**：参见 [references/float8.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/torchtitan/references/float8.md)，了解 tensorwise 与 rowwise 缩放方案。
+**Float8 训练**：参见 [references/float8.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/torchtitan/references/float8.md)，了解 tensorwise 与 rowwise 缩放方案。
 
-**检查点**：参见 [references/checkpoint.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/torchtitan/references/checkpoint.md)，了解 HuggingFace 转换与异步检查点。
+**检查点**：参见 [references/checkpoint.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/torchtitan/references/checkpoint.md)，了解 HuggingFace 转换与异步检查点。
 
-**添加自定义模型**：参见 [references/custom-models.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/torchtitan/references/custom-models.md)，了解 TrainSpec 协议。
+**添加自定义模型**：参见 [references/custom-models.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/torchtitan/references/custom-models.md)，了解 TrainSpec 协议。
 
 ## 资源
 

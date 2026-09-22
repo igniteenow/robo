@@ -68,13 +68,13 @@ def world(tmp_path, monkeypatch):
 
 class TestRemoteUrls:
     @pytest.mark.parametrize("url", [
-        "https://github.com/IgniteeNow/Robo.git", "https://github.com/IgniteeNow/Robo",
-        "https://github.com/IgniteeNow/Robo/", "git@github.com:IgniteeNow/Robo.git",
-        "ssh://git@github.com/IgniteeNow/Robo.git", "ssh://git@github.com:22/IgniteeNow/Robo",
-        "https://user:s3cr3t-token@github.com/IgniteeNow/Robo.git", "  git://github.com/IgniteeNow/Robo.git  ",
+        "https://github.com/igniteenow/robo.git", "https://github.com/igniteenow/robo",
+        "https://github.com/igniteenow/robo/", "git@github.com:igniteenow/robo.git",
+        "ssh://git@github.com/igniteenow/robo.git", "ssh://git@github.com:22/igniteenow/robo",
+        "https://user:s3cr3t-token@github.com/igniteenow/robo.git", "  git://github.com/igniteenow/robo.git  ",
     ])
     def test_every_spelling_of_the_official_repo_is_recognised(self, url):
-        assert banner._canonical_github_remote(url) == "github.com/IgniteeNow/Robo"
+        assert banner._canonical_github_remote(url) == "github.com/igniteenow/robo"
 
     def test_credentials_never_survive_canonicalisation(self):
         assert "s3cr3t" not in banner._canonical_github_remote("https://user:s3cr3t@github.com/o/r.git")
@@ -91,10 +91,10 @@ class TestRemoteUrls:
         assert banner._is_ssh_remote(url) is ssh
 
     def test_only_ignitee_nows_repo_is_official(self):
-        assert banner._is_official_ssh_remote("git@github.com:IgniteeNow/Robo.git")
+        assert banner._is_official_ssh_remote("git@github.com:igniteenow/robo.git")
         assert not banner._is_official_ssh_remote("git@github.com:someone/robo-engineer.git")
-        assert not banner._is_official_ssh_remote("https://github.com/IgniteeNow/Robo.git")  # not SSH
-        assert not banner._is_official_ssh_remote("git@github.com.evil.test:IgniteeNow/Robo.git")
+        assert not banner._is_official_ssh_remote("https://github.com/igniteenow/robo.git")  # not SSH
+        assert not banner._is_official_ssh_remote("git@github.com.evil.test:igniteenow/robo.git")
 
     def test_the_official_constants_agree_with_each_other(self):
         assert banner._canonical_github_remote(banner._UPSTREAM_REPO_URL) == banner._OFFICIAL_REPO_CANONICAL
@@ -173,7 +173,7 @@ class TestSshRemotesAreNeverFetched:
     def test_the_official_repo_over_ssh_is_fetched_over_https_instead(self, world, monkeypatch):
         monkeypatch.setattr(banner, "_UPSTREAM_REPO_URL", str(world.remote))  # stand-in for the HTTPS URL
         world.publish("d", "e")
-        result, seen = self._calls(world, "git@github.com:IgniteeNow/Robo.git")
+        result, seen = self._calls(world, "git@github.com:igniteenow/robo.git")
         fetches = [c for c in seen if "fetch" in c]
         assert len(fetches) == 1 and str(world.remote) in fetches[0] and "origin" not in fetches[0]
         assert result == 2
@@ -405,8 +405,8 @@ class TestBannerFacts:
         git(world.clone, "tag", "v3.0.0")
         assert banner.get_latest_release_tag(world.clone) == ("v3.0.0", None)  # origin is a local path: a fork
         monkeypatch.setattr(banner, "_latest_release_cache", None)
-        git(world.clone, "remote", "set-url", "origin", "https://github.com/IgniteeNow/Robo.git")
-        assert banner.get_latest_release_tag(world.clone) == ("v3.0.0", "https://github.com/IgniteeNow/Robo/releases/tag/v3.0.0")
+        git(world.clone, "remote", "set-url", "origin", "https://github.com/igniteenow/robo.git")
+        assert banner.get_latest_release_tag(world.clone) == ("v3.0.0", "https://github.com/igniteenow/robo/releases/tag/v3.0.0")
 
     def test_release_tag_is_looked_up_once_per_process(self, world):
         git(world.clone, "tag", "v1")
@@ -423,7 +423,7 @@ class TestBannerFacts:
         run.assert_not_called()
 
     def test_a_hostile_tag_name_never_becomes_a_url(self, world, monkeypatch):
-        git(world.clone, "remote", "set-url", "origin", "https://github.com/IgniteeNow/Robo.git")
+        git(world.clone, "remote", "set-url", "origin", "https://github.com/igniteenow/robo.git")
         evil = subprocess.CompletedProcess(["git"], 0, stdout='v1"><script>\n', stderr="")
         with patch("robo_cli.banner.subprocess.run", return_value=evil):
             assert banner.get_latest_release_tag(world.clone) is None

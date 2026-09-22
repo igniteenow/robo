@@ -916,9 +916,9 @@ def _perform_uninstall(
         print()
         print("To reinstall later with your existing settings:")
         if _is_windows():
-            print(color("  iex (irm https://github.com/IgniteeNow/Robo)", Colors.DIM))
+            print(color("  iex (irm https://github.com/igniteenow/robo)", Colors.DIM))
         else:
-            print(color("  git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh", Colors.DIM))
+            print(color("  git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh", Colors.DIM))
         print()
 
     if _is_windows():

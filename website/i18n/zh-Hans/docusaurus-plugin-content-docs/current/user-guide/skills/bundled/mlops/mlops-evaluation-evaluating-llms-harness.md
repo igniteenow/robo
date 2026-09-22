@@ -483,13 +483,13 @@ lm_eval --model hf \
 
 ## 进阶主题
 
-**基准描述**：参见 [references/benchmark-guide.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/benchmark-guide.md)，了解所有 60+ 个任务的详细说明、测量内容及结果解读。
+**基准描述**：参见 [references/benchmark-guide.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/benchmark-guide.md)，了解所有 60+ 个任务的详细说明、测量内容及结果解读。
 
-**自定义任务**：参见 [references/custom-tasks.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/custom-tasks.md)，了解如何创建特定领域的评估任务。
+**自定义任务**：参见 [references/custom-tasks.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/custom-tasks.md)，了解如何创建特定领域的评估任务。
 
-**API 评估**：参见 [references/api-evaluation.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/api-evaluation.md)，了解如何评估 OpenAI、Anthropic 及其他 API 模型。
+**API 评估**：参见 [references/api-evaluation.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/api-evaluation.md)，了解如何评估 OpenAI、Anthropic 及其他 API 模型。
 
-**多 GPU 策略**：参见 [references/distributed-eval.md](https://github.com/IgniteeNow/Robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/distributed-eval.md)，了解数据并行与张量并行评估方案。
+**多 GPU 策略**：参见 [references/distributed-eval.md](https://github.com/igniteenow/robo/blob/main/skills/mlops/evaluation/evaluating-llms-harness/references/distributed-eval.md)，了解数据并行与张量并行评估方案。
 
 ## 硬件要求
 

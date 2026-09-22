@@ -24,7 +24,7 @@ By default every profile is seeded with the bundled skill catalog, and each `rob
 **At install time** (applies to the default `~/.robo` profile):
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 ```
 
 **At profile-create time** (named profiles):

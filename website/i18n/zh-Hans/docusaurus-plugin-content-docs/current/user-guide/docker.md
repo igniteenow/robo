@@ -21,7 +21,7 @@ Docker 与 Robo Agent 的交集有两种截然不同的方式：
 mkdir -p ~/.robo
 docker run -it --rm \
   -v ~/.robo:/opt/data \
-  IgniteeNow/Robo setup
+  igniteenow/robo setup
 ```
 
 这将进入设置向导，向导会提示你输入 API 密钥并将其写入 `~/.robo/.env`。你只需执行一次。强烈建议此时为 gateway 配置一个聊天系统。
@@ -36,7 +36,7 @@ docker run -d \
   --restart unless-stopped \
   -v ~/.robo:/opt/data \
   -p 8642:8642 \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 端口 8642 暴露 gateway 的 [OpenAI 兼容 API 服务器](./features/api-server.md)和健康检查端点。如果你只使用聊天平台（Telegram、Discord 等），该端口是可选的；但如果你希望 dashboard 或外部工具访问 gateway，则必须开放。
@@ -53,7 +53,7 @@ docker run -d \
   -e API_SERVER_HOST=0.0.0.0 \
   -e API_SERVER_KEY="$(openssl rand -hex 32)" \
   -e API_SERVER_CORS_ORIGINS='*' \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 在面向互联网的机器上开放任何端口都存在安全风险。除非你了解相关风险，否则不应这样做。
@@ -70,7 +70,7 @@ docker run -d \
   -p 8642:8642 \
   -p 9119:9119 \
   -e ROBO_DASHBOARD=1 \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 Dashboard 由 s6 监管：若进程崩溃，`s6-supervise` 会在短暂退避后自动重启。Dashboard 的 stdout/stderr 会直接转发到 `docker logs <container>`；gateway 的主输出现在写入每个 profile 的 s6 日志文件，见下方的 per-profile 日志说明。
@@ -116,7 +116,7 @@ Dashboard 由 s6 监管：若进程崩溃，`s6-supervise` 会在短暂退避后
 ```sh
 docker run -it --rm \
   -v ~/.robo:/opt/data \
-  IgniteeNow/Robo
+  igniteenow/robo
 ```
 
 或者，如果你已通过 Docker Desktop 等方式在运行中的容器内打开了终端，直接运行：
@@ -194,7 +194,7 @@ docker run -it --rm \
   -v ~/.robo:/opt/data \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e OPENAI_API_KEY="sk-..." \
-  IgniteeNow/Robo
+  igniteenow/robo
 ```
 
 直接传入的 `-e` 标志会覆盖 `.env` 中的值。这对于不希望将密钥写入磁盘的 CI/CD 或密钥管理器集成非常有用。
@@ -210,7 +210,7 @@ docker run -it --rm \
 ```yaml
 services:
   robo:
-    image: IgniteeNow/Robo:latest
+    image: igniteenow/robo:latest
     container_name: robo
     restart: unless-stopped
     command: gateway run
@@ -254,7 +254,7 @@ docker run -d \
   --restart unless-stopped \
   --memory=4g --cpus=2 \
   -v ~/.robo:/opt/data \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 ## Dockerfile 说明
@@ -314,13 +314,13 @@ robo profile delete coder            # 拆除 s6 槽
 拉取最新镜像并重建容器。你的数据目录不受影响。
 
 ```sh
-docker pull IgniteeNow/Robo:latest
+docker pull igniteenow/robo:latest
 docker rm -f robo
 docker run -d \
   --name robo \
   --restart unless-stopped \
   -v ~/.robo:/opt/data \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 或使用 Docker Compose：
@@ -354,10 +354,10 @@ SSH 和 Modal 后端也会进行相同的同步——技能和凭据文件在每
 
 ### 持久安装——构建派生镜像
 
-当工具必须在每次容器启动时立即可用且无需重新安装延迟时，构建一个继承自 `IgniteeNow/Robo` 并在层中安装该工具的新镜像：
+当工具必须在每次容器启动时立即可用且无需重新安装延迟时，构建一个继承自 `igniteenow/robo` 并在层中安装该工具的新镜像：
 
 ```dockerfile
-FROM IgniteeNow/Robo:latest
+FROM igniteenow/robo:latest
 
 USER root
 RUN apt-get update \
@@ -378,7 +378,7 @@ docker run -d \
   my-robo:latest gateway run
 ```
 
-入口点脚本和 `/opt/data` 语义原样继承，本页其余内容仍然适用。拉取更新的上游 `IgniteeNow/Robo` 时记得重新构建镜像。
+入口点脚本和 `/opt/data` 语义原样继承，本页其余内容仍然适用。拉取更新的上游 `igniteenow/robo` 时记得重新构建镜像。
 
 ### 复杂工具或多服务栈——运行 sidecar 容器
 
@@ -387,7 +387,7 @@ docker run -d \
 ```yaml
 services:
   robo:
-    image: IgniteeNow/Robo:latest
+    image: igniteenow/robo:latest
     container_name: robo
     restart: unless-stopped
     command: gateway run
@@ -414,7 +414,7 @@ networks:
 
 ### 广泛有用的工具——提交 issue 或 pull request
 
-如果某个工具可能对大多数 Robo Agent 用户有用，考虑将其贡献到上游，而不是在私有派生镜像中维护。在 [robo-engineer 仓库](https://github.com/IgniteeNow/Robo)提交 issue 或 pull request，描述该工具及其使用场景。被纳入官方镜像的工具惠及所有用户，并避免了维护下游 fork 的开销。
+如果某个工具可能对大多数 Robo Agent 用户有用，考虑将其贡献到上游，而不是在私有派生镜像中维护。在 [robo-engineer 仓库](https://github.com/igniteenow/robo)提交 issue 或 pull request，描述该工具及其使用场景。被纳入官方镜像的工具惠及所有用户，并避免了维护下游 fork 的开销。
 
 ## 连接本地推理服务器（vLLM、Ollama 等）
 
@@ -445,7 +445,7 @@ services:
             - capabilities: [gpu]
 
   robo:
-    image: IgniteeNow/Robo:latest
+    image: igniteenow/robo:latest
     container_name: robo
     restart: unless-stopped
     command: gateway run
@@ -489,7 +489,7 @@ docker run -d \
   --name robo \
   -v ~/.robo:/opt/data \
   -p 8642:8642 \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 ```yaml
@@ -508,7 +508,7 @@ docker run -d \
   --name robo \
   --network host \
   -v ~/.robo:/opt/data \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 ```yaml
@@ -574,7 +574,7 @@ docker run -d \
   --name robo \
   --shm-size=1g \
   -v ~/.robo:/opt/data \
-  IgniteeNow/Robo gateway run
+  igniteenow/robo gateway run
 ```
 
 ### 网络问题后 gateway 无法重连
@@ -589,6 +589,6 @@ docker restart robo
 
 ```sh
 docker logs --tail 50 robo          # 最近日志
-docker run -it --rm IgniteeNow/Robo:latest version     # 验证版本
+docker run -it --rm igniteenow/robo:latest version     # 验证版本
 docker stats robo                    # 资源使用情况
 ```

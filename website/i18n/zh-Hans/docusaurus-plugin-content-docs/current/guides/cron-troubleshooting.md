@@ -214,7 +214,7 @@ robo skills list                  # 确认已安装的 skill
 
 1. 使用 `robo cron run <job_id>` 运行任务（在下次 gateway tick 时触发），观察聊天输出中的错误
 2. 查看 `~/.robo/logs/agent.log` 中的调度器消息和 `~/.robo/logs/errors.log` 中的警告
-3. 在 [github.com/IgniteeNow/Robo](https://github.com/IgniteeNow/Robo) 提交 issue，并附上：
+3. 在 [github.com/igniteenow/robo](https://github.com/igniteenow/robo) 提交 issue，并附上：
    - 任务 ID 和调度表达式
    - 投递目标
    - 预期行为与实际行为

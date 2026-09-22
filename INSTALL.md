@@ -11,7 +11,7 @@
 ## Kali, Debian, Ubuntu, Raspberry Pi OS, macOS, WSL
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git robo
+git clone https://github.com/igniteenow/robo.git robo
 cd robo
 bash install-robo.sh
 ```
@@ -42,7 +42,7 @@ Optional installer arguments:
 ## Windows 10/11 PowerShell
 
 ```powershell
-git clone https://github.com/IgniteeNow/Robo.git robo
+git clone https://github.com/igniteenow/robo.git robo
 cd .\robo
 Set-ExecutionPolicy -Scope Process Bypass
 .\install-robo.ps1

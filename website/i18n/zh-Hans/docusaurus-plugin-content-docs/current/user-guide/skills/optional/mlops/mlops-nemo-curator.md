@@ -390,8 +390,8 @@ cluster.close()
 
 ## 参考资料
 
-- **[过滤指南](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/nemo-curator/references/filtering.md)** - 30+ 质量过滤器与启发式规则
-- **[去重指南](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/nemo-curator/references/deduplication.md)** - 精确、模糊、语义去重方法
+- **[过滤指南](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/nemo-curator/references/filtering.md)** - 30+ 质量过滤器与启发式规则
+- **[去重指南](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/nemo-curator/references/deduplication.md)** - 精确、模糊、语义去重方法
 
 ## 资源
 

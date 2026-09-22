@@ -13,7 +13,7 @@ import urllib.request
 
 DEFAULT_UA = (
     "robo-osint-investigation/0.2 "
-    "(+https://github.com/IgniteeNow/Robo; "
+    "(+https://github.com/igniteenow/robo; "
     "set ROBO_OSINT_UA env var to identify yourself per "
     "Wikimedia / SEC fair-use guidance)"
 )

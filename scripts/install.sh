@@ -6,7 +6,7 @@
 # Uses uv for desktop/server installs and Python's stdlib venv + pip on Termux.
 #
 # Usage:
-#   git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+#   git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 #
 # Or with options:
 #   curl -fsSL ... | bash -s -- --no-venv --skip-setup
@@ -43,8 +43,8 @@ NC='\033[0m' # No Color
 BOLD='\033[1m'
 
 # Configuration
-REPO_URL_SSH="git@github.com:IgniteeNow/Robo.git"
-REPO_URL_HTTPS="https://github.com/IgniteeNow/Robo.git"
+REPO_URL_SSH="git@github.com:igniteenow/robo.git"
+REPO_URL_HTTPS="https://github.com/igniteenow/robo.git"
 ROBO_HOME="${ROBO_HOME:-$HOME/.robo}"
 # INSTALL_DIR is resolved AFTER arg parsing and OS detection so we can pick an
 # FHS-style layout for root installs.  Track whether the user gave us an
@@ -529,7 +529,7 @@ detect_os() {
             OS="windows"
             DISTRO="windows"
             log_error "Windows detected. Please use the PowerShell installer:"
-            log_info "  iex (irm https://github.com/IgniteeNow/Robo)"
+            log_info "  iex (irm https://github.com/igniteenow/robo)"
             exit 1
             ;;
         *)

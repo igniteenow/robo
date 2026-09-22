@@ -556,8 +556,8 @@ python inference.py \
 
 ## 参考资料
 
-- **[高级用法](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/lambda-labs/references/advanced-usage.md)** — 多节点训练、API 自动化
-- **[故障排查](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/lambda-labs/references/troubleshooting.md)** — 常见问题及解决方案
+- **[高级用法](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/lambda-labs/references/advanced-usage.md)** — 多节点训练、API 自动化
+- **[故障排查](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/lambda-labs/references/troubleshooting.md)** — 常见问题及解决方案
 
 ## 资源
 

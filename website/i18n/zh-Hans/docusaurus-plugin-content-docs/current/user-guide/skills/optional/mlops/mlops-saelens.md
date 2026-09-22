@@ -369,9 +369,9 @@ cfg = LanguageModelSAERunnerConfig(
 
 | 文件 | 内容 |
 |------|----------|
-| [references/README.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/saelens/references/README.md) | 概述与快速入门指南 |
-| [references/api.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/saelens/references/api.md) | SAE、TrainingSAE、配置的完整 API 参考 |
-| [references/tutorials.md](https://github.com/IgniteeNow/Robo/blob/main/optional-skills/mlops/saelens/references/tutorials.md) | 训练、分析、引导的分步教程 |
+| [references/README.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/saelens/references/README.md) | 概述与快速入门指南 |
+| [references/api.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/saelens/references/api.md) | SAE、TrainingSAE、配置的完整 API 参考 |
+| [references/tutorials.md](https://github.com/igniteenow/robo/blob/main/optional-skills/mlops/saelens/references/tutorials.md) | 训练、分析、引导的分步教程 |
 
 ## 外部资源
 

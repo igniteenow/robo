@@ -51,7 +51,7 @@ That does not stop Robo from working well as a phone-native CLI agent — it jus
 Robo now ships a Termux-aware installer path:
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
 ```
 
 On Termux, the installer automatically:
@@ -87,7 +87,7 @@ Why these packages?
 ### 2. Clone Robo
 
 ```bash
-git clone https://github.com/IgniteeNow/Robo.git
+git clone https://github.com/igniteenow/robo.git
 cd robo-engineer
 ```
 
