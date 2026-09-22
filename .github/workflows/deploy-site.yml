@@ -1,15 +1,8 @@
 name: Deploy Site
 
 on:
-  release:
-    types: [published]
-  push:
-    branches: [main]
-    paths:
-      - 'website/**'
-      - 'skills/**'
-      - 'optional-skills/**'
-      - '.github/workflows/deploy-site.yml'
+  # Ignitee Now: automatic triggers are off until this workflow has been
+  # reviewed for the IgniteeNow org. Run it from the Actions tab when ready.
   workflow_dispatch:
     inputs:
       skills_index_run_id:

@@ -35,16 +35,8 @@ name: auto-fix lint issues & formatting
 #      on the current state.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '**/*.js'
-      - '**/*.cjs'
-      - '**/*.mjs'
-      - '**/*.ts'
-      - '**/*.tsx'
-      - 'package.json'
-      - 'package-lock.json'
+  # Ignitee Now: automatic triggers are off until this workflow has been
+  # reviewed for the IgniteeNow org. Run it from the Actions tab when ready.
   workflow_dispatch:
 
 permissions:
