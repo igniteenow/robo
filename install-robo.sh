@@ -86,6 +86,18 @@ if [ ! -x "$VENV/bin/python" ]; then
     "$PYTHON_BIN" -m venv "$VENV"
 fi
 
+# A .venv created by uv (developers running the test suite) ships without
+# pip. Bootstrap it with ensurepip; if that interpreter cannot, rebuild the
+# environment with the Python selected above instead of failing.
+if ! "$VENV/bin/python" -m pip --version >/dev/null 2>&1; then
+    printf 'Existing Python environment has no pip; bootstrapping it...\n'
+    if ! "$VENV/bin/python" -m ensurepip --upgrade >/dev/null 2>&1; then
+        printf 'Recreating the Robo Python environment...\n'
+        rm -rf "$VENV"
+        "$PYTHON_BIN" -m venv "$VENV"
+    fi
+fi
+
 "$VENV/bin/python" -m pip install --upgrade pip setuptools wheel
 "$VENV/bin/python" -m pip install --editable "$ROOT"
 
