@@ -1270,7 +1270,9 @@ _SLACK_PRIORITY_ALIASES = ("btw", "bg")
 #   - refine: on-demand memory/skill review; reached via /robo refine on
 #     Slack. Added at the 50-cap — a native slot would clamp an existing
 #     native slash.
-_SLACK_VIA_ROBO_ONLY = frozenset({"moa", "debug", "egress", "init", "version", "diff", "update", "heartbeat", "refine"})
+# ``topup`` is a billing hand-off to the portal; on Slack it is reached via
+# ``/robo topup`` so the native slot goes to ``/platform`` (gateway control).
+_SLACK_VIA_ROBO_ONLY = frozenset({"moa", "debug", "egress", "init", "version", "diff", "update", "heartbeat", "refine", "topup"})
 
 
 def _sanitize_slack_name(raw: str) -> str:

@@ -117,6 +117,18 @@ _TERMINAL_STATES = {"completed", "failed", "cancelled"}
 # ---------------------------------------------------------------------------
 
 
+def _resolve_managed_krea_gateway():
+    """Return the managed Krea gateway target, or ``None`` when none is wired.
+
+    ``tools.image_generation_tool`` calls this before routing a native Krea
+    model through this plugin on the managed path. No hosted image gateway is
+    configured for this build, so the probe always answers ``None`` and
+    direct/BYO users keep their own pipeline. Tests monkeypatch this hook to
+    exercise the managed routing branch.
+    """
+    return None
+
+
 def _load_krea_config() -> Dict[str, Any]:
     """Read ``image_gen.krea`` (with fallthrough to ``image_gen``) from config.yaml."""
     try:

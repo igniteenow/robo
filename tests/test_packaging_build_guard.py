@@ -63,7 +63,7 @@ def test_artifact_build_rejects_nix_development_shell_environment(kind, tmp_path
 
 @pytest.mark.parametrize(
     ("kind", "artifact_glob"),
-    [("sdist", "robo_agent-*.tar.gz"), ("wheel", "robo_agent-*.whl")],
+    [("sdist", "robo_engineer-*.tar.gz"), ("wheel", "robo_engineer-*.whl")],
 )
 def test_artifact_build_allows_explicit_nix_package_build_marker(kind, artifact_glob, tmp_path):
     result = _build_artifact(kind, tmp_path, nix_build=True)

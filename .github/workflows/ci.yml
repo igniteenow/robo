@@ -1,15 +1,80 @@
 name: CI
 on:
+  workflow_dispatch:
   push: { branches: [main] }
   pull_request:
+
+# The Python suite (~26,000 tests) is run the way upstream designed it: every
+# test file in its own subprocess (scripts/run_tests.sh), sliced across
+# parallel runners. A single-process `pytest` run leaks module state, mocks
+# and ContextVars between files and reports hundreds of false failures.
+# tests/docker, tests/e2e and tests/integration have their own workflows and
+# are excluded by the slicer.
+
 jobs:
-  python:
+  slices:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
+      - id: matrix
+        run: |
+          MATRIX=$(python3 scripts/run_tests_parallel.py --generate-slices 8)
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  tests:
+    name: tests (slice ${{ matrix.slice.index }}/8)
+    needs: slices
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.slices.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep (the search tool tests need rg on PATH)
+        run: |
+          set -euo pipefail
+          RG_VERSION=15.1.0
+          RG_SHA256=1c9297be4a084eea7ecaedf93eb03d058d6faae29bbc57ecdaf5063921491599
+          RG_TARBALL=ripgrep-${RG_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          curl -sSfL --retry 3 --retry-delay 5 -o "$RG_TARBALL" \
+            "https://github.com/BurntSushi/ripgrep/releases/download/${RG_VERSION}/${RG_TARBALL}"
+          echo "${RG_SHA256}  ${RG_TARBALL}" | sha256sum -c -
+          tar -xzf "$RG_TARBALL"
+          sudo mv "ripgrep-${RG_VERSION}-x86_64-unknown-linux-musl/rg" /usr/local/bin/rg
+          rm -rf "$RG_TARBALL" "ripgrep-${RG_VERSION}-x86_64-unknown-linux-musl"
+          rg --version
       - uses: astral-sh/setup-uv@v3
-      - run: uv sync --all-extras --dev
-      - run: uv run pytest -q --ignore=tests/livetest
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - run: uv python install 3.11
+      - run: uv sync --python 3.11 --all-extras --dev
+      - name: Run tests (slice ${{ matrix.slice.index }}/8)
+        run: |
+          source .venv/bin/activate
+          scripts/run_tests.sh --files '${{ matrix.slice.files }}'
+        env:
+          OPENROUTER_API_KEY: ""
+          OPENAI_API_KEY: ""
+          ANTHROPIC_API_KEY: ""
+          IGNITEENOW_API_KEY: ""
+
+  # Single required check for branch protection: green only when every slice is.
+  python:
+    needs: tests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "tests result: ${{ needs.tests.result }}"
+          test "${{ needs.tests.result }}" = "success"
+
   node:
     runs-on: ubuntu-latest
     steps:

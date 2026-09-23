@@ -373,6 +373,13 @@ override-dependencies = [
   # remove this when we update discord.py
   "pynacl>=1.6,<1.7",
 ]
+# Shared packages that tools/lazy_deps.py also exact-pins must resolve to the
+# same version in uv.lock (tests/test_project_metadata.py). Holding them here
+# keeps every re-lock on the lazy pin instead of floating with exclude-newer.
+constraint-dependencies = [
+  "tqdm==4.70.0",
+  "huggingface-hub==1.32.0",
+]
 exclude-newer = "14 days"
 exclude-newer-package = { vercel = false, nemo-relay = false, huggingface_hub = false }
 

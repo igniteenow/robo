@@ -967,7 +967,7 @@ class TestRunDebugShareIgniteeNow:
             run_debug_share(self._args())
 
         out = capsys.readouterr().out
-        assert "Ignitee Now-INTERNAL" in out
+        assert "only Ignitee Now staff" in out
         assert "https://support.example.com/diagnostics/id-1" in out
         assert "2026-06-20T00:00:00Z" in out
         # The blob passed to share_to_igniteenow must be gzip bytes.

@@ -2028,8 +2028,10 @@ def test_load_enabled_toolsets_rejects_disabled_mcp_env(monkeypatch, capsys):
 
     result = server._load_enabled_toolsets()
     assert result is not None
-    assert {"kanban", "memory", "project"} <= set(result)
-    assert set(result) - {"kanban", "memory", "project"} <= _RECENTLY_SHIPPED_TOOLSETS
+    # ``knowledge`` (3.0.1) sits in the base tool universe like ``kanban``,
+    # so it is recovered as a non-configurable toolset on every CLI list.
+    assert {"kanban", "knowledge", "memory", "project"} <= set(result)
+    assert set(result) - {"kanban", "knowledge", "memory", "project"} <= _RECENTLY_SHIPPED_TOOLSETS
     err = capsys.readouterr().err
     assert "ignoring disabled MCP servers" in err
     assert "mcp-off" in err
@@ -2054,8 +2056,10 @@ def test_load_enabled_toolsets_falls_back_when_tui_env_invalid(monkeypatch, caps
 
     result = server._load_enabled_toolsets()
     assert result is not None
-    assert {"kanban", "memory", "project"} <= set(result)
-    assert set(result) - {"kanban", "memory", "project"} <= _RECENTLY_SHIPPED_TOOLSETS
+    # ``knowledge`` (3.0.1) sits in the base tool universe like ``kanban``,
+    # so it is recovered as a non-configurable toolset on every CLI list.
+    assert {"kanban", "knowledge", "memory", "project"} <= set(result)
+    assert set(result) - {"kanban", "knowledge", "memory", "project"} <= _RECENTLY_SHIPPED_TOOLSETS
     assert "using configured CLI toolsets" in capsys.readouterr().err
 
 

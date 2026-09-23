@@ -39,6 +39,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from robo_constants import get_robo_home
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -248,8 +250,6 @@ class SkinConfig:
 
 # --------------------------------------------------------------------------- loading
 def _skins_dir() -> Path:
-    from robo_constants import get_robo_home
-
     return get_robo_home() / "skins"
 
 

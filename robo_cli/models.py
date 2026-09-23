@@ -572,6 +572,11 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
 # source of truth.
 _PROVIDER_MODELS["ai-gateway"] = [mid for mid, _ in VERCEL_AI_GATEWAY_MODELS]
 
+# Ignitee Now Portal: the hosted inference proxy serves the same curated
+# ``OPENROUTER_MODELS`` catalog, so the picker, the silent-default resolver
+# and the static fallback catalog all read one list.
+_PROVIDER_MODELS["igniteenow"] = [mid for mid, _ in OPENROUTER_MODELS]
+
 def _is_model_free(model_id: str, pricing: dict[str, dict[str, str]]) -> bool:
     """Return True if *model_id* has zero-cost prompt AND completion pricing."""
     p = pricing.get(model_id)
@@ -931,7 +936,7 @@ def pick_silent_default_model(model_ids: list[str], provider: str = "openrouter"
 # (cache-only catalog read). The *interactive* default (GUI onboarding /
 # ``robo model``) uses the richer free/paid-tier-aware resolver — see
 # ``get_recommended_default_model`` in robo_cli/web_server.py.
-_SILENT_DEFAULT_PROVIDERS: frozenset[str] = frozenset({"openrouter"})
+_SILENT_DEFAULT_PROVIDERS: frozenset[str] = frozenset({"openrouter", "igniteenow"})
 
 
 def get_default_model_for_provider(provider: str) -> str:

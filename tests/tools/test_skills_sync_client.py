@@ -304,14 +304,14 @@ class TestDevGate:
         token = _jwt({"sub": "u", "tool_gateway_admin": False})
         import robo_cli.auth as auth_mod
         monkeypatch.setattr(auth_mod, "resolve_igniteenow_runtime_credentials",
-                            lambda **kw: {"api_key": token, "base_url": "https://x"})
+                            lambda **kw: {"api_key": token, "base_url": "https://x"}, raising=False)
         assert ssc.dev_gate_open() is False
 
     def test_maybe_push_inert_when_gate_closed(self, monkeypatch):
         token = _jwt({"sub": "u"})
         import robo_cli.auth as auth_mod
         monkeypatch.setattr(auth_mod, "resolve_igniteenow_runtime_credentials",
-                            lambda **kw: {"api_key": token})
+                            lambda **kw: {"api_key": token}, raising=False)
         monkeypatch.setattr(ssc, "resolve_sync_base_url", lambda: "http://x")
         # gate closed -> None (inert), never attempts a push
         assert ssc.maybe_push_skills() is None
@@ -322,7 +322,7 @@ class TestDevGate:
         def _raise(**kw):
             raise RuntimeError("not logged in")
 
-        monkeypatch.setattr(auth_mod, "resolve_igniteenow_runtime_credentials", _raise)
+        monkeypatch.setattr(auth_mod, "resolve_igniteenow_runtime_credentials", _raise, raising=False)
         assert ssc.maybe_pull_skills() is None
 
 
@@ -857,7 +857,7 @@ class TestOrgIdentityGate:
         token = _jwt({"sub": "u", "org_id": "org-1"})
         import robo_cli.auth as auth_mod
         monkeypatch.setattr(auth_mod, "resolve_igniteenow_runtime_credentials",
-                            lambda **kw: {"api_key": token, "base_url": "https://x"})
+                            lambda **kw: {"api_key": token, "base_url": "https://x"}, raising=False)
         with pytest.raises(ssc.SyncInertError):
             ssc.resolve_org_identity()
         assert ssc.org_sync_available() is False
@@ -975,7 +975,7 @@ class TestOrgEndToEnd:
         token = _jwt({"sub": "u", "org_id": "org-1"})
         import robo_cli.auth as auth_mod
         monkeypatch.setattr(auth_mod, "resolve_igniteenow_runtime_credentials",
-                            lambda **kw: {"api_key": token})
+                            lambda **kw: {"api_key": token}, raising=False)
         assert ssc.maybe_pull_org_skills() is None
 
 

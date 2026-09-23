@@ -78,8 +78,10 @@ robo model
 robo
 ```
 
-The installer sets up Python, a managed Node runtime if needed, and the optional
-hands-free voice stack. If a voice component has no package for your platform,
+`install-robo.sh` and `install-robo.ps1` are thin wrappers around
+`scripts/install.sh` and `scripts/install.ps1`; call those directly if you are
+scripting an install. The installer sets up Python, a managed Node runtime if
+needed, and the optional hands-free voice stack. If a voice component has no package for your platform,
 Robo still installs — run `robo doctor` afterward to see exactly what, if
 anything, is missing and how to add it.
 

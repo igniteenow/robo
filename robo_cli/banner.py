@@ -81,7 +81,7 @@ def _run_git(args: List[str], *, cwd: Optional[Path], timeout: int) -> Optional[
         logger.debug("update check: subprocess helpers unavailable: %s", exc)
         kwargs["env"] = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
-        return subprocess.run(["git", *args], **kwargs)
+        return subprocess.run(["git", *args], timeout=kwargs.pop("timeout", timeout), **kwargs)
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         logger.debug("update check: git %s failed to run: %s", args[:2], exc)
         return None
