@@ -26,7 +26,7 @@ YAML format (every key optional)::
     dark_colors: {...}                         # overlay for dark terminals
     branding: {agent_name, welcome, goodbye, response_label, prompt_symbol, help_header}
     spinner: {waiting_faces: [...], thinking_faces: [...], thinking_verbs: [...], wings: [[l, r], ...]}
-    tool_prefix: "│"
+    tool_prefix: "┊"
     tool_emojis: {terminal: "⌘", ...}
     banner_logo: "rich markup"
     banner_hero: "rich markup"
@@ -124,7 +124,7 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
             "thinking_verbs": ["analyzing", "tracing dependencies", "checking evidence", "planning", "verifying"],
             "wings": [],
         },
-        "tool_prefix": "│",
+        "tool_prefix": "┊",
     },
     # Warm charcoal with the full flame.
     "ember": {
@@ -187,7 +187,7 @@ _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
         },
         "spinner": {"waiting_faces": _SPINNER_FACES, "thinking_faces": _SPINNER_FACES,
                     "thinking_verbs": ["analyzing", "checking evidence", "planning"], "wings": []},
-        "tool_prefix": "│",
+        "tool_prefix": "┊",
     },
     # Accessibility first: maximum contrast, colour never the only signal.
     "contrast": {
@@ -223,7 +223,7 @@ class SkinConfig:
     dark_colors: Dict[str, str] = field(default_factory=dict)
     spinner: Dict[str, Any] = field(default_factory=dict)
     branding: Dict[str, str] = field(default_factory=dict)
-    tool_prefix: str = "│"
+    tool_prefix: str = "┊"
     tool_emojis: Dict[str, str] = field(default_factory=dict)
     banner_logo: str = ""
     banner_hero: str = ""
@@ -304,7 +304,7 @@ def _build_skin_config(data: Dict[str, Any]) -> SkinConfig:
         dark_colors=_string_map(section("dark_colors")),
         spinner=spinner,
         branding={**base["branding"], **_string_map(section("branding"))},
-        tool_prefix=prefix if isinstance(prefix, str) and prefix else str(base.get("tool_prefix", "│")),
+        tool_prefix=prefix if isinstance(prefix, str) and prefix else str(base.get("tool_prefix", "┊")),
         tool_emojis=_string_map(section("tool_emojis")),
         banner_logo=data.get("banner_logo") if isinstance(data.get("banner_logo"), str) else "",
         banner_hero=data.get("banner_hero") if isinstance(data.get("banner_hero"), str) else "",

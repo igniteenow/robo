@@ -31,7 +31,7 @@ class TestSkinConfig:
 
         skin = load_skin("robo")
         assert skin.name == "robo"
-        assert skin.tool_prefix == "│"
+        assert skin.tool_prefix == "┊"
         assert not [k for k in REQUIRED_COLOR_KEYS if not skin.get_color(k)]
         assert skin.get_branding("agent_name") == "Robo"
         assert skin.get_branding("prompt_symbol")
