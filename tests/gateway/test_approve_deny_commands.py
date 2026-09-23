@@ -480,7 +480,19 @@ class TestBlockingApprovalE2E:
         unregister_gateway_notify(session_key)
 
     def test_parallel_subagent_approvals(self):
-        """Multiple threads can block concurrently and be resolved independently."""
+        """Concurrent risky calls in one session are each blocked, prompted and
+        resolved independently.
+
+        ``_await_gateway_decision`` deliberately never shows overlapping
+        prompts for one session: a call that arrives while another approval
+        window is open waits for it to clear before it notifies (see its
+        docstring). So the three agents may prompt one at a time or, if they
+        race past that check together, all at once; either way each one
+        notifies exactly once and is approved on its own. Resolving whatever
+        is queued, round by round, until all three are through is the
+        contract - insisting on three simultaneous prompts raced the
+        serialization and, on a warm process, parked two agents forever.
+        """
         from tools.approval import (
             register_gateway_notify, unregister_gateway_notify,
             resolve_gateway_approval, check_all_command_guards,
@@ -511,30 +523,43 @@ class TestBlockingApprovalE2E:
             return run
 
         threads = [
-            threading.Thread(target=make_agent(0, "rm -rf /a")),
-            threading.Thread(target=make_agent(1, "rm -rf /b")),
-            threading.Thread(target=make_agent(2, "rm -rf /c")),
+            threading.Thread(target=make_agent(0, "rm -rf /a"), daemon=True),
+            threading.Thread(target=make_agent(1, "rm -rf /b"), daemon=True),
+            threading.Thread(target=make_agent(2, "rm -rf /c"), daemon=True),
         ]
-        for t in threads:
-            t.start()
+        try:
+            for t in threads:
+                t.start()
 
-        # Wait for all 3 to block
-        assert _wait_until(lambda: len(notified) >= 3), \
-            "not all 3 agents reached the gateway approval notify"
+            # Each round: wait for at least one more agent to reach the
+            # notify (its queue entry is appended before the callback fires),
+            # then approve everything currently queued. Ends when all three
+            # have been approved.
+            approved = 0
+            rounds = 0
+            while approved < 3:
+                rounds += 1
+                assert rounds <= 3, "more approval rounds than agents"
+                seen = len(notified)
+                assert _wait_until(lambda: len(notified) > seen), \
+                    "no agent reached the gateway approval notify"
+                approved += resolve_gateway_approval(
+                    session_key, "once", resolve_all=True
+                )
 
-        assert len(notified) == 3
-        assert len(_gateway_queues.get(session_key, [])) == 3
-
-        # Approve all at once
-        count = resolve_gateway_approval(session_key, "session", resolve_all=True)
-        assert count == 3
-
-        for t in threads:
-            t.join(timeout=5)
-
-        assert all(r is not None for r in results)
-        assert all(r["approved"] is True for r in results)
-        unregister_gateway_notify(session_key)
+            assert approved == 3
+            for t in threads:
+                t.join(timeout=10)
+            assert not any(t.is_alive() for t in threads), "an agent never resumed"
+            assert len(notified) == 3, "each agent must prompt exactly once"
+            assert not _gateway_queues.get(session_key)
+            assert all(r is not None for r in results)
+            assert all(r["approved"] is True for r in results)
+        finally:
+            # Never leave agents parked on an unresolved prompt: a blocked
+            # non-daemon thread would hang the whole pytest process.
+            resolve_gateway_approval(session_key, "deny", resolve_all=True)
+            unregister_gateway_notify(session_key)
 
 
 # ------------------------------------------------------------------

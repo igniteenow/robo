@@ -317,6 +317,11 @@ class TestIntegrationWithModelsModule:
         from robo_cli.model_switch import list_authenticated_providers
 
         monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
+        # The slicing under test runs over the hardcoded list; keep the live
+        # manifest (network) out of it, as the other tests in this file do.
+        monkeypatch.setattr(
+            "robo_cli.model_catalog.get_curated_openrouter_models", lambda: None
+        )
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
         expected = [mid for mid, _ in OPENROUTER_MODELS]
