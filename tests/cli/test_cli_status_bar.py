@@ -111,7 +111,12 @@ class TestCLIStatusBar:
 
         text = cli_obj._build_status_bar_text(width=120)
 
-        assert "🗜️ 3" in text
+        # The emoji-free bar shows the compression count as its own " │ "
+        # separated segment; at zero compressions the segment is absent.
+        assert "3" in [part.strip() for part in text.split("│")]
+        cli_obj.agent.context_compressor.compression_count = 0
+        without = cli_obj._build_status_bar_text(width=120)
+        assert "3" not in [part.strip() for part in without.split("│")]
 
 
 
@@ -167,7 +172,7 @@ class TestCLIStatusBar:
 
         fragments = cli_obj._get_voice_status_fragments(width=50)
 
-        assert fragments == [("class:voice-status", " 🎤 Ctrl+B ")]
+        assert fragments == [("class:voice-status", " Ctrl+B ")]
 
 
     # Round-13 Copilot review regressions on #19835. The label in voice
@@ -189,7 +194,7 @@ class TestCLIStatusBar:
         assert any("Ctrl+O to record" in text for _cls, text in wide)
 
         compact = cli_obj._get_voice_status_fragments(width=50)
-        assert compact == [("class:voice-status", " 🎤 Ctrl+O ")]
+        assert compact == [("class:voice-status", " Ctrl+O ")]
 
 
 

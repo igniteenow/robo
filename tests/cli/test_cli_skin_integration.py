@@ -42,7 +42,7 @@ class TestCliSkinPromptIntegration:
         cli._secret_state = {"response_queue": object()}
 
         set_active_skin("ember")
-        assert cli._get_tui_prompt_fragments() == [("class:sudo-prompt", "🔑 ▲ ")]
+        assert cli._get_tui_prompt_fragments() == [("class:sudo-prompt", " ▲ ")]
 
 
     def test_narrow_terminals_compact_voice_recording_prompt_fragments(self):
