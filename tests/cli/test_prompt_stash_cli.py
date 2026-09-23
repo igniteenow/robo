@@ -180,7 +180,7 @@ class TestRenderStashPanel:
 
     def test_header_and_footer_present(self, cli):
         text = "".join(t for _, t in self._rows(cli))
-        assert "📌 Stash" in text
+        assert "Stash (" in text
         assert "Ctrl+S" in text
         assert "Enter=restore" in text
         assert "D=delete" in text
@@ -254,7 +254,8 @@ class TestStatusBarIndicator:
         cli._prompt_stash.stash("a parked draft")
         try:
             text = "".join(t for _, t in cli._get_status_bar_fragments())
-            assert "📌 1" in text
+            assert cli._prompt_stash.indicator() == "1"
+            assert " 1" in text
         finally:
             cli._prompt_stash.clear()
 
@@ -265,7 +266,8 @@ class TestStatusBarIndicator:
         cli._prompt_stash.stash("b")
         try:
             text = "".join(t for _, t in cli._get_status_bar_fragments())
-            assert "📌 2" in text
+            assert cli._prompt_stash.indicator() == "2"
+            assert " 2" in text
         finally:
             cli._prompt_stash.clear()
 

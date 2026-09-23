@@ -2,7 +2,6 @@ import type { Unstable_TriggerAdapter, Unstable_TriggerItem } from '@assistant-u
 import { useStore } from '@nanostores/react'
 import { useCallback } from 'react'
 
-import type { RoboGateway } from '@/robo'
 import { sessionTitle } from '@/lib/chat-runtime'
 import {
   type CommandsCatalogLike,
@@ -21,6 +20,7 @@ import {
   peekCachedSlashCompletion
 } from '@/lib/slash-completion-cache'
 import { normalize } from '@/lib/text'
+import type { RoboGateway } from '@/robo'
 import { $sessions } from '@/store/session'
 
 import type { CompletionEntry, CompletionPayload } from './use-live-completion-adapter'

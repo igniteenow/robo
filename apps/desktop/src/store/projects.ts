@@ -6,12 +6,12 @@ import {
   type SidebarProjectTree
 } from '@/app/chat/sidebar/projects/workspace-groups'
 import type { RoboGitBaseBranch, RoboGitBranch } from '@/global'
-import { getRoboConfig, type RoboGateway } from '@/robo'
 import { translateNow } from '@/i18n'
 import { desktopDefaultCwd, isDesktopFsRemoteMode, selectDesktopPaths, writeDesktopFileText } from '@/lib/desktop-fs'
 import { desktopGit } from '@/lib/desktop-git'
 import { isMissingRpcMethod } from '@/lib/gateway-rpc'
 import { persistentAtom } from '@/lib/persisted'
+import { getRoboConfig, type RoboGateway } from '@/robo'
 import { $gateway, activeGateway, ensureActiveGatewayOpen } from '@/store/gateway'
 import { setSidebarAgentsGrouped } from '@/store/layout'
 import { notify } from '@/store/notifications'

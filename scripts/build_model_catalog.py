@@ -56,7 +56,7 @@ def build_catalog() -> dict:
         "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "metadata": {
             "source": "robo-engineer repo",
-            "docs": "website/docs/reference/model-catalog.md",
+            "docs": "https://robo.igniteenow.com/docs/reference/model-catalog",
         },
         "providers": {
             "openrouter": {

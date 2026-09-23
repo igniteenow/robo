@@ -1,6 +1,5 @@
 import { useCallback, useRef } from 'react'
 
-import { getCronJobs, listAllProfileSessions, listSidebarSessions, type SessionInfo } from '@/robo'
 import { sameCronSignature } from '@/lib/session-signatures'
 import {
   isMessagingSource,
@@ -8,6 +7,7 @@ import {
   MESSAGING_SESSION_SOURCE_IDS,
   normalizeSessionSource
 } from '@/lib/session-source'
+import { getCronJobs, listAllProfileSessions, listSidebarSessions, type SessionInfo } from '@/robo'
 import { setCronJobs } from '@/store/cron'
 import { $pinnedSessionIds, $sessionsLimit, bumpSessionsLimit, SIDEBAR_SESSIONS_PAGE_SIZE } from '@/store/layout'
 import { ALL_PROFILES, normalizeProfileKey } from '@/store/profile'

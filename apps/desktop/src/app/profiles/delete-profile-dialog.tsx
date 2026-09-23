@@ -1,6 +1,6 @@
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { deleteProfile } from '@/robo'
 import { useI18n } from '@/i18n'
+import { deleteProfile } from '@/robo'
 import { $activeGatewayProfile, normalizeProfileKey, selectProfile, setActiveProfile } from '@/store/profile'
 
 // Thin wrapper over ConfirmDialog: owns the deleteProfile call, inherits

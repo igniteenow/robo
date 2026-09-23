@@ -15,9 +15,9 @@ import { test } from 'vitest'
 import {
   canImportRoboCli,
   DEFAULT_PROBE_TIMEOUT_MS,
-  roboRuntimeImportProbe,
   PROBE_TIMEOUT_MS,
   resolveProbeTimeoutMs,
+  roboRuntimeImportProbe,
   shouldTrustRoboOverride,
   verifyRoboCli
 } from './backend-probes'

@@ -14,10 +14,24 @@ runs when the main provider has no working client.
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+import pytest
 
 
 
 # ── Text aux tasks — _resolve_auto ──────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _isolated_runtime_main():
+    """The runtime-main provider is context-local state with module-level
+    mirrors; tests here patch the mirrors, so a value left behind by an
+    earlier test (an agent started with provider ``openai``) would win.
+    Clear it on both sides of every test in this file."""
+    import agent.auxiliary_client as aux
+
+    aux.clear_runtime_main()
+    yield
+    aux.clear_runtime_main()
 
 
 class TestResolveAutoMainFirst:

@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tip } from '@/components/ui/tooltip'
 import type { DesktopAuthProvider, DesktopConnectionProbeResult } from '@/global'
 import { useI18n } from '@/i18n'
-import { ExternalLink } from '@/lib/external-link'
 import {
   AlertCircle,
   Check,
@@ -17,7 +16,6 @@ import {
   Loader2,
   LogIn,
   Monitor,
-  RefreshCw,
   Terminal
 } from '@/lib/icons'
 import { coerceRemoteUrlScheme } from '@/lib/remote-url'

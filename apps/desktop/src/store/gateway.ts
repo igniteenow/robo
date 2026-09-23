@@ -1,8 +1,8 @@
 import { type ConnectionState, type GatewayEvent, resolveGatewayWsUrl } from '@robo/shared'
 import { atom } from 'nanostores'
 
-import { RoboGateway } from '@/robo'
 import { reconnectBackoffDelayMs } from '@/lib/reconnect-backoff'
+import { RoboGateway } from '@/robo'
 import { markNativeNotifyBaseline } from '@/store/notify-baseline'
 import { setGatewayState } from '@/store/session'
 

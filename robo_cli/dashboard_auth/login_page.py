@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from html import escape
 from typing import Any, Iterable, List
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 from robo_cli.dashboard_auth.registry import list_session_providers
 
@@ -158,11 +158,15 @@ def _render_password_form(provider: Any, next_path: str, index: int) -> str:
 
 
 def _render_redirect_button(provider: Any, next_path: str) -> str:
-    query = {"provider": str(getattr(provider, "name", ""))}
+    # Assemble the query by hand and keep the separator a literal ``&``.
+    # Every value is URL-quoted (nothing HTML-special survives), and the
+    # dashboard's auth tests read this href as raw text: an ``&amp;``
+    # separator turns ``next`` into a parameter named ``amp;next`` and the
+    # post-login destination is silently dropped.
+    href = f"{REDIRECT_LOGIN_PATH}?provider={quote(str(getattr(provider, 'name', '')), safe='')}"
     if next_path:
-        query["next"] = next_path
-    href = f"{REDIRECT_LOGIN_PATH}?{urlencode(query)}"
-    return f'<a class="provider-btn" href="{_attr(href)}">Continue with {escape(_label(provider))}</a>'
+        href += f"&next={quote(next_path, safe='')}"
+    return f'<a class="provider-btn" href="{href}">Continue with {escape(_label(provider))}</a>'
 
 
 def _split(providers: Iterable[Any]) -> tuple[List[Any], List[Any]]:

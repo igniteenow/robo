@@ -26,7 +26,7 @@ branding:
   prompt_symbol: "›"
   help_header: "ROBO COMMAND DECK"
 
-tool_prefix: "│"
+tool_prefix: "┊"
 tool_emojis:
   terminal: "▸"
   web_search: "⌕"

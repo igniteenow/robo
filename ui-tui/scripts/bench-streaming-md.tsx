@@ -250,6 +250,7 @@ if (strategyArg === 'series') {
   const [, seriesStrategy, seriesSize] = process.argv.slice(2)
   const size = Number(seriesSize)
   const updates = makeUpdates(makeBlocks(size, `${seriesStrategy}${size}`))
+
   const { elapsed, times } = bench(
     seriesStrategy!,
     updates,

@@ -8,8 +8,8 @@ import {
 } from '@/app/right-sidebar/terminal/terminal-font'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { saveRoboConfig } from '@/robo'
 import { useI18n } from '@/i18n'
+import { saveRoboConfig } from '@/robo'
 import { notifyError } from '@/store/notifications'
 import type { RoboConfigRecord } from '@/types/robo'
 

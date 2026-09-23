@@ -6,8 +6,8 @@ import {
   attachmentPreviewDataUrl,
   type DroppedFile,
   extractDroppedFiles,
-  ROBO_PATHS_MIME,
-  partitionDroppedFiles
+  partitionDroppedFiles,
+  ROBO_PATHS_MIME
 } from './use-composer-actions'
 
 // A Finder/Explorer drop carries a native File handle; an in-app drag (project

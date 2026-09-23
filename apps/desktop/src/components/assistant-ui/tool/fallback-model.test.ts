@@ -115,7 +115,7 @@ describe('buildToolView browser_navigate title', () => {
     const view = buildToolView(
       part({
         toolName: 'browser_navigate',
-        args: { url: 'website/docs/index.mdx' },
+        args: { url: 'https://example.com/docs' },
         result: { success: false, error: 'Command timed out after 60 seconds' }
       }),
       ''
@@ -129,8 +129,8 @@ describe('buildToolView browser_navigate title', () => {
     const view = buildToolView(
       part({
         toolName: 'browser_navigate',
-        args: { url: 'website/docs/index.mdx' },
-        result: { success: true, url: 'website/docs/index.mdx', title: 'Docs' }
+        args: { url: 'https://example.com/docs' },
+        result: { success: true, url: 'https://example.com/docs', title: 'Docs' }
       }),
       ''
     )

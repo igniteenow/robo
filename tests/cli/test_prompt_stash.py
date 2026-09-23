@@ -200,24 +200,24 @@ class TestIndicatorState:
 
     def test_single_item_indicator(self, stash):
         stash.stash("draft")
-        assert stash.indicator() == "📌 1"
+        assert stash.indicator() == "1"
         assert bool(stash) is True
 
     def test_count_grows_with_stash(self, stash):
         stash.stash("a")
-        assert stash.indicator() == "📌 1"
+        assert stash.indicator() == "1"
         stash.stash("b")
-        assert stash.indicator() == "📌 2"
+        assert stash.indicator() == "2"
         stash.stash("c")
-        assert stash.indicator() == "📌 3"
+        assert stash.indicator() == "3"
 
     def test_indicator_marks_open_panel(self, stash):
         stash.stash("a")
         stash.stash("b")
         stash.open_panel()
-        assert stash.indicator() == "📌 2 ▲"
+        assert stash.indicator() == "2 ▲"
         stash.close_panel()
-        assert stash.indicator() == "📌 2"
+        assert stash.indicator() == "2"
 
     def test_indicator_clears_after_restoring_last_item(self, stash):
         stash.stash("only")

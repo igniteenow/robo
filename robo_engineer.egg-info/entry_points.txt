@@ -1,3 +1,0 @@
-[console_scripts]
-robo = robo_runtime.cli:main
-robo-acp = acp_adapter.entry:main

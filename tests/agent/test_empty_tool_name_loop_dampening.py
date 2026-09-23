@@ -135,10 +135,16 @@ def agent_env():
     os.environ["ROBO_HOME"] = os.path.join(test_home, ".robo")
 
     # Import fresh so the patched conversation_loop is exercised even when the
-    # module was imported earlier in the same worker.
-    for mod in list(sys.modules):
-        if mod == "run_agent" or mod.startswith("agent.") or mod.startswith("tools.") or mod.startswith("robo_"):
-            del sys.modules[mod]
+    # module was imported earlier in the same worker.  Keep the originals so
+    # they can be put back afterwards: later test files imported names from
+    # them at collection time, and a ``patch("agent.x.y")`` in those files
+    # must land on the same module object their functions still reference.
+    def _is_ours(name: str) -> bool:
+        return name == "run_agent" or name.startswith(("agent.", "tools.", "robo_"))
+
+    saved_modules = {k: v for k, v in sys.modules.items() if _is_ours(k)}
+    for mod in list(saved_modules):
+        del sys.modules[mod]
     from run_agent import AIAgent
 
     agent = AIAgent(
@@ -159,6 +165,19 @@ def agent_env():
             os.environ.pop("ROBO_HOME", None)
         else:
             os.environ["ROBO_HOME"] = prev_home
+        # Restore the module table this fixture replaced (see above), and
+        # rebind each restored submodule on its parent package: ``from agent
+        # import x`` reads the package attribute, ``from agent.x import y``
+        # reads sys.modules, and a later test must get the same object from
+        # both.
+        for mod in list(sys.modules):
+            if _is_ours(mod):
+                del sys.modules[mod]
+        sys.modules.update(saved_modules)
+        for name, module in saved_modules.items():
+            parent, _, child = name.rpartition(".")
+            if parent and parent in sys.modules:
+                setattr(sys.modules[parent], child, module)
 
 
 def _tool_results(handler) -> list[str]:

@@ -130,8 +130,10 @@ describe('StatusRule background-subagent indicator', () => {
   })
 
   it('spells out the auto-resume hint when idle with subagents in flight', () => {
+    // The hint is the lowest-priority tail segment; give it room.
     const element = StatusRule({
       ...baseProps,
+      cols: 140,
       usage: { ...baseProps.usage, active_subagents: 1 }
     })
 
@@ -141,6 +143,7 @@ describe('StatusRule background-subagent indicator', () => {
   it('pluralizes the resume hint for multiple in-flight subagents', () => {
     const element = StatusRule({
       ...baseProps,
+      cols: 140,
       usage: { ...baseProps.usage, active_subagents: 3 }
     })
 

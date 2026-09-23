@@ -1,4 +1,4 @@
-import { getGlobalModelOptions, type RoboGateway, type ModelOptionsResponse } from '@/robo'
+import { getGlobalModelOptions, type ModelOptionsResponse, type RoboGateway } from '@/robo'
 import type { ModelOptionProvider } from '@/types/robo'
 
 /**

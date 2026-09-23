@@ -314,6 +314,7 @@ COMMAND_REGISTRY: list[CommandDef] = [
                gateway_only=True, busy_policy="dispatch"),
     CommandDef("usage", "Show token usage and rate limits; `reset` redeems a banked Codex limit reset", "Info",
                args_hint="[reset [--force]]"),
+    CommandDef("topup", "Check your account balance and add credits (opens the billing portal)", "Info"),
     CommandDef("insights", "Show usage insights and analytics", "Info",
                args_hint="[days]"),
     CommandDef("platforms", "Show gateway/messaging platform status", "Info",
@@ -1269,7 +1270,9 @@ _SLACK_PRIORITY_ALIASES = ("btw", "bg")
 #   - refine: on-demand memory/skill review; reached via /robo refine on
 #     Slack. Added at the 50-cap — a native slot would clamp an existing
 #     native slash.
-_SLACK_VIA_ROBO_ONLY = frozenset({"moa", "debug", "egress", "init", "version", "diff", "update", "heartbeat", "refine"})
+# ``topup`` is a billing hand-off to the portal; on Slack it is reached via
+# ``/robo topup`` so the native slot goes to ``/platform`` (gateway control).
+_SLACK_VIA_ROBO_ONLY = frozenset({"moa", "debug", "egress", "init", "version", "diff", "update", "heartbeat", "refine", "topup"})
 
 
 def _sanitize_slack_name(raw: str) -> str:

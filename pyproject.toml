@@ -365,7 +365,7 @@ robo = "robo_runtime.cli:main"
 robo-acp = "acp_adapter.entry:main"
 
 [tool.uv]
-constraint-dependencies = ["anyio>=4.14.2"]
+constraint-dependencies = ["anyio>=4.14.2", "tqdm==4.70.0", "huggingface-hub==1.32.0"]
 override-dependencies = [
   # discord.py's latest published version, 2.7.1, pins pynacl at <1.6. however, pynacl 1.5.0 has known vulnerabilities.
   # discord.py has updated pynacl to 1.6 on `main`, but has not yet published a patch release.

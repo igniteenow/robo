@@ -35,7 +35,7 @@ test('canonicalGitHubRemote normalizes SSH and HTTPS forms to the same value', (
   assert.equal(canonicalGitHubRemote('ssh://git@github.com/igniteenow/robo.git'), ssh)
   assert.equal(canonicalGitHubRemote('https://github.com/igniteenow/robo.git'), ssh)
   // Case-insensitive: an uppercased owner still canonicalizes to the same repo.
-  assert.equal(canonicalGitHubRemote('git@github.com:Your-Org/robo-engineer.git'), ssh)
+  assert.equal(canonicalGitHubRemote('git@github.com:IgniteeNow/Robo.git'), ssh)
   // Trailing slashes are stripped.
   assert.equal(canonicalGitHubRemote('https://github.com/igniteenow/robo/'), ssh)
 })

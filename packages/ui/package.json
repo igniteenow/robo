@@ -6,16 +6,23 @@
   "license": "MIT",
   "author": "Ignitee Now",
   "type": "module",
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     "./ui/components/*": "./src/ui/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./lib/*": "./src/lib/*.ts",
     "./styles/*": "./src/styles/*"
   },
-  "files": ["src", "LICENSE", "README.md"],
+  "files": [
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
-    "test": "tsx test/smoke.test.tsx"
+    "test": "tsx test/smoke.test.tsx",
+    "check": "tsx test/smoke.test.tsx"
   },
   "peerDependencies": {
     "react": ">=18",

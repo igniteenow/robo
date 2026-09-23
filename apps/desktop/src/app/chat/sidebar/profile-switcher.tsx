@@ -31,7 +31,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tip, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { getProfileSoul, updateProfileSoul } from '@/robo'
 import { useI18n } from '@/i18n'
 import { triggerHaptic } from '@/lib/haptics'
 import { PROFILE_SWATCHES, profileColorSoft, resolveProfileColor } from '@/lib/profile-color'
@@ -42,6 +41,7 @@ import {
   reorderStepHaptic
 } from '@/lib/reorder'
 import { cn } from '@/lib/utils'
+import { getProfileSoul, updateProfileSoul } from '@/robo'
 import { notify, notifyError } from '@/store/notifications'
 import {
   $activeGatewayProfile,

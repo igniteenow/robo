@@ -202,6 +202,16 @@ def _list_registered_web_providers():
         return []
 
 
+def _is_tool_gateway_ready() -> bool:
+    """Whether a hosted web-tool gateway is available for the search backend.
+
+    No hosted gateway is wired for this build, so backend selection relies on
+    the vendor API keys / URLs alone. Kept as a module-level hook because the
+    provider tests patch it when pinning the auto-detect order.
+    """
+    return False
+
+
 def _get_backend() -> str:
     """Determine which web backend to use (shared fallback).
 

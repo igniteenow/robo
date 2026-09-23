@@ -58,7 +58,7 @@ agent-browser/
 privvy*
 images/
 __pycache__/
-robo_agent.egg-info/
+*.egg-info/
 wandb/
 testlogs
 playwright-report/

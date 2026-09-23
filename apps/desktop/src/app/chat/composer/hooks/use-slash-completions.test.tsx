@@ -2,9 +2,9 @@ import type { Unstable_TriggerItem } from '@assistant-ui/core'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { RoboGateway } from '@/robo'
 import { queryClient } from '@/lib/query-client'
 import { invalidateSlashCompletions } from '@/lib/slash-completion-cache'
+import type { RoboGateway } from '@/robo'
 
 import { isSkillItem } from '../composer-utils'
 

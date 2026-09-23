@@ -317,6 +317,23 @@ class TestIntegrationWithModelsModule:
         from robo_cli.model_switch import list_authenticated_providers
 
         monkeypatch.setattr("agent.models_dev.fetch_models_dev", lambda: {})
+        # The slicing under test runs over the hardcoded list. Keep both
+        # network inputs out of it: the hosted manifest (as the other tests
+        # in this file do) and OpenRouter's public /v1/models, which
+        # get_openrouter_models() reconciles the curated list against - ids
+        # OpenRouter has since retired would otherwise be dropped and the
+        # result would depend on the day the suite runs (same isolation as
+        # tests/robo_cli/test_models.py).
+        monkeypatch.setattr(
+            "robo_cli.model_catalog.get_curated_openrouter_models", lambda: None
+        )
+        from robo_cli import models as _models_mod
+
+        def _offline(*_args, **_kwargs):
+            raise OSError("network disabled in this test")
+
+        monkeypatch.setattr(_models_mod, "_openrouter_catalog_cache", None)
+        monkeypatch.setattr(_models_mod, "_urlopen_model_catalog_request", _offline)
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
         expected = [mid for mid, _ in OPENROUTER_MODELS]

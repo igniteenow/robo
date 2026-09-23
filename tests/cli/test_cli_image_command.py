@@ -84,6 +84,9 @@ class TestImageBadgeFormatting:
 
         badges = _format_image_attachment_badges([img], image_counter=1, width=40)
 
-        assert badges.startswith("[📎 ")
+        # Narrow terminals show a truncated filename badge (the CLI has no
+        # emoji glyphs), never the numbered "[Image #N]" form.
+        assert badges.startswith("[Screenshot 2026-0")
+        assert badges.endswith("...]")
         assert "Image #1" not in badges
 
