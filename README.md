@@ -9,7 +9,6 @@ size, browses the web, writes and runs code, and carries a task through from
 start to finish — in your terminal, on your desktop, or from a web dashboard.
 
 Built by [**Ignitee Now**](https://igniteenow.com) · Free and open source ·
-Built on the MIT-licensed [Hermes Agent](https://github.com/NousResearch/hermes-agent)
 
 [Install](#install) · [First steps](#first-steps) · [Features](#what-robo-does) · [How it's licensed](#license)
 
