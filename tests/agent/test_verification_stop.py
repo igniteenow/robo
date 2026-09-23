@@ -41,7 +41,24 @@ def clear_verify_env(monkeypatch):
         "ROBO_SESSION_SOURCE",
     ):
         monkeypatch.delenv(var, raising=False)
-    return monkeypatch
+
+    # The surface classifier reads the session ContextVars first and only
+    # falls back to os.environ while they have never been set in this
+    # context. Any earlier test that called set_session_vars /
+    # clear_session_vars (which store "" on purpose) leaves them set for the
+    # rest of the pytest process, so the env values these tests set would be
+    # ignored. Restore the never-set state for the duration of each test.
+    try:
+        from gateway import session_context as _sc
+    except Exception:
+        _sc = None
+    if _sc is not None:
+        tokens = [var.set(_sc._UNSET) for var in _sc._VAR_MAP.values()]
+        yield monkeypatch
+        for var, token in zip(_sc._VAR_MAP.values(), tokens):
+            var.reset(token)
+        return
+    yield monkeypatch
 
 
 

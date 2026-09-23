@@ -1539,3 +1539,35 @@ def _moa_caches_isolated():
     yield
     moa._preset_cache.clear()
     moa._runtime_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _session_context_env_fallback():
+    """Give every test the fresh-process session context.
+
+    ``gateway.session_context`` reads ContextVars first and consults
+    ``os.environ`` only while they have never been set in the current
+    context. Production relies on that (a cleared gateway session must not
+    pick up stale environment values), but pytest runs every test in one
+    context, so the first test to call ``set_session_vars`` or
+    ``clear_session_vars`` silently disables ``ROBO_SESSION_*`` environment
+    signals for every later test. Restore the never-set state around each
+    test, and hand the previous state back afterwards. Only acts when the
+    module is already imported, so it never changes import order.
+    """
+    import sys
+
+    sc = sys.modules.get("gateway.session_context")
+    if sc is None or not hasattr(sc, "_VAR_MAP") or not hasattr(sc, "_UNSET"):
+        yield
+        return
+    variables = list(sc._VAR_MAP.values())
+    tokens = [var.set(sc._UNSET) for var in variables]
+    try:
+        yield
+    finally:
+        for var, token in zip(variables, tokens):
+            try:
+                var.reset(token)
+            except (ValueError, RuntimeError):
+                pass
