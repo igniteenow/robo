@@ -165,11 +165,19 @@ def agent_env():
             os.environ.pop("ROBO_HOME", None)
         else:
             os.environ["ROBO_HOME"] = prev_home
-        # Restore the module table this fixture replaced (see above).
+        # Restore the module table this fixture replaced (see above), and
+        # rebind each restored submodule on its parent package: ``from agent
+        # import x`` reads the package attribute, ``from agent.x import y``
+        # reads sys.modules, and a later test must get the same object from
+        # both.
         for mod in list(sys.modules):
             if _is_ours(mod):
                 del sys.modules[mod]
         sys.modules.update(saved_modules)
+        for name, module in saved_modules.items():
+            parent, _, child = name.rpartition(".")
+            if parent and parent in sys.modules:
+                setattr(sys.modules[parent], child, module)
 
 
 def _tool_results(handler) -> list[str]:
