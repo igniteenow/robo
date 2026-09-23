@@ -1614,3 +1614,36 @@ def _restore_first_party_modules():
                 setattr(sys.modules[parent], child, module)
             except Exception:
                 pass
+
+
+@pytest.fixture(autouse=True)
+def _prompt_toolkit_output_follows_capsys():
+    """Make prompt_toolkit print through the current sys.stdout.
+
+    ``cli._cprint`` prints via prompt_toolkit, whose global ``AppSession``
+    creates its Output once, bound to whatever ``sys.stdout`` was at that
+    moment, and reuses it. In a full run an earlier test creates it against
+    the real stdout, so a later test's ``capsys`` never sees the text.
+    Drop the cached Input/Output around each test so they are re-created
+    lazily against the stdout in effect for that test. Only acts when
+    prompt_toolkit is already imported, so it never changes import order.
+    """
+    import sys
+
+    current = sys.modules.get("prompt_toolkit.application.current")
+    session = None
+    if current is not None:
+        try:
+            session = current.get_app_session()
+        except Exception:
+            session = None
+    if session is None:
+        yield
+        return
+    session._input = None
+    session._output = None
+    try:
+        yield
+    finally:
+        session._input = None
+        session._output = None

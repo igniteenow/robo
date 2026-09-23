@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - run: uv sync --all-extras --dev
-      - run: uv run pytest -q -x --ignore=tests/livetest
+      - run: uv run pytest -q --ignore=tests/livetest
   node:
     runs-on: ubuntu-latest
     steps:
