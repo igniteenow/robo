@@ -91,6 +91,20 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
     Invoke-Python -Arguments @('-m', 'venv', $venv)
 }
 
+# A .venv created by uv (developers running the test suite) ships without
+# pip. Bootstrap it with ensurepip; if that interpreter cannot, rebuild the
+# environment with the Python selected above instead of failing.
+& $venvPython -m pip --version *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host 'Existing Python environment has no pip; bootstrapping it...'
+    & $venvPython -m ensurepip --upgrade *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host 'Recreating the Robo Python environment...'
+        Remove-Item -LiteralPath $venv -Recurse -Force
+        Invoke-Python -Arguments @('-m', 'venv', $venv)
+    }
+}
+
 & $venvPython -m pip install --upgrade pip setuptools wheel
 if ($LASTEXITCODE -ne 0) { throw 'Failed to update the Python installer.' }
 & $venvPython -m pip install --editable $Root
