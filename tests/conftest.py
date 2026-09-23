@@ -1571,3 +1571,46 @@ def _session_context_env_fallback():
                 var.reset(token)
             except (ValueError, RuntimeError):
                 pass
+
+
+def _is_first_party_module(name: str) -> bool:
+    # The prefixes the module-purging fixtures in this suite delete.
+    return name == "run_agent" or name.startswith(("agent.", "tools.", "robo_"))
+
+
+@pytest.fixture(autouse=True)
+def _restore_first_party_modules():
+    """Undo module purges so later tests keep one copy of each module.
+
+    A few tests delete ``run_agent`` and every ``agent.*`` / ``tools.*`` /
+    ``robo_*`` entry from ``sys.modules`` to force a fresh import. pytest
+    imports every test module at collection time, before any test runs, so
+    those modules already hold references to the original copies; after a
+    purge, ``patch("agent.x.y")`` lands on a copy the code under test no
+    longer uses, and an exception class raised from one copy is not caught
+    by an ``except`` written against the other. Restore the pre-test copies
+    when a test replaced or removed them, drop the copies the purge imported
+    (they reference the discarded tree), and rebind each restored submodule
+    on its package so ``from agent import x`` agrees with ``sys.modules``.
+    """
+    import sys
+
+    before = {k: v for k, v in sys.modules.items() if _is_first_party_module(k)}
+    yield
+    purged = False
+    for name, module in before.items():
+        if sys.modules.get(name) is not module:
+            purged = True
+            sys.modules[name] = module
+    if not purged:
+        return
+    for name in list(sys.modules):
+        if _is_first_party_module(name) and name not in before:
+            del sys.modules[name]
+    for name, module in before.items():
+        parent, _, child = name.rpartition(".")
+        if parent and parent in sys.modules:
+            try:
+                setattr(sys.modules[parent], child, module)
+            except Exception:
+                pass
