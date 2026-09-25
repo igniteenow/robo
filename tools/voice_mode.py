@@ -430,7 +430,15 @@ SAMPLE_WIDTH = 2  # bytes per sample (int16)
 
 # Silence detection defaults
 SILENCE_RMS_THRESHOLD = 200  # RMS below this = silence (int16 range 0-32767)
-SILENCE_DURATION_SECONDS = 3.0  # Seconds of continuous silence before auto-stop
+SILENCE_DURATION_SECONDS = 1.5  # Seconds of continuous silence before auto-stop
+# The silence threshold adapts to the room ONLY when the room is louder than
+# the configured threshold: below that the configured value is used exactly
+# as before (so a quiet mic loses nothing); at or above it — where a fixed
+# threshold can never see silence and a recording would run to the cap —
+# the threshold becomes measured noise floor * this multiplier.
+NOISE_FLOOR_MULTIPLIER = 1.5
+NOISE_FLOOR_MAX_THRESHOLD = 5000  # ceiling so a very loud room can still trigger
+NOISE_FLOOR_RISE_PER_SECOND = 40.0  # how fast the floor may climb (RMS units)
 
 # Temp directory for voice recordings
 _TEMP_DIR = os.path.join(tempfile.gettempdir(), "robo_voice")
@@ -474,6 +482,74 @@ def _is_nan(value: float) -> bool:
         return False
 
 
+# One short tone at a time. Beeps and thinking blips used to race through
+# sounddevice's shared ``sd.play()`` / ``sd.stop()`` from different threads
+# (the recorder's silence callback, the transcription cue, the CLI), each
+# cutting the other's stream off mid-buffer: garbled, and on some Windows
+# audio drivers an aborted output stream keeps looping its last buffer — the
+# "weird noise that stays" until the device is reset. Every tone now plays on
+# its own stream, written in full and STOPPED (drained), never aborted, and
+# the lock keeps them strictly sequential.
+_tone_lock = threading.Lock()
+# How long past a tone's own length the device may take to drain it before
+# the stream is abandoned (aborted + closed) so no caller hangs forever.
+TONE_STALL_GRACE_SECONDS = 2.0
+
+
+def _play_tone_pcm(audio: "Any", sample_rate: int = SAMPLE_RATE) -> bool:
+    """Play one int16 mono tone to completion on a private OutputStream.
+
+    Blocks the caller for the tone's length. A stalled device is the only
+    case that aborts: the write/stop runs on a helper thread and if it has
+    not finished ``duration + TONE_STALL_GRACE_SECONDS`` later the stream is
+    aborted and closed so no caller can hang forever. Returns True when the
+    tone was played in full.
+    """
+    try:
+        sd, np = _import_audio()
+    except (ImportError, OSError):
+        return False
+    pcm = np.asarray(audio, dtype=np.int16)
+    if pcm.ndim == 1:
+        pcm = pcm.reshape(-1, 1)
+    if pcm.size == 0:
+        return False
+    duration = pcm.shape[0] / float(sample_rate)
+    with _tone_lock:
+        try:
+            stream = sd.OutputStream(samplerate=sample_rate, channels=1, dtype="int16")
+        except Exception as e:
+            logger.debug("Tone stream open failed: %s", e)
+            return False
+        done = threading.Event()
+        state = {"ok": False}
+
+        def _run() -> None:
+            try:
+                stream.start()
+                stream.write(pcm)
+                stream.stop()  # waits for the tail to play — never abort
+                state["ok"] = True
+            except Exception as e:
+                logger.debug("Tone playback failed: %s", e)
+            finally:
+                done.set()
+
+        threading.Thread(target=_run, daemon=True, name="voice-tone").start()
+        if not done.wait(duration + TONE_STALL_GRACE_SECONDS):
+            logger.debug("Tone playback stalled; aborting stream")
+            try:
+                stream.abort()
+            except Exception:
+                pass
+            done.wait(0.5)
+        try:
+            stream.close()
+        except Exception:
+            pass
+        return state["ok"]
+
+
 def play_beep(frequency: int = 880, duration: float = 0.12, count: int = 1) -> None:
     """Play a short beep tone using numpy + sounddevice.
 
@@ -513,31 +589,30 @@ def play_beep(frequency: int = 880, duration: float = 0.12, count: int = 1) -> N
             _play_int16_via_tempfile(audio, SAMPLE_RATE)
             return
 
-        try:
-            sd, _ = _import_audio()
-        except (ImportError, OSError):
-            return
-        sd.play(audio, samplerate=SAMPLE_RATE)
-        # sd.wait() calls Event.wait() without timeout — hangs forever if the
-        # audio device stalls.  Poll with a 2s ceiling and force-stop.
-        deadline = time.monotonic() + 2.0
-        while sd.get_stream() and sd.get_stream().active and time.monotonic() < deadline:
-            time.sleep(0.01)
-        sd.stop()
+        # Serialized, drained playback (see _play_tone_pcm) — never the shared
+        # sd.play()/sd.stop() pair that other threads could cut off.
+        _play_tone_pcm(audio, SAMPLE_RATE)
     except Exception as e:
         logger.debug("Beep playback failed: %s", e)
 
 
 # ============================================================================
-# Thinking sound — calm ambient "blub blub" while the agent works
+# Thinking sound — soft "blub blub" blips while Robo is busy with your voice
 # ============================================================================
-# During a voice conversation the agent can think / run tools for minutes with
-# zero audio, which reads as "it died". A quiet, repeating pair of soft water-
-# bubble blips fills that gap. Fully synthesized with numpy (no binary asset),
-# volume-scaled by voice.beep_volume, gated by voice.thinking_sound (default
-# on), and macOS-TCC-safe: sounddevice OUTPUT is gated there
-# (_sounddevice_output_allowed), and spawning afplay every second would churn
-# subprocesses, so on macOS the thinking sound is skipped silently.
+# A quiet, repeating pair of soft water-bubble blips, fully synthesized with
+# numpy (no binary asset), volume-scaled by voice.beep_volume and macOS-TCC-
+# safe: sounddevice OUTPUT is gated there (_sounddevice_output_allowed), and
+# spawning afplay every second would churn subprocesses, so on macOS the sound
+# is skipped silently.
+#
+# ``voice.thinking_sound`` picks when it plays (see thinking_sound_mode):
+#   true (default) — a short cue only while a spoken recording is being
+#                    transcribed, i.e. the gap between "I stopped talking" and
+#                    "Robo has my words". It stops the moment the transcript
+#                    lands; typed prompts never trigger it.
+#   "ambient"      — the original behaviour: blips for the whole turn while
+#                    the agent thinks / runs tools with no audio flowing.
+#   false          — never.
 
 # The host's *should_play* callback decides when blips are allowed; the
 # module-level output ref-count below tracks when real audio (TTS sentences,
@@ -571,22 +646,58 @@ def is_audio_output_active() -> bool:
 
 _thinking_lock = threading.Lock()
 _thinking_stop: Optional[threading.Event] = None
+# Who started the loop that is running: "ambient" (the turn-long loop) or
+# "cue" (the transcription cue). The cue only ever stops its own loop — in
+# ambient mode a spoken message mid-turn must not silence the turn's blips.
+_thinking_owner: Optional[str] = None
 
 
-def thinking_sound_enabled() -> bool:
-    """Config gate: ``voice.thinking_sound`` (default True)."""
+THINKING_SOUND_MODES = ("off", "cue", "ambient")
+
+# Hard ceiling for the transcription cue so a stuck STT backend can never
+# leave the blips running forever (the turn-long ambient loop is stopped by
+# the turn itself).
+TRANSCRIBING_CUE_MAX_SECONDS = 60.0
+
+
+def thinking_sound_mode() -> str:
+    """Resolve ``voice.thinking_sound`` to ``"off"`` | ``"cue"`` | ``"ambient"``.
+
+    Booleans keep working (``true`` → ``"cue"``, ``false`` → ``"off"``); the
+    strings ``"ambient"``/``"always"`` select the turn-long loop, ``"cue"``/
+    ``"on"`` the transcription cue, ``"off"``/``"none"`` silence. Anything
+    unparseable falls back to the default (``"cue"``).
+    """
     try:
         from robo_cli.config import load_config
         from utils import is_truthy_value
 
         voice_cfg = load_config().get("voice", {})
-        if isinstance(voice_cfg, dict):
-            return is_truthy_value(
-                voice_cfg.get("thinking_sound", True), default=True
-            )
+        if not isinstance(voice_cfg, dict):
+            return "cue"
+        raw = voice_cfg.get("thinking_sound", True)
+        if isinstance(raw, str):
+            key = raw.strip().lower()
+            if key in {"ambient", "always", "turn"}:
+                return "ambient"
+            if key in {"cue", "on", "transcribing"}:
+                return "cue"
+            if key in {"off", "none", "never"}:
+                return "off"
+        return "cue" if is_truthy_value(raw, default=True) else "off"
     except Exception:
         pass
-    return True
+    return "cue"
+
+
+def thinking_sound_enabled() -> bool:
+    """Config gate: ``voice.thinking_sound`` is not off (default True)."""
+    return thinking_sound_mode() != "off"
+
+
+def thinking_sound_ambient() -> bool:
+    """True only when the user opted into the turn-long ambient loop."""
+    return thinking_sound_mode() == "ambient"
 
 
 def _synth_thinking_blip(np, frequency: float) -> "Any":
@@ -610,13 +721,16 @@ def _synth_thinking_blip(np, frequency: float) -> "Any":
     return (tone * env * volume * 32767).astype(np.int16)
 
 
-def _thinking_sound_loop(stop: threading.Event, should_play) -> None:
+def _thinking_sound_loop(
+    stop: threading.Event, should_play, max_seconds: Optional[float] = None
+) -> None:
     """Daemon loop: play alternating-pitch blips every ~0.8-1.2s until *stop*.
 
     Skips a blip (without stopping) whenever *should_play* returns False —
     e.g. TTS audio started flowing or the mic re-armed. macOS: sounddevice
     output is TCC-gated, and per-second afplay subprocess churn is worse
-    than silence, so the loop exits immediately there.
+    than silence, so the loop exits immediately there. *max_seconds*, when
+    given, ends the loop on its own after that long.
     """
     if not _sounddevice_output_allowed():
         return
@@ -630,28 +744,49 @@ def _thinking_sound_loop(stop: threading.Event, should_play) -> None:
     pitches = (392.0, 329.6)  # G4 / E4 — calm, low, alternating
     blips = [_synth_thinking_blip(np, p) for p in pitches]
     i = 0
-    while not stop.is_set():
-        try:
-            if should_play is None or should_play():
-                blip = blips[i % len(blips)]
-                sd.play(blip, samplerate=SAMPLE_RATE)
-                stop.wait(len(blip) / SAMPLE_RATE + 0.02)
-                sd.stop()
-                i += 1
-        except Exception as e:
-            logger.debug("Thinking sound blip failed: %s", e)
-            return
-        stop.wait(0.8 + random.random() * 0.4)
+    deadline = None if max_seconds is None else time.monotonic() + max_seconds
+    try:
+        while not stop.is_set():
+            if deadline is not None and time.monotonic() >= deadline:
+                return
+            try:
+                if should_play is None or should_play():
+                    # Each blip plays to completion on its own stream,
+                    # serialized with the beeps (see _play_tone_pcm) — a
+                    # stop() request is honoured at the next blip boundary,
+                    # ~0.2 s at most.
+                    _play_tone_pcm(blips[i % len(blips)], SAMPLE_RATE)
+                    i += 1
+            except Exception as e:
+                logger.debug("Thinking sound blip failed: %s", e)
+                return
+            stop.wait(0.8 + random.random() * 0.4)
+    finally:
+        _release_thinking_loop(stop)
 
 
-def start_thinking_sound(should_play=None) -> bool:
-    """Start the ambient thinking sound (idempotent).
+def _release_thinking_loop(stop: threading.Event) -> None:
+    """A loop that ended on its own (deadline, blip failure) unregisters
+    itself so the next start_thinking_sound() does not see a running loop
+    that is not there."""
+    global _thinking_stop, _thinking_owner
+    with _thinking_lock:
+        if _thinking_stop is stop:
+            _thinking_stop, _thinking_owner = None, None
+
+
+def start_thinking_sound(
+    should_play=None, max_seconds: Optional[float] = None, *, owner: str = "ambient"
+) -> bool:
+    """Start the thinking sound loop (idempotent).
 
     *should_play* is polled before each blip; return False to skip while
-    speech audio flows or the mic is capturing. Returns True when the loop
-    was started (or already running), False when disabled/unavailable.
+    speech audio flows or the mic is capturing. *max_seconds* caps the loop's
+    lifetime. Returns True when the loop was started (or already running),
+    False when disabled/unavailable. *owner* records who started it so the
+    transcription cue can tell its own loop from the ambient one.
     """
-    global _thinking_stop
+    global _thinking_stop, _thinking_owner
     if not thinking_sound_enabled():
         return False
     with _thinking_lock:
@@ -659,20 +794,55 @@ def start_thinking_sound(should_play=None) -> bool:
             return True  # already running
         stop = threading.Event()
         _thinking_stop = stop
+        _thinking_owner = owner
     threading.Thread(
         target=_thinking_sound_loop,
-        args=(stop, should_play),
+        args=(stop, should_play, max_seconds),
         daemon=True,
         name="voice-thinking-sound",
     ).start()
     return True
 
 
-def stop_thinking_sound() -> None:
-    """Stop the ambient thinking sound instantly (idempotent)."""
-    global _thinking_stop
+def start_transcribing_cue() -> bool:
+    """Blips while a spoken recording is being transcribed (default mode).
+
+    Started the moment the recorder hands its audio to STT and stopped by
+    ``stop_transcribing_cue()`` the moment the transcript (or a failure)
+    comes back, so the user hears "got it, working on your words" and then
+    silence. Skips blips while real speech audio is playing. No-op when
+    ``voice.thinking_sound`` is off; capped at TRANSCRIBING_CUE_MAX_SECONDS.
+    """
+    if thinking_sound_mode() == "off":
+        return False
+    return start_thinking_sound(
+        should_play=lambda: not is_audio_output_active(),
+        max_seconds=TRANSCRIBING_CUE_MAX_SECONDS,
+        owner="cue",
+    )
+
+
+def stop_transcribing_cue() -> None:
+    """Silence the transcription cue instantly (idempotent).
+
+    Only a loop the cue started is stopped: with ``thinking_sound: ambient``
+    the turn-long loop keeps running through a spoken mid-turn message and is
+    ended by the turn itself (``stop_thinking_sound``).
+    """
+    global _thinking_stop, _thinking_owner
     with _thinking_lock:
-        stop, _thinking_stop = _thinking_stop, None
+        if _thinking_owner != "cue":
+            return
+        stop, _thinking_stop, _thinking_owner = _thinking_stop, None, None
+    if stop is not None:
+        stop.set()
+
+
+def stop_thinking_sound() -> None:
+    """Stop the thinking sound instantly, whoever started it (idempotent)."""
+    global _thinking_stop, _thinking_owner
+    with _thinking_lock:
+        stop, _thinking_stop, _thinking_owner = _thinking_stop, None, None
     if stop is not None:
         stop.set()
 
@@ -845,6 +1015,17 @@ class AudioRecorder:
         self._on_silence_stop = None
         self._silence_threshold: int = SILENCE_RMS_THRESHOLD
         self._silence_duration: float = SILENCE_DURATION_SECONDS
+        # Adaptive noise floor: the quietest level the mic has reported lately.
+        # It follows drops instantly and climbs slowly (NOISE_FLOOR_RISE_PER_
+        # SECOND), so speech never drags it up while a fan that switches on is
+        # absorbed within seconds. Tracked whenever the stream is open —
+        # between recordings too — so every capture starts calibrated to the
+        # room. Seeded at 0: the threshold only ever moves UP from the
+        # configured value, and only on evidence that the room is louder
+        # than it (see effective_silence_threshold).
+        self._noise_floor: float = 0.0
+        self._noise_floor_at: float = 0.0
+        self._floor_multiplier: float = NOISE_FLOOR_MULTIPLIER
         self._max_wait: float = 15.0  # Max seconds to wait for speech before auto-stop
         # Hard cap on total recording length, wired from voice.max_recording_seconds
         # by the CLI before each recording. 0 (or unset) = no cap (previous behaviour).
@@ -865,7 +1046,45 @@ class AudioRecorder:
         cap = self._max_recording_seconds
         return bool(cap and cap > 0 and elapsed >= cap)
 
+    def _track_noise_floor(self, rms: float, now: float) -> None:
+        """Min-follower: drop to *rms* at once, rise at most
+        ``NOISE_FLOOR_RISE_PER_SECOND`` per second."""
+        last = self._noise_floor_at
+        self._noise_floor_at = now
+        ceiling = self._noise_floor
+        if last > 0.0:
+            dt = min(max(now - last, 0.0), 1.0)
+            ceiling += NOISE_FLOOR_RISE_PER_SECOND * dt
+        self._noise_floor = min(float(rms), ceiling)
+
+    def _adaptation_enabled(self) -> bool:
+        mult = self._floor_multiplier
+        return isinstance(mult, (int, float)) and not isinstance(mult, bool) and mult > 0
+
     # -- public properties ---------------------------------------------------
+
+    @property
+    def noise_floor(self) -> float:
+        """Current estimate of the room's noise level (RMS, int16 scale)."""
+        return self._noise_floor
+
+    @property
+    def effective_silence_threshold(self) -> float:
+        """The RMS level that separates speech from silence right now.
+
+        The configured ``silence_threshold`` exactly, as long as the measured
+        room noise sits below it — a quiet mic keeps every word it used to
+        catch. Only when the room itself is at or above the configured value
+        (where a fixed threshold can never see silence and a recording would
+        run until the cap) does it become ``noise floor × multiplier``, capped
+        at NOISE_FLOOR_MAX_THRESHOLD. A multiplier <= 0
+        (``voice.noise_floor_multiplier: 0``) disables the adaptation.
+        """
+        base = float(self._silence_threshold)
+        if not self._adaptation_enabled() or self._noise_floor < base:
+            return base
+        adaptive = min(float(NOISE_FLOOR_MAX_THRESHOLD), self._noise_floor * float(self._floor_multiplier))
+        return max(base, adaptive)
 
     @property
     def elapsed_seconds(self) -> float:
@@ -901,22 +1120,30 @@ class AudioRecorder:
         def _callback(indata, frames, time_info, status):  # noqa: ARG001
             if status:
                 logger.debug("sounddevice status: %s", status)
+            # Compute RMS for level display and silence detection. The noise
+            # floor is tracked on idle chunks (so the threshold is already
+            # calibrated when a recording starts) and, while recording, on
+            # chunks at or below the threshold — the room between words. A
+            # chunk above it is speech and must never raise the floor: a
+            # long dictation would otherwise drag the threshold up under the
+            # speaker's own voice and end the recording mid-sentence.
+            rms = int(np.sqrt(np.mean(indata.astype(np.float64) ** 2)))
+            now = time.monotonic()
+            threshold = self.effective_silence_threshold
+            if not self._recording or rms <= threshold:
+                self._track_noise_floor(rms, now)
             # When not recording the stream is idle — discard audio.
             if not self._recording:
                 return
             self._frames.append(indata.copy())
-
-            # Compute RMS for level display and silence detection
-            rms = int(np.sqrt(np.mean(indata.astype(np.float64) ** 2)))
             self._current_rms = rms
             self._peak_rms = max(self._peak_rms, rms)
 
             # Silence detection
             if self._on_silence_stop is not None:
-                now = time.monotonic()
                 elapsed = now - self._start_time
 
-                if rms > self._silence_threshold:
+                if rms > threshold:
                     # Audio is above threshold -- this is speech (or noise).
                     self._dip_start = 0.0  # Reset dip tracker
                     if self._speech_start == 0.0:
@@ -968,13 +1195,13 @@ class AudioRecorder:
                 # 1. User spoke then went silent for silence_duration, OR
                 # 2. No speech detected at all for max_wait seconds
                 should_fire = False
-                if self._has_spoken and rms <= self._silence_threshold:
+                if self._has_spoken and rms <= threshold:
                     # User was speaking and now is silent
                     if self._silence_start == 0.0:
                         self._silence_start = now
                     elif now - self._silence_start >= self._silence_duration:
-                        logger.info("Silence detected (%.1fs), auto-stopping",
-                                    self._silence_duration)
+                        logger.info("Silence detected (%.1fs, threshold=%d, floor=%d), auto-stopping",
+                                    self._silence_duration, threshold, self._noise_floor)
                         should_fire = True
                 elif not self._has_spoken and elapsed >= self._max_wait:
                     logger.info("No speech within %.0fs, auto-stopping",
@@ -1083,7 +1310,8 @@ class AudioRecorder:
 
         with self._lock:
             self._recording = True
-        logger.info("Voice recording started (rate=%d, channels=%d)", self._sample_rate, CHANNELS)
+        logger.info("Voice recording started (rate=%d, channels=%d, floor=%d, threshold=%d)",
+                    self._sample_rate, CHANNELS, self._noise_floor, self.effective_silence_threshold)
 
     def _close_stream_with_timeout(self, timeout: float = 3.0) -> None:
         """Close the audio stream with a timeout to prevent CoreAudio hangs."""
@@ -1144,10 +1372,12 @@ class AudioRecorder:
                 return None
 
             # Skip silent recordings using peak RMS (not overall average, which
-            # gets diluted by silence at the end of the recording).
+            # gets diluted by silence at the end of the recording). Deliberately
+            # the fixed constant, not the adaptive threshold: anything the
+            # recorder used to hand to STT still is.
             if self._peak_rms < SILENCE_RMS_THRESHOLD:
-                logger.info("Recording too quiet (peak RMS=%d < %d), discarding",
-                            self._peak_rms, SILENCE_RMS_THRESHOLD)
+                logger.info("Recording too quiet (peak RMS=%d < %d, floor=%d), discarding",
+                            self._peak_rms, SILENCE_RMS_THRESHOLD, self._noise_floor)
                 return None
 
             return self._write_wav(audio_data, sample_rate=self._sample_rate)

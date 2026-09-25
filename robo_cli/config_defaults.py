@@ -1145,6 +1145,12 @@ DEFAULT_CONFIG = {
         # starts delegating, nudging the user toward the live spawn-tree
         # dashboard. Set false to suppress the hint.
         "tui_agents_nudge": True,
+        # `robo --tui` quits on its own after this many minutes with no
+        # keyboard/mouse input, no running turn, no background task and no open
+        # mic (voice mode / armed wake word), so an abandoned terminal does not
+        # keep the gateway alive forever. A system line warns five minutes
+        # before; any key cancels. 0 disables. Ignored by the dashboard chat.
+        "tui_idle_exit_minutes": 60,
         "bell_on_complete": False,
         # Stream the model's reasoning/thinking live before the response.
         # Default ON: on thinking models the reasoning phase can run tens of
@@ -1315,7 +1321,6 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "fields": ["model", "context_pct", "cwd"],  # Order shown; drop any to hide
         },
-        "copy_shortcut": "auto",  # "auto" (platform default) | "ctrl_c" | "ctrl_shift_c" | "disabled"
         # Petdex animated mascot (https://github.com/crafter-station/petdex).
         # A purely cosmetic sprite that reacts to agent activity across the
         # CLI, TUI, and desktop app. Manage with `robo pets`. Disabled until
@@ -1367,21 +1372,19 @@ DEFAULT_CONFIG = {
         # that the numbers are a local lower-bound estimate, not billing.
         "show_token_analytics": False,
         # OAuth gate configuration (engaged when ``--host`` is set and
-        # ``--insecure`` is not). The bundled Ignitee Now Portal plugin reads
-        # both keys at startup; they are the canonical surface for these
-        # settings. Each can be overridden by an environment variable —
-        # ``ROBO_DASHBOARD_OAUTH_CLIENT_ID`` and
-        # ``ROBO_DASHBOARD_PORTAL_URL`` respectively — and the env var
-        # wins when set to a non-empty value. The override path is what
-        # Fly.io's platform-secret injection uses to push the per-deploy
-        # client_id at provisioning time without operators needing to
-        # touch config.yaml. Local dev / non-Fly deploys can set either
-        # surface; missing values fall through to the plugin's defaults
-        # (no provider registered when ``client_id`` is empty;
-        # ``portal_url`` defaults to https://portal.igniteenow.com).
+        # ``--insecure`` is not). Read by the bundled self-hosted OIDC
+        # provider (``plugins/dashboard_auth/self_hosted``): the provider
+        # registers when ``issuer`` and ``client_id`` are set here or via
+        # the ``ROBO_DASHBOARD_OIDC_*`` env vars (env wins when non-empty).
+        # Nothing registers while both are blank — a public bind then needs
+        # the username/password provider below, or it fails closed.
         "oauth": {
-            "client_id": "",  # agent:{instance_id} — Portal provisions this
-            "portal_url": "",  # blank → use plugin default (production Portal)
+            "self_hosted": {
+                "issuer": "",  # OIDC issuer URL (discovery at /.well-known/openid-configuration)
+                "client_id": "",  # public client (authorization code + PKCE)
+                "client_secret": "",  # optional; confidential clients only
+                "scopes": "",  # blank → "openid profile email"
+            },
         },
         # Username/password gate configuration — read by the bundled
         # ``dashboard_auth/basic`` plugin (a self-hosted "just put a
@@ -1556,6 +1559,8 @@ DEFAULT_CONFIG = {
             "model": "base",  # tiny, base, small, medium, large-v3
             "language": "",  # auto-detect by default; set to "en", "es", "fr", etc. to force
             "initial_prompt": "",
+            "beam_size": 1,  # greedy decode: fastest for live voice turns; 5 = beam search for long recordings
+            "remember_language": True,  # with language on auto: reuse the language detected last time instead of re-detecting every turn
             # Anti-hallucination hardening (faster-whisper decodes junk tokens
             # from silence/noise without these):
             "vad": True,  # Silero VAD filter — silence never reaches whisper. false = old raw behavior (music/ambient).
@@ -1594,11 +1599,21 @@ DEFAULT_CONFIG = {
         "record_key": "ctrl+b",
         "max_recording_seconds": 120,
         "auto_tts": False,
-        "beep_enabled": True,         # Play record start/stop beeps in CLI voice mode
-        "beep_volume": 0.3,           # Beep amplitude multiplier (0.0-1.0, default keeps prior hardcoded value)
-        "thinking_sound": True,       # Calm ambient bubble sound while the agent works in voice chat (volume follows beep_volume)
-        "silence_threshold": 200,     # RMS below this = silence (0-32767)
-        "silence_duration": 3.0,      # Seconds of silence before auto-stop
+        "beep_volume": 0.3,           # Volume of the transcribing blips (0.0-1.0); no record start/stop beeps exist
+        # Soft bubble blips (volume follows beep_volume):
+        #   true      — only while your spoken recording is being transcribed;
+        #               silent the moment Robo has your words (default)
+        #   "ambient" — for the whole turn while the agent thinks/works
+        #   false     — never
+        "thinking_sound": True,
+        "silence_threshold": 200,     # RMS below this = silence (0-32767); floor of the adaptive threshold
+        "silence_duration": 1.5,      # Seconds of silence after you stop talking before auto-stop
+        # The recorder measures the room's noise floor while listening. While
+        # the room is quieter than silence_threshold that value is used as is;
+        # when the room is louder than it (a fixed value could never see
+        # silence, the recording would run to the cap) the threshold becomes
+        # floor x this instead (capped at 5000). 0 = fixed threshold only.
+        "noise_floor_multiplier": 1.5,
         "barge_in": True,             # Interrupt the agent / stop TTS when the user starts talking
         "barge_in_grace_seconds": 0.5,  # Trip suppression right after TTS playback starts (onset transient); the mic itself is live for the whole turn
         "barge_in_threshold_multiplier": 3.0,  # Speech trigger = quiet-room floor x this (floor is calibrated BEFORE playback, never against speaker bleed)
@@ -1606,6 +1621,13 @@ DEFAULT_CONFIG = {
         # voice chat instead of being sent to the agent. Case-insensitive,
         # surrounding punctuation ignored. Set [] to disable.
         "stop_phrases": ["stop"],
+        # Reasoning effort for SPOKEN turns only (typed turns keep the model's
+        # own setting). A reasoning model deliberates for many seconds before
+        # the first sentence can be spoken — the longest "Thinking…" in a voice
+        # chat — so spoken turns run with thinking off by default. Levels:
+        # "none" | "minimal" | "low" | "medium" | "high"; "inherit" = leave the
+        # model's setting alone. Ignored by providers without the control.
+        "reasoning_effort": "none",
     },
 
     # "Hey Robo" hands-free wake word. Always-on, on-device hotword

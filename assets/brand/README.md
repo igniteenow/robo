@@ -19,7 +19,7 @@ Sources of truth (edit these to retune the whole product):
 - `apps/desktop/src/styles.css` → `:root` static seeds (first paint before theme hydrates)
 - `apps/bootstrap-installer/src/styles.css` → `:root.dark` seeds
 - `web/src/themes/presets.ts` → `defaultTheme`, `igniteenowLightTheme`; `web/src/index.css` → `:root` seeds
-- `robo_runtime/resources/face/cute-face.html` (mirrored at `apps/desktop/public/robo-face/`)
+- `robo_runtime/resources/face/cute-face.html` (mirrored at `apps/desktop/public/robo-face/`, shown in the desktop's voice chat view; everywhere else the desktop shows the mark itself, `apps/desktop/public/robo-face-icon.png`)
 
 ## Files in this folder
 

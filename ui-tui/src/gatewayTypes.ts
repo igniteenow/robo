@@ -98,6 +98,9 @@ export interface ConfigDisplayConfig {
   tui_agents_nudge?: boolean
   tui_auto_resume_recent?: boolean
   tui_compact?: boolean
+  /** Quit the TUI after this many minutes with no keyboard/mouse input and
+   *  nothing running. 0 disables. Default 60. */
+  tui_idle_exit_minutes?: number | string
   /** Legacy alias for display.mouse_tracking. */
   tui_mouse?: boolean | null | number | string
   // Forward-compat: backend may send styles this client doesn't know yet —
@@ -122,6 +125,8 @@ export interface ConfigFullResponse {
   config?: {
     display?: ConfigDisplayConfig
     voice?: ConfigVoiceConfig
+    /** "Hey Robo" hands-free wake word; only `enabled` is read here. */
+    wake_word?: { enabled?: boolean }
     paste_collapse_threshold?: number
     paste_collapse_char_threshold?: number
   }
@@ -323,6 +328,10 @@ export interface SessionSteerResponse {
 
 export interface PromptSubmitResponse {
   ok?: boolean
+  /** What the gateway did with a prompt that landed mid-turn under the
+   *  busy-input policy: 'redirected' | 'steered' | 'queued'. Absent for a
+   *  normal idle-session submit. */
+  status?: string
   /** Set when the submitted text was a bare voice stop phrase consumed
    *  server-side to end the voice chat instead of starting a turn. */
   voice_stopped?: boolean
@@ -607,7 +616,11 @@ export type GatewayEvent =
   | { payload?: { text?: string }; session_id?: string; type: 'thinking.delta' }
   | { payload?: { kind?: string }; session_id?: string; type: 'reaction' }
   | { payload?: undefined; session_id?: string; type: 'message.start' }
-  | { payload?: { mid_turn?: boolean; text?: string; ts?: number }; session_id?: string; type: 'message.user' }
+  | {
+      payload?: { mid_turn?: boolean; status?: string; text?: string; ts?: number }
+      session_id?: string
+      type: 'message.user'
+    }
   | { payload?: { kind?: string; text?: string }; session_id?: string; type: 'status.update' }
   | {
       payload?: {

@@ -205,7 +205,39 @@ export const en: Translations = {
     openStarmap: 'Open memory graph',
     openKeybinds: 'Keyboard shortcuts',
     layoutEditor: 'Layout editor',
-    layoutEditorTitle: 'Layout editor — ⌘-click resets the layout'
+    layoutEditorTitle: 'Layout editor — ⌘-click resets the layout',
+    switchToLight: 'Switch to light appearance',
+    switchToDark: 'Switch to dark appearance',
+    appearanceTitle: 'Light / dark — more in Settings → Appearance'
+  },
+
+  voiceScreen: {
+    title: 'Voice chat',
+    subtitle: 'Just talk — the whole conversation is here to read when you end the voice chat.',
+    status: {
+      idle: 'One moment…',
+      listening: 'Listening…',
+      transcribing: 'Got it…',
+      thinking: 'Thinking…',
+      speaking: 'Speaking…'
+    },
+    muted: 'Mic muted',
+    mute: 'Mute mic',
+    unmute: 'Unmute mic',
+    sendNow: 'Send now',
+    end: 'End voice chat',
+    hint: key => (key ? `${key} also ends the voice chat` : 'End voice chat stops it'),
+    hintWithPhrase: (phrase, key) =>
+      key ? `Say “${phrase}” to end the voice chat · ${key}` : `Say “${phrase}” to end the voice chat`,
+    timing: {
+      words: 'words',
+      firstWord: 'first word',
+      voice: 'voice',
+      total: 'total',
+      sentence: 'sentence by sentence',
+      streamed: 'streamed',
+      whole: 'whole reply at once'
+    }
   },
 
   keybinds: {
@@ -2870,6 +2902,8 @@ export const en: Translations = {
     setProfileFailed: 'Failed to set profile',
     sttDisabled: 'Speech-to-text is disabled in settings.',
     stopFailed: 'Stop failed',
+    redirectDelivered: 'Sent to the running turn',
+    redirectQueued: 'Queued for the next turn',
     regenerateFailed: 'Regenerate failed',
     editFailed: 'Edit failed',
     resumeFailed: 'Resume failed',

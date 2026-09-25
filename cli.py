@@ -104,6 +104,31 @@ def estimate_usage_cost(*args, **kwargs):
     return _estimate_usage_cost(*args, **kwargs)
 
 
+def _format_session_cost(agent) -> str:
+    """Status-bar label for the session's estimated spend (``display.show_cost``).
+
+    The conversation loop keeps ``agent.session_estimated_cost_usd`` running
+    (agent/conversation_loop.py) with ``session_cost_status`` saying whether the
+    route was priced. Blank until something priced has been spent — an
+    ``included`` subscription route or an unpriced model shows nothing rather
+    than a misleading $0.00.
+    """
+    if agent is None:
+        return ""
+    status = str(getattr(agent, "session_cost_status", "") or "")
+    if status in ("", "unknown", "included"):
+        return ""
+    try:
+        amount = float(getattr(agent, "session_estimated_cost_usd", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return ""
+    if amount <= 0:
+        return ""
+    if amount < 0.01:
+        return "<$0.01"
+    return f"${amount:.2f}"
+
+
 def format_duration_compact(*args, **kwargs):
     seconds = float(args[0] if args else kwargs.get("seconds", 0.0))
     if seconds < 60:
@@ -4710,6 +4735,8 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         # Battery read-out in the status bar (toggled via /battery, off by
         # default). Persisted to display.battery so it survives restarts.
         self._battery_visible = bool(CLI_CONFIG["display"].get("battery", False))
+        # display.show_cost: estimated $ spend for the session in the status bar.
+        self._show_cost = bool(CLI_CONFIG["display"].get("show_cost", False))
         # When True, the input separator rules and the dynamic status bar are
         # hidden until the next user input. Set by _recover_after_resize() so a
         # SIGWINCH cannot stamp a freshly-drawn status bar on top of one that
@@ -5256,7 +5283,14 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             # Focus view badge (/focus). Persistent indicator so the reduced
             # output mode is never invisible. Display-only.
             "focus_label": "",
+            # Estimated session spend (``display.show_cost``). Blank when the
+            # knob is off, nothing has been spent, or the route has no
+            # pricing (subscription-included / unknown).
+            "cost_label": "",
         }
+
+        if getattr(self, "_show_cost", False):
+            snapshot["cost_label"] = _format_session_cost(agent)
 
         try:
             from robo_cli.focus_view import focus_statusbar_segment
@@ -5921,6 +5955,8 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                 if goal_segment:
                     parts.append(goal_segment)
                 parts.append(duration_label)
+                if snapshot.get("cost_label"):
+                    parts.append(snapshot["cost_label"])
                 if focus_label:
                     parts.append(focus_label)
                 if yolo_active:
@@ -5952,6 +5988,8 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             if goal_segment:
                 parts.append(goal_segment)
             parts.append(duration_label)
+            if snapshot.get("cost_label"):
+                parts.append(snapshot["cost_label"])
             prompt_elapsed = snapshot.get("prompt_elapsed")
             if prompt_elapsed:
                 parts.append(prompt_elapsed)
@@ -5991,6 +6029,9 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                     ("class:status-bar-dim", " · "),
                     ("class:status-bar-dim", duration_label),
                 ]
+                if snapshot.get("cost_label"):
+                    frags.append(("class:status-bar-dim", " · "))
+                    frags.append(("class:status-bar-dim", snapshot["cost_label"]))
                 if goal_segment:
                     frags.append(("class:status-bar-dim", " · "))
                     frags.append(("class:status-bar-strong", goal_segment))
@@ -6034,6 +6075,9 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                         ("class:status-bar-dim", " · "),
                         ("class:status-bar-dim", duration_label),
                     ])
+                    if snapshot.get("cost_label"):
+                        frags.append(("class:status-bar-dim", " · "))
+                        frags.append(("class:status-bar-dim", snapshot["cost_label"]))
                     if focus_label:
                         frags.append(("class:status-bar-dim", " · "))
                         frags.append(("class:status-bar-strong", focus_label))
@@ -6083,6 +6127,10 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                         ("class:status-bar-dim", " │ "),
                         ("class:status-bar-dim", duration_label),
                     ])
+                    # Estimated session spend (display.show_cost)
+                    if snapshot.get("cost_label"):
+                        frags.append(("class:status-bar-dim", " │ "))
+                        frags.append(("class:status-bar-dim", snapshot["cost_label"]))
                     # Position 7: per-prompt elapsed timer (live or frozen)
                     prompt_elapsed = snapshot.get("prompt_elapsed")
                     if prompt_elapsed:
@@ -10125,6 +10173,8 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             self._manual_compress(cmd_original)
         elif canonical == "usage":
             self._handle_usage_command(cmd_original)
+        elif canonical == "topup":
+            self._handle_topup_command()
         elif canonical == "insights":
             self._show_insights(cmd_original)
         elif canonical == "copy":
@@ -11246,6 +11296,29 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
 
 
 
+    def _handle_topup_command(self) -> None:
+        """`/topup` — the balance view + portal link, the same surface the
+        gateway's /topup renders. Fail-open: logged out or unreachable portal
+        → one line saying so. Used to fall through to "Unknown command" here
+        while /help listed it."""
+        from agent.account_usage import build_credits_view
+
+        try:
+            view = build_credits_view(markdown=False)
+        except Exception:
+            view = None
+
+        if view is None or not view.logged_in:
+            print("  Not logged into Ignitee Now Portal — nothing to show for /topup.")
+            return
+
+        for line in view.balance_lines:
+            print(f"  {line}")
+        if view.identity_line:
+            print(f"  {view.identity_line}")
+        if view.topup_url:
+            print(f"  Manage billing on the portal: {view.topup_url}")
+
     def _handle_usage_command(self, cmd_original: str):
         """Dispatch `/usage [reset [--force]]`.
 
@@ -12249,8 +12322,14 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             _threshold if isinstance(_threshold, (int, float)) and not isinstance(_threshold, bool) else 200
         )
         self._voice_recorder._silence_duration = (
-            _duration if isinstance(_duration, (int, float)) and not isinstance(_duration, bool) else 3.0
+            _duration if isinstance(_duration, (int, float)) and not isinstance(_duration, bool) else 1.5
         )
+        # voice.noise_floor_multiplier — scales the measured room noise into
+        # the speech/silence threshold (see AudioRecorder). Missing / non-numeric
+        # keeps the recorder's default; an explicit 0 pins the fixed threshold.
+        _floor_mult = voice_cfg.get("noise_floor_multiplier")
+        if isinstance(_floor_mult, (int, float)) and not isinstance(_floor_mult, bool):
+            self._voice_recorder._floor_multiplier = float(_floor_mult)
         # voice.max_recording_seconds — hard cap on a single recording's length.
         # Same numeric guard as the silence params (bool excluded: a hand-edited
         # ``max_recording_seconds: true`` must not become ``1`` — it falls back
@@ -12274,14 +12353,6 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             if hasattr(self, '_app') and self._app:
                 self._app.invalidate()
             self._voice_stop_and_transcribe()
-
-        # Audio cue: single beep BEFORE starting stream (avoid CoreAudio conflict)
-        if self._voice_beeps_enabled():
-            try:
-                from tools.voice_mode import play_beep
-                play_beep(frequency=880, count=1)
-            except Exception:
-                pass
 
         try:
             self._voice_recorder.start(on_silence_stop=_on_silence)
@@ -12353,6 +12424,23 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                 _cprint(f"{_DIM}Voice auto-restart failed: {e}{_RST}")
         threading.Thread(target=_restart_recording, daemon=True).start()
 
+    def _voice_cue(self, on: bool) -> None:
+        """Start/stop the transcription cue (soft blips while STT runs).
+
+        Wraps ``tools.voice_mode.start_transcribing_cue`` /
+        ``stop_transcribing_cue``; never raises so a missing audio stack can
+        not break the transcription that the cue merely decorates.
+        """
+        try:
+            from tools.voice_mode import start_transcribing_cue, stop_transcribing_cue
+
+            if on and self._voice_mode:
+                start_transcribing_cue()
+            elif not on:
+                stop_transcribing_cue()
+        except Exception:
+            pass
+
     def _voice_stop_and_transcribe(self):
         """Stop recording, transcribe via STT, and queue the transcript as input."""
         # Atomic guard: only one thread can enter stop-and-transcribe.
@@ -12373,14 +12461,6 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
 
             wav_path = self._voice_recorder.stop()
 
-            # Audio cue: double beep after stream stopped (no CoreAudio conflict)
-            if self._voice_beeps_enabled():
-                try:
-                    from tools.voice_mode import play_beep
-                    play_beep(frequency=660, count=2)
-                except Exception:
-                    pass
-
             if wav_path is None:
                 _cprint(f"{_DIM}No speech detected.{_RST}")
                 return
@@ -12399,7 +12479,13 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                 _cprint(f"{_DIM}Transcribing...{_RST}")
 
             from tools.voice_mode import transcribe_recording
-            result = transcribe_recording(wav_path, model=stt_model)
+            # Soft blips while STT works, silent the moment the text is in
+            # (voice.thinking_sound; see tools/voice_mode.py).
+            self._voice_cue(True)
+            try:
+                result = transcribe_recording(wav_path, model=stt_model)
+            finally:
+                self._voice_cue(False)
 
             if result.get("success") and result.get("transcript", "").strip():
                 transcript = result["transcript"].strip()
@@ -12689,7 +12775,11 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         submitted = False
         try:
             from tools.voice_mode import transcribe_recording
-            result = transcribe_recording(wav_path, model=self._voice_stt_model())
+            self._voice_cue(True)
+            try:
+                result = transcribe_recording(wav_path, model=self._voice_stt_model())
+            finally:
+                self._voice_cue(False)
             transcript = (result.get("transcript") or "").strip() if result.get("success") else ""
             if transcript:
                 from tools.voice_mode import is_voice_stop_phrase
@@ -12713,20 +12803,6 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             # No usable transcript: hand the mic back to the normal loop.
             if not submitted and self._voice_mode and self._voice_continuous and not self._voice_recording:
                 self._voice_restart_recording_async()
-
-    def _voice_beeps_enabled(self) -> bool:
-        """Return whether CLI voice mode should play record start/stop beeps."""
-        try:
-            from robo_cli.config import load_config
-            from utils import is_truthy_value
-            voice_cfg = load_config().get("voice", {})
-            if isinstance(voice_cfg, dict):
-                # is_truthy_value handles quoted YAML strings like "false"
-                # which bool() would misread as True (#49883).
-                return is_truthy_value(voice_cfg.get("beep_enabled", True), default=True)
-        except Exception:
-            pass
-        return True
 
     def _enable_voice_mode(self):
         """Enable voice mode after checking requirements."""
@@ -12776,6 +12852,21 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         # Voice mode instruction is injected as a user message prefix (not a
         # system prompt change) to avoid invalidating the prompt cache.  See
         # _voice_message_prefix property and its usage in _process_message().
+
+        # Load the local STT model now, in the background, instead of inside
+        # the first recording — that lazy load was the long silent pause
+        # after the first spoken message. Cache-only (never downloads), and
+        # never spawned inside the test process (robo_cli.auth's guard idiom).
+        def _warm_up_stt():
+            try:
+                from tools.transcription_tools import warm_up_local_stt
+
+                warm_up_local_stt()
+            except Exception as e:
+                logger.debug("voice: STT warm-up failed: %s", e)
+
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            threading.Thread(target=_warm_up_stt, daemon=True, name="voice-stt-warmup").start()
 
         tts_status = " (TTS enabled)" if self._voice_tts else ""
         # Use the startup-pinned cache so the advertised shortcut always
@@ -12856,6 +12947,14 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         except Exception:
             pass
         self._voice_tts_done.set()
+
+        # Silence the thinking sound too (a turn-long ambient loop, or a
+        # transcription cue still running) — /voice off must go quiet at once.
+        try:
+            from tools.voice_mode import stop_thinking_sound
+            stop_thinking_sound()
+        except Exception:
+            pass
 
         _cprint(f"\n{_DIM}Voice mode disabled.{_RST}")
 
@@ -14065,24 +14164,25 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             agent_thread = threading.Thread(target=run_agent, daemon=True)
             agent_thread.start()
 
-            # Ambient "thinking" sound: calm bubble blips while the agent
-            # works in voice mode with no audio flowing, so the user knows
-            # it's alive during long thinking/tool stretches. Skipped per-blip
-            # while TTS speaks, the mic records, or a barge capture is live;
-            # stopped outright as soon as the turn ends. voice.thinking_sound
-            # gates it (default on); macOS is handled inside (TCC-safe skip).
+            # Turn-long ambient "thinking" sound: opt-in only
+            # (voice.thinking_sound: ambient). By default the blips are a
+            # short cue while a spoken recording is transcribed (see
+            # _voice_stop_and_transcribe) and never play for a typed prompt.
+            # Skipped per-blip while TTS speaks, the mic records, or a barge
+            # capture is live; stopped outright as soon as the turn ends.
             _thinking_started = False
             if self._voice_mode:
                 try:
-                    from tools.voice_mode import start_thinking_sound
+                    from tools.voice_mode import start_thinking_sound, thinking_sound_ambient
 
-                    _thinking_started = start_thinking_sound(
-                        should_play=lambda: (
-                            self._voice_tts_done.is_set()
-                            and not self._voice_recording
-                            and not self._voice_barge_capture.is_set()
+                    if thinking_sound_ambient():
+                        _thinking_started = start_thinking_sound(
+                            should_play=lambda: (
+                                self._voice_tts_done.is_set()
+                                and not self._voice_recording
+                                and not self._voice_barge_capture.is_set()
+                            )
                         )
-                    )
                 except Exception:
                     _thinking_started = False
 
@@ -14394,17 +14494,11 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                 if result and result.get("failure_reason") == "billing":
                     _bb = result.get("billing_block") or {}
                     _prov_label = _bb.get("provider_label") or "your provider"
-                    if _bb.get("is_igniteenow"):
-                        _cta_lines = [
-                            "Run [bold]/topup[/] to add credits, or "
-                            "[bold]/subscription[/] to change plan.",
-                        ]
-                    else:
-                        _url = _bb.get("billing_url")
-                        _cta_lines = [
-                            f"Add credits with {_prov_label}"
-                            + (f": [bold]{_url}[/]" if _url else ".")
-                        ]
+                    _url = _bb.get("billing_url")
+                    _cta_lines = [
+                        f"Add credits with {_prov_label}"
+                        + (f": [bold]{_url}[/]" if _url else ".")
+                    ]
                     _cta_lines.append(
                         "Or switch providers with "
                         "[bold]/model <model> --provider <provider>[/]."
@@ -15510,8 +15604,9 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
 
         @kb.add('c-g', filter=_editor_filter)
         @kb.add('escape', 'g', filter=_editor_filter)
+        @kb.add('c-x', 'c-e', filter=_editor_filter)
         def handle_open_in_editor(event):
-            """Ctrl+G (or Alt+G in VSCode/Cursor) opens the current draft in an external editor."""
+            """Ctrl+G (or Alt+G in VSCode/Cursor, or the Emacs-style Ctrl+X Ctrl+E) opens the current draft in an external editor."""
             cli_ref._open_external_editor(event.current_buffer)
 
         # --- Ctrl+S prompt stash -------------------------------------------

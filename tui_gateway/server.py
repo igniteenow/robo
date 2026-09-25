@@ -2402,6 +2402,15 @@ def _start_agent_build(sid: str, session: dict) -> None:
                     pass
             ready.set()
 
+        # Context gauge + system-prompt size at "ready", not one turn later.
+        # After ready.set() on purpose: the first prompt.submit waits on
+        # ``ready``, and a slow context file or memory provider must never
+        # hold it. Runs with the session's own cwd / profile bound, so the
+        # estimate reads the same AGENTS.md, context files and workspace the
+        # first turn will (the build cleared that context above).
+        if current.get("agent") is not None and not current.get("agent_error"):
+            _seed_startup_context_estimate_async(sid, current, key, profile_home)
+
     build_thread = threading.Thread(target=_build, daemon=True)
     # Handle for _wait_agent_for_prompt: a dead build thread with agent_ready
     # still unset means the build died hard — waiters must not sit out the
@@ -5031,6 +5040,10 @@ def _get_usage(agent) -> dict:
             usage["context_used"] = last_prompt
             usage["context_max"] = ctx_max
             usage["context_percent"] = max(0, min(100, round(last_prompt / ctx_max * 100)))
+            # A real provider-reported figure. Clients merge usage payloads,
+            # so say so explicitly to retire the pre-first-turn estimate
+            # (see _seed_startup_context_estimate).
+            usage["context_estimated"] = False
         usage["compressions"] = getattr(comp, "compression_count", 0) or 0
     # Live count of background/async subagents still running (delegate_task
     # batches + background single delegations). Mirrors the classic CLI status
@@ -5127,8 +5140,119 @@ def _session_usage_snapshot(session: dict | None) -> dict:
     if (session or {}).get("_compute_host_active") and isinstance(mirror_usage, dict):
         return dict(mirror_usage)
     if agent is not None:
-        return _get_usage(agent)
+        usage = _get_usage(agent)
+        # Before the first reply there is no provider-reported occupancy;
+        # show the pre-turn estimate (flagged) so the status bar reads the
+        # same at "ready" as it does one turn later.
+        estimate = (session or {}).get("_startup_context_estimate")
+        if not usage.get("context_used") and isinstance(estimate, dict):
+            used = int(estimate.get("context_used") or 0)
+            ctx_max = int(estimate.get("context_max") or 0)
+            if used:
+                usage["context_used"] = used
+                usage["context_estimated"] = True
+                if ctx_max:
+                    usage["context_max"] = ctx_max
+                    usage["context_percent"] = max(0, min(100, round(used / ctx_max * 100)))
+        return usage
     return dict(mirror_usage) if isinstance(mirror_usage, dict) else {}
+
+
+def _seed_startup_context_estimate(sid: str, session: dict, agent) -> bool:
+    """Give the status bar its context gauge before the first turn.
+
+    ``_get_usage`` reports context occupancy only from the provider's real
+    prompt-token count, so until the first reply the bar had no
+    ``39k/1m [███] 4%`` and the intro panel no ``System Prompt — N chars``:
+    the same session looked different at "ready" than one turn later. Build
+    the prompt the first turn will send and estimate the request it makes
+    (system prompt + tool schemas + any resumed history), then re-announce
+    ``session.info`` with the gauge flagged ``context_estimated`` so clients
+    can mark it approximate. The first real reply replaces it.
+
+    Runs AFTER the initial ``session.info`` and after the build has set
+    ``ready`` (see ``_seed_startup_context_estimate_async``), so a slow
+    context file or memory provider never delays "ready" or the first
+    prompt; the prompt is assembled with the pure parts builder and never
+    cached on the agent, so the first turn's own build / stored-prompt reuse
+    is untouched. Any failure just leaves the gauge off, as before. Returns
+    True when seeded.
+    """
+    try:
+        build_parts = getattr(agent, "_build_system_prompt_parts", None)
+        if build_parts is None:
+            return False
+        parts = build_parts() or {}
+        prompt = "\n\n".join(
+            p for p in (parts.get("stable"), parts.get("context"), parts.get("volatile")) if p
+        )
+        from agent.model_metadata import estimate_request_tokens_rough
+
+        with session["history_lock"]:
+            history = list(session.get("history", []))
+        used = int(
+            estimate_request_tokens_rough(
+                history, system_prompt=prompt, tools=list(getattr(agent, "tools", None) or [])
+            )
+            or 0
+        )
+        if used <= 0:
+            return False
+        comp = getattr(agent, "context_compressor", None)
+        ctx_max = int(getattr(comp, "context_length", 0) or 0)
+        session["_startup_context_estimate"] = {
+            "context_used": used,
+            "context_max": ctx_max,
+            "system_prompt": prompt,
+        }
+    except Exception as e:
+        logger.debug("startup context estimate skipped: %s", e)
+        return False
+    with _sessions_lock:
+        live = _sessions.get(sid) is session
+    if not live:
+        return False
+    try:
+        _emit("session.info", sid, _session_info(agent, session))
+    except Exception as e:
+        logger.debug("startup context estimate announce failed: %s", e)
+    return True
+
+
+def _seed_startup_context_estimate_async(
+    sid: str, session: dict, key: str, profile_home: str | None
+) -> None:
+    """Run ``_seed_startup_context_estimate`` off the build thread, after
+    "ready", with the session's cwd / ui-session context and profile home
+    bound exactly as the first turn binds them. Skipped when a turn already
+    started (its real count is about to replace the estimate anyway).
+    Inline under pytest so tests stay deterministic."""
+    agent = session.get("agent")
+    if agent is None:
+        return
+
+    def run() -> None:
+        home_token = set_robo_home_override(profile_home) if profile_home else None
+        tokens = _set_session_context(key, ui_session_id=sid)
+        try:
+            with session["history_lock"]:
+                if session.get("running"):
+                    return
+            _seed_startup_context_estimate(sid, session, agent)
+        except Exception as e:
+            logger.debug("startup context estimate thread failed: %s", e)
+        finally:
+            _clear_session_context(tokens)
+            if home_token is not None:
+                try:
+                    reset_robo_home_override(home_token)
+                except Exception:
+                    pass
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        run()
+        return
+    threading.Thread(target=run, daemon=True, name=f"ctx-estimate-{sid}").start()
 
 
 def _project_info_for_cwd(cwd: str) -> dict | None:
@@ -5280,6 +5404,13 @@ def _session_info(agent, session: dict | None = None) -> dict:
             if "system_prompt" in mirror
             else getattr(agent, "_cached_system_prompt", "") or ""
         )
+        if not info["system_prompt"]:
+            # Pre-first-turn: the prompt the first turn will send, built by
+            # _seed_startup_context_estimate, so the intro panel's
+            # "System Prompt — N chars" row shows at "ready" too.
+            estimate = (session or {}).get("_startup_context_estimate")
+            if isinstance(estimate, dict):
+                info["system_prompt"] = str(estimate.get("system_prompt") or "")
     except Exception:
         pass
     try:
@@ -6848,6 +6979,55 @@ def _build_persist_message_with_image_refs(user_text: str, image_paths: list[str
     return f"{text}\n{refs}" if text else refs
 
 
+def _spoken_turn(session: dict) -> bool:
+    """Whether the turn about to run arrived by voice: the desktop's hands-free
+    chat flags its submits (`voice: true`, latched on the session by
+    prompt.submit right before the run, or carried by the queued envelope),
+    and the TUI's voice chat is the backend voice-mode flag. Consumes the
+    latch, so it can only ever apply to the turn it was set for."""
+    flagged = bool(session.pop("_spoken_turn", False))
+    if flagged:
+        return True
+    try:
+        return bool(_voice_mode_enabled())
+    except Exception:
+        return False
+
+
+def _spoken_turn_reasoning_override(agent: Any) -> Optional[Callable[[], None]]:
+    """Apply ``voice.reasoning_effort`` to *agent* for one spoken turn.
+
+    A reasoning model deliberates for many seconds before its first sentence
+    can be spoken — by far the longest "Thinking…" in a voice chat. Spoken
+    turns therefore run with their own reasoning effort (default ``none``:
+    thinking off) and the model's normal setting comes back the moment the
+    turn ends, so typed turns are untouched. ``inherit`` (or an empty /
+    unknown value) leaves the turn alone. Returns the restore callable, or
+    ``None`` when nothing was changed.
+    """
+    try:
+        raw = _voice_cfg_dict().get("reasoning_effort", "none")
+    except Exception:
+        raw = "none"
+    if isinstance(raw, str) and raw.strip().lower() in {"", "inherit", "default", "model"}:
+        return None
+    try:
+        from robo_constants import parse_reasoning_effort
+
+        parsed = parse_reasoning_effort(raw)
+    except Exception:
+        parsed = None
+    if parsed is None or not hasattr(agent, "reasoning_config"):
+        return None
+    saved = agent.reasoning_config
+    agent.reasoning_config = dict(parsed)
+
+    def _restore() -> None:
+        agent.reasoning_config = saved
+
+    return _restore
+
+
 def _build_persist_user_message(user_text: str, image_paths: list[str], run_message: Any) -> Any:
     """Shape the persisted user turn to match what was sent to the model.
 
@@ -7293,6 +7473,36 @@ def _record_inflight_correction(session: dict, text: Any) -> None:
     session["inflight_turn"] = turn
 
 
+def _emit_mid_turn_user_echo(sid: str, text: Any, status: str) -> None:
+    """Authoritative echo of a user message the gateway accepted mid-turn.
+
+    Fired on every accepted mid-turn path — ``prompt.submit`` under the
+    ``display.busy_input_mode`` policy and the ``session.steer`` /
+    ``session.redirect`` RPCs — so every client (Ink TUI, desktop, web) can
+    paint the user's bubble the moment the gateway takes the message, not when
+    the model eventually reads it, and so a message sent from another attached
+    client still shows up. Clients that already painted an optimistic bubble
+    dedupe on the text within a short window (ui-tui
+    ``submissionCore.rememberLocalUserEcho``).
+
+    ``status`` says what the gateway did with the text: ``steered`` (rides the
+    next tool result), ``redirected`` (the live model request restarts with
+    it) or ``queued`` (runs as the next turn). Never raises: the agent already
+    accepted the message, so a failed echo must not turn into an RPC error.
+    """
+    body = _inflight_text(text)
+    if not body:
+        return
+    try:
+        _emit(
+            "message.user",
+            sid,
+            {"text": body, "mid_turn": True, "status": status, "ts": time.time()},
+        )
+    except Exception:
+        pass
+
+
 def _clear_inflight_turn(session: dict) -> None:
     session["inflight_turn"] = None
 
@@ -7485,6 +7695,7 @@ def _enqueue_prompt(
     text: Any,
     transport: Any,
     image_paths: list[str] | None = None,
+    voice: bool = False,
 ) -> None:
     """Stash a message to run as the very next turn once the live one ends.
 
@@ -7493,12 +7704,16 @@ def _enqueue_prompt(
     merge in ``repair_message_sequence``). Image-bearing submissions stay as
     separate envelopes, so their attachment ownership and chronology survive.
     ``transport`` is pinned so the drained turn streams back to the client that
-    sent it even if the session transport is rebound meanwhile.
+    sent it even if the session transport is rebound meanwhile. ``voice`` marks
+    a spoken turn (desktop voice chat) so the drained turn is still shaped for
+    the ear — see ``_spoken_turn``.
     """
     image_paths = list(image_paths or [])
     queued = {"text": text, "transport": transport}
     if image_paths:
         queued["image_paths"] = image_paths
+    if voice:
+        queued["voice"] = True
     existing = session.get("queued_prompt")
     if (
         existing
@@ -7510,6 +7725,8 @@ def _enqueue_prompt(
     ):
         prev = existing["text"]
         existing["text"] = f"{prev}\n\n{text}" if prev and text else (prev or text)
+        if voice:
+            existing["voice"] = True
         return
     if existing:
         session.setdefault("queued_prompts", []).append(queued)
@@ -7553,7 +7770,7 @@ def _interrupt_busy_session(sid: str, session: dict, agent: Any) -> None:
 
 
 def _handle_busy_submit(
-    rid, sid: str, session: dict, text: Any, transport: Any, queued: bool = False
+    rid, sid: str, session: dict, text: Any, transport: Any, queued: bool = False, voice: bool = False
 ) -> dict | None:
     """Apply the ``display.busy_input_mode`` policy to a prompt that lands while
     a turn is in flight, instead of rejecting it with ``session busy``.
@@ -7573,6 +7790,9 @@ def _handle_busy_submit(
     drain that loses the settle race (client observed idle, server still
     unwinding the turn) redirected the live turn with next-turn text — queue
     semantics betrayed by a millisecond race the user can't see.
+
+    ``voice=True`` marks a spoken turn; it rides the queued envelope so the
+    turn is still shaped for the ear when it finally runs.
     """
     mode = "queue" if queued else _load_busy_input_mode()
     agent = session.get("agent")
@@ -7595,7 +7815,12 @@ def _handle_busy_submit(
         try:
             if agent.steer(plain_text):
                 with session["history_lock"]:
+                    # Same bookkeeping as the session.steer RPC: a resume while
+                    # the turn is still running rebuilds the user bubble from
+                    # the inflight snapshot instead of losing it.
+                    _record_inflight_correction(session, plain_text)
                     session["last_active"] = time.time()
+                _emit_mid_turn_user_echo(sid, plain_text, "steered")
                 return _ok(rid, {"status": "steered"})
         except Exception:
             pass  # fall through to queue
@@ -7615,17 +7840,7 @@ def _handle_busy_submit(
                 with session["history_lock"]:
                     _record_inflight_correction(session, plain_text)
                     session["last_active"] = time.time()
-                # Authoritative echo of the accepted mid-turn message so every
-                # client (Ink TUI, desktop, web) renders the user's bubble the
-                # moment it is accepted — not when the model eventually reads
-                # it — and so a client that submitted without an optimistic
-                # local echo still sees it. Clients that already echoed dedupe
-                # on (text, mid_turn) within a short window.
-                _emit(
-                    "message.user",
-                    sid,
-                    {"text": plain_text, "mid_turn": True, "ts": time.time()},
-                )
+                _emit_mid_turn_user_echo(sid, plain_text, "redirected")
                 return _ok(rid, {"status": "redirected"})
         except Exception:
             pass  # preserve the proven interrupt + queue fallback below
@@ -7637,13 +7852,17 @@ def _handle_busy_submit(
             if image_paths:
                 session["attached_images"] = image_paths + list(session.get("attached_images", []))
             return None
-        _enqueue_prompt(session, text, transport, image_paths=image_paths)
+        _enqueue_prompt(session, text, transport, image_paths=image_paths, voice=voice)
         session["last_active"] = time.time()
 
     # Attachments need a separate model invocation. Queue them without
     # cancelling the active turn so the user gets both results in order.
     if mode != "queue" and not image_paths:
         _interrupt_busy_session(sid, session, agent)
+    if plain_text:
+        # Text the gateway took but parked for the next turn is still a
+        # message the user sent mid-turn: echo it so it is on screen now.
+        _emit_mid_turn_user_echo(sid, plain_text, "queued")
     return _ok(rid, {"status": "queued"})
 
 
@@ -7695,6 +7914,7 @@ def _drain_queued_prompt(rid, sid: str, session: dict) -> bool:
                 _emit("error", sid, {"message": message})
                 dispatch_failed = True
         else:
+            session["_spoken_turn"] = bool(queued.get("voice"))
             if queued.get("image_paths"):
                 _run_prompt_submit(
                     rid,
@@ -9291,6 +9511,9 @@ def _run_prompt_submit(
     image_paths: list[str] | None = None,
     queued_prompt_generation: int | None = None,
 ) -> None:
+    # Consume the spoken-turn latch first thing: it belongs to this turn only,
+    # whatever happens below (an early exit must not hand it to the next one).
+    spoken_turn = _spoken_turn(session)
     with session["history_lock"]:
         if (
             queued_prompt_generation is not None
@@ -9496,33 +9719,22 @@ def _run_prompt_submit(
             if _voice_mode_enabled() and _voice_cfg_dict().get("barge_in", True):
                 _arm_full_duplex_listener()
 
-            # Ambient "thinking" sound (voice mode only): calm bubble blips
-            # while the agent works with no audio flowing, so long
-            # thinking/tool stretches don't read as a dead session. Per-blip
+            # Turn-long ambient "thinking" sound: opt-in only
+            # (voice.thinking_sound: ambient). By default the blips are a
+            # short cue while a spoken recording is transcribed (see
+            # voice.record) and never play for a typed prompt — a turn's
+            # worth of bubbling while the agent thinks read as noise. Per-blip
             # gate skips while real TTS audio flows or the mic is capturing;
             # stopped in the finally the instant the turn ends.
-            # voice.thinking_sound config-gates it; macOS TCC handled inside.
             thinking_started = False
             if _voice_mode_enabled():
                 try:
-                    from tools.voice_mode import (
-                        is_audio_output_active,
-                        start_thinking_sound,
-                    )
+                    from tools.voice_mode import start_thinking_sound, thinking_sound_ambient
 
-                    def _thinking_should_play() -> bool:
-                        if is_audio_output_active():
-                            return False
-                        try:
-                            from robo_cli.voice import is_continuous_active
-
-                            return not is_continuous_active()
-                        except Exception:
-                            return True
-
-                    thinking_started = start_thinking_sound(
-                        should_play=_thinking_should_play
-                    )
+                    if thinking_sound_ambient():
+                        thinking_started = start_thinking_sound(
+                            should_play=_thinking_sound_allowed
+                        )
                 except Exception:
                     thinking_started = False
 
@@ -9536,6 +9748,17 @@ def _run_prompt_submit(
                     run_message = f"{SPEECH_INTERRUPTED_NOTE}\n\n{run_message}"
                 elif isinstance(run_message, list):
                     run_message = [{"type": "text", "text": SPEECH_INTERRUPTED_NOTE}, *run_message]
+
+            # A spoken turn (desktop voice chat → `voice: true`; TUI voice chat
+            # → backend voice mode) is shaped for the ear. Model input only —
+            # persist_user_message below stays the clean transcript.
+            if spoken_turn:
+                from tools.tts_streaming import SPOKEN_TURN_NOTE
+
+                if isinstance(run_message, str):
+                    run_message = f"{SPOKEN_TURN_NOTE}\n\n{run_message}"
+                elif isinstance(run_message, list):
+                    run_message = [{"type": "text", "text": SPOKEN_TURN_NOTE}, *run_message]
 
             # Reactions the user added since the last turn ride the MODEL INPUT
             # only (same enrichment channel as the speech-interrupted note);
@@ -9596,7 +9819,14 @@ def _run_prompt_submit(
             if display_kind and "persist_user_display_kind" in _run_params:
                 run_kwargs["persist_user_display_kind"] = display_kind
                 run_kwargs["persist_user_display_metadata"] = display_metadata
-            result = agent.run_conversation(run_message, **run_kwargs)
+            # A spoken turn answers fast: reasoning per voice.reasoning_effort
+            # for this turn only (see _spoken_turn_reasoning_override).
+            restore_reasoning = _spoken_turn_reasoning_override(agent) if spoken_turn else None
+            try:
+                result = agent.run_conversation(run_message, **run_kwargs)
+            finally:
+                if restore_reasoning is not None:
+                    restore_reasoning()
             if display_kind and isinstance(text, str):
                 db = getattr(agent, "_session_db", None)
                 current_session_id = getattr(agent, "session_id", None) or session.get("session_key")
@@ -12637,6 +12867,72 @@ def _voice_mode_enabled() -> bool:
     return os.environ.get("ROBO_VOICE", "").strip() == "1"
 
 
+def _start_transcribing_cue() -> None:
+    """Blips while a spoken recording is transcribed (voice.thinking_sound)."""
+    if not _voice_mode_enabled():
+        return
+    try:
+        from tools.voice_mode import start_transcribing_cue
+
+        start_transcribing_cue()
+    except Exception:
+        pass
+
+
+def _stop_transcribing_cue() -> None:
+    try:
+        from tools.voice_mode import stop_transcribing_cue
+
+        stop_transcribing_cue()
+    except Exception:
+        pass
+
+
+def _warm_up_stt_in_background() -> None:
+    """Preload the local STT model on a daemon thread (see voice.toggle on)."""
+    # Never spawn a background model load inside the test process (same
+    # guard idiom as robo_cli.auth): a single dict lookup in production.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+
+    def _run() -> None:
+        try:
+            from tools.transcription_tools import warm_up_local_stt
+
+            warm_up_local_stt()
+        except Exception as e:
+            logger.debug("voice: STT warm-up failed: %s", e)
+
+    try:
+        threading.Thread(target=_run, daemon=True, name="voice-stt-warmup").start()
+    except Exception as e:
+        logger.debug("voice: STT warm-up thread failed to start: %s", e)
+
+
+def _thinking_sound_allowed() -> bool:
+    """Per-blip gate for the ambient thinking sound.
+
+    Polled before every blip. False while voice mode is off (``/voice off``
+    mid-turn must go silent at once, not when the turn ends), while real TTS
+    audio is flowing, or while the continuous mic loop is capturing.
+    """
+    if not _voice_mode_enabled():
+        return False
+    try:
+        from tools.voice_mode import is_audio_output_active
+
+        if is_audio_output_active():
+            return False
+    except Exception:
+        pass
+    try:
+        from robo_cli.voice import is_continuous_active
+
+        return not is_continuous_active()
+    except Exception:
+        return True
+
+
 def _voice_tts_enabled() -> bool:
     """Whether agent replies should be spoken back via TTS (runtime only)."""
     return os.environ.get("ROBO_VOICE_TTS", "").strip() == "1"
@@ -12872,7 +13168,11 @@ def _full_duplex_listener() -> None:
         if not (wav_path and tripped.is_set()):
             return
         try:
-            result = transcribe_recording(wav_path)
+            _start_transcribing_cue()
+            try:
+                result = transcribe_recording(wav_path)
+            finally:
+                _stop_transcribing_cue()
             text = (result.get("transcript") or "").strip() if result.get("success") else ""
             if text:
                 # Stop-check must never break transcript delivery — if the
@@ -13491,6 +13791,11 @@ def _(rid, params: dict) -> dict:
                 stop_hint = voice_stop_hint()
             except Exception:
                 stop_hint = ""
+            # Load the local STT model now, off the RPC thread, instead of
+            # inside the first recording — that lazy load (plus the one-time
+            # download) was the long silent pause after the first spoken
+            # message. No-op for cloud providers or when the model is loaded.
+            _warm_up_stt_in_background()
 
         if not enabled:
             # Disabling the mode must tear the continuous loop down; the
@@ -13503,6 +13808,16 @@ def _(rid, params: dict) -> dict:
                 pass
             except Exception as e:
                 logger.warning("voice: stop_continuous failed during toggle off: %s", e)
+
+            # The ambient thinking sound is started per turn and normally
+            # stopped when that turn ends; a turn still running when the
+            # user turns voice off would keep blipping until then.
+            try:
+                from tools.voice_mode import stop_thinking_sound
+
+                stop_thinking_sound()
+            except Exception:
+                pass
 
             # Clear TTS so it can be toggled independently after voice is off,
             # and silence any in-flight streaming speech.
@@ -13593,10 +13908,11 @@ def _(rid, params: dict) -> dict:
             # Exclude ``bool`` from the numeric check since Python's bool is
             # a subclass of int — a hand-edit like ``silence_threshold: true``
             # would otherwise forward as ``1`` instead of falling back to
-            # the documented 200 / 3.0 defaults (Copilot round-12 on #19835).
+            # the documented 200 / 1.5 defaults (Copilot round-12 on #19835).
             voice_cfg = _voice_cfg_dict()
             threshold = voice_cfg.get("silence_threshold")
             duration = voice_cfg.get("silence_duration")
+            floor_mult = voice_cfg.get("noise_floor_multiplier")
             safe_threshold = (
                 threshold
                 if isinstance(threshold, (int, float))
@@ -13606,7 +13922,13 @@ def _(rid, params: dict) -> dict:
             safe_duration = (
                 duration
                 if isinstance(duration, (int, float)) and not isinstance(duration, bool)
-                else 3.0
+                else 1.5
+            )
+            # None keeps the recorder's built-in multiplier; 0 disables it.
+            safe_floor_mult = (
+                float(floor_mult)
+                if isinstance(floor_mult, (int, float)) and not isinstance(floor_mult, bool)
+                else None
             )
             # Hand the mic to STT if the wake-word detector holds it; resume
             # once a terminal capture event fires (one-shot transcript / silence
@@ -13622,10 +13944,12 @@ def _(rid, params: dict) -> dict:
                     _voice_wake_owner = transport
 
             def _on_transcript(t):
+                _stop_transcribing_cue()
                 _voice_emit("voice.transcript", {"text": t})
                 _resume_voice_wake()
 
             def _on_silent():
+                _stop_transcribing_cue()
                 _voice_emit("voice.transcript", {"no_speech_limit": True})
                 _resume_voice_wake()
 
@@ -13637,6 +13961,7 @@ def _(rid, params: dict) -> dict:
                 # (TUI, desktop) end the conversation instead of treating
                 # it as a no-speech timeout. The continuous loop has
                 # already halted before this callback fires.
+                _stop_transcribing_cue()
                 os.environ["ROBO_VOICE"] = "0"
                 os.environ["ROBO_VOICE_TTS"] = "0"
                 try:
@@ -13647,6 +13972,14 @@ def _(rid, params: dict) -> dict:
                 _resume_voice_wake()
 
             def _on_status(state):
+                # The cue fills the gap between "stopped talking" and "text
+                # is in": on while STT runs, off the moment the loop is idle
+                # (the transcript / silence / stop-phrase callbacks stop it
+                # too, so no path can leave it blipping).
+                if state == "transcribing":
+                    _start_transcribing_cue()
+                elif state == "idle":
+                    _stop_transcribing_cue()
                 _voice_emit("voice.status", {"state": state})
                 if state == "idle":
                     _resume_voice_wake()
@@ -13670,6 +14003,7 @@ def _(rid, params: dict) -> dict:
                 auto_restart=False,
                 max_recording_seconds=safe_max_rec,
                 on_stop_phrase=_on_stop_phrase,
+                noise_floor_multiplier=safe_floor_mult,
             )
             if started is False:
                 _resume_voice_wake()

@@ -23,9 +23,32 @@ def _ns(**kw):
         ignore_existing=False,
         robo_root=None,
         cwd=None,
+        foreground=False,
     )
     defaults.update(kw)
     return argparse.Namespace(**defaults)
+
+
+class _FakeChild:
+    pid = 4242
+
+
+def _same_exe(argv: list, exe: Path) -> bool:
+    """The launched executable is *exe* — compared the way the host filesystem
+    does. A Windows checkout resolves the Linux fixture's `robo` as `Robo`
+    (case-insensitive NTFS), which is the same file, not a different launch."""
+    import os
+
+    return len(argv) >= 1 and os.path.normcase(str(argv[0])) == os.path.normcase(str(exe))
+
+
+def _detached_launch(tmp_path: Path):
+    """Patch the detached launch's spawn + sidecar log so a test never touches
+    the real ROBO_HOME or starts a process. Yields the Popen mock."""
+    return patch.multiple(
+        "robo_cli.main",
+        _desktop_stdio_log_path=lambda: tmp_path / "desktop-stdio.log",
+    ), patch("robo_cli.main.subprocess.Popen", return_value=_FakeChild())
 
 
 def _make_desktop_tree(tmp_path: Path) -> Path:
@@ -58,14 +81,15 @@ def test_gui_installs_packages_and_launches_desktop_app(tmp_path, monkeypatch):
 
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
     pack_ok = subprocess.CompletedProcess(["npm", "run", "pack"], 0)
-    launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
+    log_patch, popen_patch = _detached_launch(tmp_path)
 
     with patch("robo_cli.main.shutil.which", return_value="/usr/bin/npm"), \
          patch("robo_cli.main._run_npm_install_deterministic", return_value=install_ok) as mock_install, \
          patch("robo_cli.main._desktop_build_needed", return_value=True), \
          patch("robo_cli.main._write_desktop_build_stamp"), \
          patch("robo_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("robo_cli.main.subprocess.run", side_effect=[pack_ok, launch_ok]) as mock_run, \
+         patch("robo_cli.main.subprocess.run", side_effect=[pack_ok]) as mock_run, \
+         log_patch, popen_patch as mock_popen, \
          pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
@@ -77,10 +101,92 @@ def test_gui_installs_packages_and_launches_desktop_app(tmp_path, monkeypatch):
     assert mock_install.call_args.kwargs["capture_output"] is False
     install_env = mock_install.call_args.kwargs["env"]
     assert install_env is not None and "PATH" in install_env
+    # The build is a blocking run; the LAUNCH is a detached spawn that returns
+    # at once — the app must outlive the terminal that started it.
+    assert mock_run.call_args_list == [mock_run.call_args_list[0]]
     assert mock_run.call_args_list[0].args[0] == ["/usr/bin/npm", "run", "pack"]
     assert mock_run.call_args_list[0].kwargs["cwd"] == desktop_dir
-    assert mock_run.call_args_list[1].args[0] == [str(packaged_exe)]
-    assert mock_run.call_args_list[1].kwargs["cwd"] == desktop_dir
+    mock_popen.assert_called_once()
+    assert _same_exe(mock_popen.call_args.args[0], packaged_exe)
+    assert mock_popen.call_args.kwargs["cwd"] == desktop_dir
+    assert mock_popen.call_args.kwargs["stdin"] is subprocess.DEVNULL
+    assert mock_popen.call_args.kwargs["close_fds"] is True
+    assert mock_popen.call_args.kwargs["start_new_session"] is True  # darwin: own session
+
+
+def test_gui_foreground_keeps_the_old_attached_launch(tmp_path, monkeypatch):
+    """--foreground: Electron stays attached to this terminal and its exit
+    code is mirrored — the debugging run."""
+    root = _make_desktop_tree(tmp_path)
+    desktop_dir = root / "apps" / "desktop"
+    monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
+    packaged_exe = _make_packaged_executable(root, monkeypatch)
+
+    launch_done = subprocess.CompletedProcess([str(packaged_exe)], 3)
+
+    with patch("robo_cli.main._desktop_build_needed", return_value=False), \
+         patch("robo_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
+         patch("robo_cli.main._desktop_macos_relaunchable_fixup"), \
+         patch("robo_cli.main.subprocess.run", return_value=launch_done) as mock_run, \
+         patch("robo_cli.main.subprocess.Popen") as mock_popen, \
+         pytest.raises(SystemExit) as exc:
+        cli_main.cmd_gui(_ns(foreground=True))
+
+    assert exc.value.code == 3
+    assert _same_exe(mock_run.call_args.args[0], packaged_exe)
+    assert mock_run.call_args.kwargs["cwd"] == desktop_dir
+    mock_popen.assert_not_called()
+
+
+def test_launch_desktop_detached_on_windows_uses_the_gateway_detach_bundle(tmp_path, monkeypatch):
+    """Windows: own process group + hidden console + job breakaway, no inherited
+    stdio, and Electron told not to attach to the launching console."""
+    from robo_cli._subprocess_compat import windows_detach_flags
+
+    monkeypatch.setattr(cli_main.sys, "platform", "win32")
+    log_patch, popen_patch = _detached_launch(tmp_path)
+
+    with log_patch, popen_patch as mock_popen:
+        rc = cli_main._launch_desktop_detached([r"C:\\app\\Robo.exe"], cwd=tmp_path, env={"PATH": "x"})
+
+    assert rc == 0
+    kwargs = mock_popen.call_args.kwargs
+    assert kwargs["creationflags"] == windows_detach_flags()
+    assert "start_new_session" not in kwargs
+    assert kwargs["stdin"] is subprocess.DEVNULL
+    assert kwargs["close_fds"] is True
+    assert kwargs["env"]["ELECTRON_NO_ATTACH_CONSOLE"] == "1"
+    assert kwargs["env"]["PATH"] == "x"
+    assert (tmp_path / "desktop-stdio.log").exists()
+
+
+def test_launch_desktop_detached_retries_without_job_breakaway(tmp_path, monkeypatch):
+    """A job object that forbids breakaway makes the first spawn fail with
+    OSError; the hidden-console spawn without the breakaway bit still goes."""
+    from robo_cli._subprocess_compat import windows_detach_flags_without_breakaway
+
+    monkeypatch.setattr(cli_main.sys, "platform", "win32")
+    log_patch, popen_patch = _detached_launch(tmp_path)
+
+    with log_patch, popen_patch as mock_popen:
+        mock_popen.side_effect = [OSError("access denied"), _FakeChild()]
+        rc = cli_main._launch_desktop_detached(["Robo.exe"], cwd=tmp_path, env={})
+
+    assert rc == 0
+    assert mock_popen.call_count == 2
+    assert mock_popen.call_args_list[1].kwargs["creationflags"] == windows_detach_flags_without_breakaway()
+
+
+def test_launch_desktop_detached_reports_a_spawn_failure(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli_main.sys, "platform", "linux")
+    log_patch, popen_patch = _detached_launch(tmp_path)
+
+    with log_patch, popen_patch as mock_popen:
+        mock_popen.side_effect = OSError("no such file")
+        rc = cli_main._launch_desktop_detached(["/nope/robo"], cwd=tmp_path, env={})
+
+    assert rc == 1
+    assert "Could not start Robo Desktop" in capsys.readouterr().out
 
 
 def test_gui_install_env_prepends_managed_node_on_bare_path(tmp_path, monkeypatch):
@@ -105,13 +211,14 @@ def test_gui_install_env_prepends_managed_node_on_bare_path(tmp_path, monkeypatc
     monkeypatch.setenv("PATH", os.pathsep.join(["/usr/bin", "/bin"]))
 
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
-    launch_ok = subprocess.CompletedProcess(["robo"], 0)
+    log_patch, popen_patch = _detached_launch(tmp_path)
 
     with patch("robo_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
          patch("robo_cli.main._run_npm_install_deterministic", return_value=install_ok) as mock_install, \
          patch("robo_cli.main._desktop_build_needed", return_value=True), \
          patch("robo_cli.main._write_desktop_build_stamp"), \
-         patch("robo_cli.main.subprocess.run", side_effect=[subprocess.CompletedProcess([], 0), launch_ok]), \
+         patch("robo_cli.main.subprocess.run", side_effect=[subprocess.CompletedProcess([], 0)]), \
+         log_patch, popen_patch, \
          pytest.raises(SystemExit):
         cli_main.cmd_gui(_ns(skip_build=False))
 
@@ -400,16 +507,17 @@ def test_gui_registers_linux_desktop_entry_before_launch(tmp_path, monkeypatch):
         lambda project_root: registered.append(project_root) or (tmp_path / "robo.desktop"),
     )
 
-    launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
+    log_patch, popen_patch = _detached_launch(tmp_path)
 
     with patch("robo_cli.main._desktop_build_needed", return_value=False), \
          patch("robo_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
          patch("robo_cli.main._desktop_linux_sandbox_fixup", return_value=True), \
-         patch("robo_cli.main.subprocess.run", return_value=launch_ok), \
+         log_patch, popen_patch as mock_popen, \
          pytest.raises(SystemExit):
         cli_main.cmd_gui(_ns())
 
     assert registered == [root]
+    assert _same_exe(mock_popen.call_args.args[0], packaged_exe)
 
 
 def test_gui_launches_even_when_desktop_entry_install_fails(tmp_path, monkeypatch):
@@ -424,17 +532,17 @@ def test_gui_launches_even_when_desktop_entry_install_fails(tmp_path, monkeypatc
     monkeypatch.setattr("robo_cli.linux_desktop_entry.is_supported", lambda: True)
     monkeypatch.setattr("robo_cli.linux_desktop_entry.install_desktop_entry", boom)
 
-    launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
+    log_patch, popen_patch = _detached_launch(tmp_path)
 
     with patch("robo_cli.main._desktop_build_needed", return_value=False), \
          patch("robo_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
          patch("robo_cli.main._desktop_linux_sandbox_fixup", return_value=True), \
-         patch("robo_cli.main.subprocess.run", return_value=launch_ok) as mock_run, \
+         log_patch, popen_patch as mock_popen, \
          pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
-    assert mock_run.call_args.args[0] == [str(packaged_exe)]
+    assert _same_exe(mock_popen.call_args.args[0], packaged_exe)
 
 
 def test_gui_skips_desktop_entry_off_linux(tmp_path, monkeypatch):
@@ -449,13 +557,14 @@ def test_gui_skips_desktop_entry_off_linux(tmp_path, monkeypatch):
 
     monkeypatch.setattr("robo_cli.linux_desktop_entry.install_desktop_entry", fail)
 
-    launch_ok = subprocess.CompletedProcess([str(packaged_exe)], 0)
+    log_patch, popen_patch = _detached_launch(tmp_path)
 
     with patch("robo_cli.main._desktop_build_needed", return_value=False), \
          patch("robo_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
          patch("robo_cli.main._desktop_macos_relaunchable_fixup"), \
-         patch("robo_cli.main.subprocess.run", return_value=launch_ok), \
+         log_patch, popen_patch as mock_popen, \
          pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 0
+    assert _same_exe(mock_popen.call_args.args[0], packaged_exe)

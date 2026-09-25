@@ -43,6 +43,14 @@ def build_mcp_parser(subparsers, *, cmd_mcp: Callable) -> None:
     )
     mcp_add_p.add_argument("name", help="Server name (used as config key)")
     mcp_add_p.add_argument("--url", help="HTTP/SSE endpoint URL")
+    mcp_add_p.add_argument(
+        "--transport",
+        choices=["http", "sse"],
+        help=(
+            "Remote transport for --url: 'http' (Streamable HTTP, the default) "
+            "or 'sse' for servers that only speak the older SSE transport"
+        ),
+    )
     # dest="mcp_command" so this flag does not clobber the top-level
     # subparser's args.command attribute, which the dispatcher reads to
     # route to cmd_mcp.  Without an explicit dest, argparse derives

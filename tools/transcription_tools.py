@@ -135,6 +135,33 @@ _local_model_name: Optional[str] = None
 # None` and download/load the whisper model twice (#24767).
 _local_model_lock = threading.Lock()
 
+# The language whisper detected on the last confident local transcription.
+# With ``stt.language`` on auto-detect, every call otherwise pays a detection
+# pass over the audio before decoding it — a few hundred milliseconds of the
+# "it takes forever to catch what I said" in a voice chat, spent re-learning
+# what it learned one turn ago. Remembered per process; a forced language
+# always wins; ``stt.local.remember_language: false`` turns it off.
+_remembered_language: Optional[str] = None
+_REMEMBER_LANGUAGE_MIN_PROBABILITY = 0.8
+
+
+def _remember_detected_language(info: Any, transcript: str) -> None:
+    """Keep whisper's confident language guess for the next call."""
+    global _remembered_language
+    try:
+        language = str(getattr(info, "language", "") or "").strip().lower()
+        probability = float(getattr(info, "language_probability", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return
+    if language and transcript.strip() and probability >= _REMEMBER_LANGUAGE_MIN_PROBABILITY:
+        _remembered_language = language
+
+
+def forget_remembered_language() -> None:
+    """Drop the remembered language (tests; a fresh voice session)."""
+    global _remembered_language
+    _remembered_language = None
+
 # ---------------------------------------------------------------------------
 # Config helpers
 # ---------------------------------------------------------------------------
@@ -1444,7 +1471,12 @@ def _should_force_faster_whisper_cpu() -> bool:
     return _sysctl_value("hw.optional.arm64") == "1"
 
 
-def _load_local_whisper_model(model_name: str, device: str = "auto", compute_type: str = "auto"):
+def _load_local_whisper_model(
+    model_name: str,
+    device: str = "auto",
+    compute_type: str = "auto",
+    local_files_only: bool = False,
+):
     """Load faster-whisper with graceful CUDA → CPU fallback.
 
     faster-whisper's ``device="auto"`` picks CUDA when the ctranslate2 wheel
@@ -1460,8 +1492,13 @@ def _load_local_whisper_model(model_name: str, device: str = "auto", compute_typ
 
     We try the requested config first (fast CUDA path when it works), and on
     any CUDA library load failure fall back to CPU + int8.
+
+    ``local_files_only=True`` loads only an already-downloaded model and
+    raises instead of fetching one (the voice-mode warm-up uses it so turning
+    voice on never starts a download on its own).
     """
     force_cpu = _should_force_faster_whisper_cpu()
+    extra = {"local_files_only": True} if local_files_only else {}
     if force_cpu:
         # Importing ctranslate2/faster-whisper itself can abort on some
         # Apple Silicon/Rosetta installs because multiple Intel OpenMP runtimes
@@ -1475,10 +1512,10 @@ def _load_local_whisper_model(model_name: str, device: str = "auto", compute_typ
             "Apple Silicon/Rosetta detected — loading faster-whisper on CPU "
             "(int8) to avoid native device autodetection crashes"
         )
-        return WhisperModel(model_name, device="cpu", compute_type="int8")
+        return WhisperModel(model_name, device="cpu", compute_type="int8", **extra)
 
     try:
-        return WhisperModel(model_name, device=device, compute_type=compute_type)
+        return WhisperModel(model_name, device=device, compute_type=compute_type, **extra)
     except Exception as exc:
         if not _looks_like_cuda_lib_error(exc):
             raise
@@ -1487,7 +1524,7 @@ def _load_local_whisper_model(model_name: str, device: str = "auto", compute_typ
             "Install the NVIDIA CUDA runtime (libcublas/libcudnn) to use GPU.",
             exc,
         )
-        return WhisperModel(model_name, device="cpu", compute_type="int8")
+        return WhisperModel(model_name, device="cpu", compute_type="int8", **extra)
 
 
 # Silence-hallucination hardening defaults for local faster-whisper.
@@ -1516,7 +1553,12 @@ def build_local_transcribe_kwargs(stt_config: Optional[Dict[str, Any]] = None) -
     local_cfg = stt_config.get("local") or {}
 
     kwargs: Dict[str, Any] = {
-        "beam_size": 5,
+        # Greedy decoding by default (``stt.local.beam_size``): a live voice
+        # turn is a few seconds of clean speech, where beam search buys
+        # nothing audible and costs 2-3x the decode time — the "it takes
+        # forever to catch what I said" half of voice-chat latency. Set
+        # ``beam_size: 5`` to restore the old search for long recordings.
+        "beam_size": _beam_size(local_cfg),
         # Don't feed the previous window's text back as a prompt: a single
         # hallucinated token otherwise seeds a self-reinforcing run of them.
         "condition_on_previous_text": False,
@@ -1553,12 +1595,27 @@ def build_local_transcribe_kwargs(stt_config: Optional[Dict[str, Any]] = None) -
     forced_lang = _resolve_stt_language("local", stt_config)
     if forced_lang:
         kwargs["language"] = forced_lang
+    elif _remembered_language and is_truthy_value(local_cfg.get("remember_language", True), default=True):
+        # Auto-detect learned the language last time; skip the detection pass.
+        kwargs["language"] = _remembered_language
 
     initial_prompt = local_cfg.get("initial_prompt")
     if isinstance(initial_prompt, str) and initial_prompt.strip():
         kwargs["initial_prompt"] = initial_prompt
 
     return kwargs
+
+
+_BEAM_SIZE_DEFAULT = 1
+
+
+def _beam_size(local_cfg: Dict[str, Any]) -> int:
+    """``stt.local.beam_size`` clamped to 1..10; greedy (1) by default."""
+    try:
+        n = int(local_cfg.get("beam_size", _BEAM_SIZE_DEFAULT))
+    except (TypeError, ValueError):
+        n = _BEAM_SIZE_DEFAULT
+    return min(max(n, 1), 10)
 
 
 def _confidence_thresholds(local_cfg: Dict[str, Any]) -> tuple[float, float]:
@@ -1678,12 +1735,58 @@ def _transcribe_local(file_path: str, model_name: str) -> Dict[str, Any]:
             "Transcribed %s via local whisper (%s, lang=%s, %.1fs audio)",
             Path(file_path).name, model_name, info.language, info.duration,
         )
+        if "language" not in transcribe_kwargs:
+            _remember_detected_language(info, transcript)
 
         return {"success": True, "transcript": transcript, "provider": "local"}
 
     except Exception as e:
         logger.error("Local transcription failed: %s", e, exc_info=True)
         return {"success": False, "transcript": "", "error": f"Local transcription failed: {e}"}
+
+
+def warm_up_local_stt() -> bool:
+    """Load the local faster-whisper model ahead of the first recording.
+
+    The model is otherwise loaded lazily inside the first transcription, so
+    the first spoken message of a session paid the whole load (and on a
+    fresh install the ~150 MB download) as a silent delay between "I stopped
+    talking" and "Robo has my words". Voice-mode start calls this on a
+    background thread. Only acts when ``stt.provider`` resolves to the
+    in-process local backend and faster-whisper is already importable, and
+    only loads a model that is already on disk (``local_files_only``) —
+    never triggers a lazy install, a model download or any network call.
+    Returns True when the model is loaded (or already was), False otherwise;
+    never raises.
+    """
+    global _local_model, _local_model_name
+    try:
+        if not _HAS_FASTER_WHISPER:
+            return False
+        stt_config = _load_stt_config()
+        if not is_stt_enabled(stt_config):
+            return False
+        if stt_config.get("provider", DEFAULT_PROVIDER) != "local":
+            return False
+        local_cfg = stt_config.get("local") or {}
+        model_name = _normalize_local_model(local_cfg.get("model", DEFAULT_LOCAL_MODEL))
+        if _local_model is not None and _local_model_name == model_name:
+            return True
+        with _local_model_lock:
+            if _local_model is not None and _local_model_name == model_name:
+                return True
+            logger.info("Warming up faster-whisper model '%s' for voice mode...", model_name)
+            _local_model = _load_local_whisper_model(
+                model_name,
+                device=local_cfg.get("device", "auto"),
+                compute_type=local_cfg.get("compute_type", "auto"),
+                local_files_only=True,
+            )
+            _local_model_name = model_name
+            return True
+    except Exception as e:
+        logger.debug("local STT warm-up skipped: %s", e)
+        return False
 
 
 def _prepare_local_audio(file_path: str, work_dir: str) -> tuple[Optional[str], Optional[str]]:

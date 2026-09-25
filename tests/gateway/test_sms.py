@@ -76,6 +76,25 @@ class TestSmsFormatAndTruncate:
         assert result == "a\n\nb"
 
 
+class TestSmsStandaloneStrip:
+    """The out-of-process sender (cron delivery, `robo send` with no live
+    gateway) strips markdown with its own helper. It used to raise
+    ``NameError: name 're' is not defined`` on every call — the module never
+    imported ``re`` — so standalone SMS delivery could not succeed at all."""
+
+    def test_strip_markdown_for_sms_strips_without_raising(self):
+        from plugins.platforms.sms.adapter import _strip_markdown_for_sms
+
+        text = "# Title\n\n**bold** and _em_ with `code` and [a link](https://x.y)\n\n\n\n```py\nprint(1)\n```"
+        result = _strip_markdown_for_sms(text)
+
+        assert result.startswith("Title")
+        assert "**" not in result and "`" not in result and "](" not in result
+        assert "bold and em with code and a link" in result
+        assert "print(1)" in result
+        assert "\n\n\n" not in result
+
+
 # ── Echo prevention ────────────────────────────────────────────────
 
 class TestSmsEchoPrevention:

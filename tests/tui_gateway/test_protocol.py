@@ -106,6 +106,39 @@ def test_unknown_method(server):
     assert resp["error"]["code"] == -32601
 
 
+@pytest.mark.parametrize("method", ["billing.state", "subscription.state"])
+def test_billing_state_reads_answer_logged_out(server, method):
+    """Ignitee Now billing was removed; /topup and /subscription in the TUI
+    still ask for state. They get the shim's answer — logged out — not
+    ``unknown method`` (which the TUI printed as a raw error)."""
+    resp = server.handle_request({"id": "b1", "method": method, "params": {}})
+    assert "error" not in resp
+    assert resp["result"]["ok"] is True
+    assert resp["result"]["logged_in"] is False
+    assert "no longer available" in resp["result"]["error"]
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "billing.charge",
+        "billing.charge_status",
+        "billing.auto_reload",
+        "billing.step_up",
+        "subscription.preview",
+        "subscription.change",
+        "subscription.resume",
+        "subscription.upgrade",
+    ],
+)
+def test_billing_mutations_refuse_in_one_sentence(server, method):
+    resp = server.handle_request({"id": "b2", "method": method, "params": {}})
+    assert "error" not in resp
+    assert resp["result"]["ok"] is False
+    assert resp["result"]["granted"] is False
+    assert "no longer available" in resp["result"]["message"]
+
+
 def test_ok_envelope(server):
     assert server._ok("r1", {"x": 1}) == {
         "jsonrpc": "2.0", "id": "r1", "result": {"x": 1},

@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
-import { DiffCount } from '@/components/ui/diff-count'
 import type { RoboGitBranch } from '@/global'
 import { useI18n } from '@/i18n'
 import { displayPath } from '@/lib/display-path'
@@ -132,11 +131,6 @@ export const CodingStatusRow = memo(function CodingStatusRow({
   const otherWorktrees = onOpenWorktree
     ? worktrees.filter(w => w.path && !w.detached && w.branch && w.branch !== current)
     : []
-
-  const hasLineDelta = status.added > 0 || status.removed > 0
-  // Untracked files carry no line delta vs HEAD, so surface them as a count when
-  // they're the only change (otherwise +/- tells the story).
-  const untrackedOnly = !hasLineDelta && status.untracked > 0
 
   // The branch actions, rendered identically by the kebab dropdown and the
   // row's right-click menu so the two never drift. `onBranchOff` gates the
@@ -267,41 +261,28 @@ export const CodingStatusRow = memo(function CodingStatusRow({
             )}
           </div>
 
-          {/* The counts describe what's in the review pane, so clicking them
-              opens it. `contents` again: the two spans stay direct flex children
-              of the row, keeping their gap and `ml-auto` behaviour untouched. */}
-          {(status.ahead > 0 || status.behind > 0 || hasLineDelta || untrackedOnly) && (
+          {/* Ahead/behind vs the upstream, when there is something to say. The
+              working-tree line counts (+n −m) used to sit here too; they are
+              gone — a lockfile churn read as "+17678 −17678" next to the
+              prompt, which is noise, not status. The review pane (click the
+              branch) has the real diff. `contents` keeps the span a direct
+              flex child of the row. */}
+          {(status.ahead > 0 || status.behind > 0) && (
             <button className="contents" onClick={onOpen} type="button">
-              {(status.ahead > 0 || status.behind > 0) && (
-                <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[0.68rem] leading-4 text-muted-foreground/75 tabular-nums">
-                  {status.ahead > 0 && (
-                    <span className="flex items-center gap-0.5" title={s.ahead(status.ahead)}>
-                      <span aria-hidden>↑</span>
-                      {status.ahead}
-                    </span>
-                  )}
-                  {status.behind > 0 && (
-                    <span className="flex items-center gap-0.5" title={s.behind(status.behind)}>
-                      <span aria-hidden>↓</span>
-                      {status.behind}
-                    </span>
-                  )}
-                </span>
-              )}
-
-              {hasLineDelta ? (
-                <DiffCount
-                  added={status.added}
-                  className={`text-[0.72rem] leading-4 ${status.ahead === 0 && status.behind === 0 ? 'ml-auto' : ''}`}
-                  removed={status.removed}
-                />
-              ) : untrackedOnly ? (
-                <span
-                  className={`shrink-0 text-[0.72rem] leading-4 text-amber-500/90 ${status.ahead === 0 && status.behind === 0 ? 'ml-auto' : ''}`}
-                >
-                  {s.changed(status.untracked)}
-                </span>
-              ) : null}
+              <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[0.68rem] leading-4 text-muted-foreground/75 tabular-nums">
+                {status.ahead > 0 && (
+                  <span className="flex items-center gap-0.5" title={s.ahead(status.ahead)}>
+                    <span aria-hidden>↑</span>
+                    {status.ahead}
+                  </span>
+                )}
+                {status.behind > 0 && (
+                  <span className="flex items-center gap-0.5" title={s.behind(status.behind)}>
+                    <span aria-hidden>↓</span>
+                    {status.behind}
+                  </span>
+                )}
+              </span>
             </button>
           )}
         </StatusRow>

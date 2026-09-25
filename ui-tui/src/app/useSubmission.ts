@@ -11,7 +11,7 @@ import { hasInterpolation, INTERPOLATION_RE } from '../protocol/interpolation.js
 import type { Msg } from '../types.js'
 
 import type { ComposerActions, ComposerRefs, ComposerState, ComposerToken } from './interfaces.js'
-import { submitPrompt } from './submissionCore.js'
+import { rememberLocalUserEcho, settleMidTurnSend, submitPrompt, trackMidTurnSend } from './submissionCore.js'
 import { turnController } from './turnController.js'
 import { getUiState, patchUiState } from './uiStore.js'
 
@@ -79,7 +79,13 @@ export function useSubmission(opts: UseSubmissionOptions) {
   }, [composerState.input, composerState.inputBuf])
 
   const send = useCallback(
-    (text: string, showUserMessage = true, displayText?: string, expandOverride?: (value: string) => string) => {
+    (
+      text: string,
+      showUserMessage = true,
+      displayText?: string,
+      expandOverride?: (value: string) => string,
+      midTurn = false
+    ) => {
       // Read tokens off the ref, not render state: a paste immediately followed
       // by Enter submits before React has re-rendered with the new token.
       const expand = expandOverride ?? expandTokens(composerRefs.tokensRef.current)
@@ -95,7 +101,8 @@ export function useSubmission(opts: UseSubmissionOptions) {
           sys
         },
         showUserMessage,
-        displayText
+        displayText,
+        midTurn
       )
     },
     [appendMessage, composerActions, composerRefs, gw, setLastUserMsg, sys]
@@ -206,17 +213,32 @@ export function useSubmission(opts: UseSubmissionOptions) {
       }
 
       if (mode === 'steer' && live.sid) {
+        // On screen at once: the composer strip lists the send as 'sending'
+        // until the gateway answers. The bubble itself waits for acceptance
+        // (a rejected steer goes back to the local queue and would otherwise
+        // paint twice when drained), and the gateway's own `message.user`
+        // echo of an accepted steer must not paint a second one next to it.
+        const tracked = trackMidTurnSend(item.display)
+        rememberLocalUserEcho(item.text)
+
         gw.request<SessionSteerResponse>('session.steer', { session_id: live.sid, text: item.text })
           .then(raw => {
             const r = asRpcResult<SessionSteerResponse>(raw)
 
             if (r?.status === 'queued') {
               appendMessage({ role: 'user', text: item.display })
+              // session.steer's "queued" means queued INTO the live run — a
+              // steer: read after the current step, and the strip says so.
+              settleMidTurnSend(tracked, 'steered')
             } else {
+              settleMidTurnSend(tracked, 'dropped')
               fallback('steer rejected — message queued for next turn')
             }
           })
-          .catch(() => fallback('steer failed — message queued for next turn'))
+          .catch(() => {
+            settleMidTurnSend(tracked, 'dropped')
+            fallback('steer failed — message queued for next turn')
+          })
 
         return
       }
@@ -224,8 +246,9 @@ export function useSubmission(opts: UseSubmissionOptions) {
       // The gateway owns the atomic redirect decision because it knows whether
       // the agent is in model generation, tool execution, or an older runtime.
       // Reuse the normal submit pipeline so the correction gets its user bubble
-      // and file-drop interpolation exactly once.
-      send(item.text)
+      // and file-drop interpolation exactly once; `midTurn` also lists it in
+      // the composer strip until the gateway reports what it did with it.
+      send(item.text, true, undefined, undefined, true)
     },
     [appendMessage, composerActions, gw, send, sys]
   )
@@ -274,6 +297,12 @@ export function useSubmission(opts: UseSubmissionOptions) {
       }
 
       const live = getUiState()
+
+      // /edit: the history is already backed up to before this message; the
+      // edited text goes out as an ordinary fresh turn from that point.
+      if (live.editingLast) {
+        patchUiState({ editingLast: false })
+      }
 
       if (!live.sid) {
         composerActions.pushHistory(toHistory)

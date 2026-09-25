@@ -45,7 +45,6 @@ import {
   setCurrentServiceTier,
   setCurrentUsage,
   setFreshDraftReady,
-  setIntroSeed,
   setMessages,
   setNewChatWorkspaceTarget,
   setResumeExhaustedSessionId,
@@ -296,7 +295,6 @@ export function useSessionActions({
       setBusy(false)
       setAwaitingResponse(false)
       clearNotifications()
-      setIntroSeed(seed => seed + 1)
       // Clear the durable route intent synchronously, before React Router
       // publishes /new. Submit uses that intent to heal an existing-session
       // rebind race, so leaving the old id here could revive it on a very fast

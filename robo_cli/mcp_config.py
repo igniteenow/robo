@@ -427,6 +427,7 @@ def cmd_mcp_add(args):
     preset_name = getattr(args, "preset", None)
     raw_env = getattr(args, "env", None)
     raw_connect_timeout = getattr(args, "connect_timeout", None)
+    transport = (getattr(args, "transport", None) or "").strip().lower() or None
 
     server_config: Dict[str, Any] = {}
     try:
@@ -445,6 +446,10 @@ def cmd_mcp_add(args):
 
     if url and explicit_env:
         _error("--env is only supported for stdio MCP servers (--command or stdio presets)")
+        return
+
+    if transport and not url:
+        _error("--transport only applies to remote servers (--url)")
         return
 
     # Validate transport
@@ -466,6 +471,10 @@ def cmd_mcp_add(args):
     # Build initial config
     if url:
         server_config["url"] = url
+        # Streamable HTTP is the default and needs no key; only the older
+        # SSE transport is recorded (tools/mcp_tool.py reads `transport: sse`).
+        if transport == "sse":
+            server_config["transport"] = "sse"
     else:
         server_config["command"] = command
         if cmd_args:

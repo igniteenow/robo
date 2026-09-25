@@ -167,9 +167,9 @@ voice:
   record_key: "ctrl+b"
   max_recording_seconds: 120
   auto_tts: false
-  beep_enabled: true
   silence_threshold: 200
-  silence_duration: 3.0
+  silence_duration: 1.5
+  noise_floor_multiplier: 1.5
 
 stt:
   provider: "local"
@@ -270,17 +270,18 @@ If Robo starts/stops too aggressively, tune:
 ```yaml
 voice:
   silence_threshold: 250
+  noise_floor_multiplier: 2.0
 ```
 
-Higher threshold = less sensitive.
+Higher threshold = less sensitive. The recorder also measures your room's noise floor while it listens; while the room is quieter than `silence_threshold` that value is used as is, and only when the room is louder than it does the threshold become `noise floor × noise_floor_multiplier`, so a fan or laptop hum does not keep a recording open after you stop talking. Set `noise_floor_multiplier: 0` to use the fixed `silence_threshold` alone.
 
 ### Silence duration
 
-If you pause a lot between sentences, increase:
+Recording stops 1.5 seconds after you stop talking. If you pause a lot between sentences, increase:
 
 ```yaml
 voice:
-  silence_duration: 4.0
+  silence_duration: 2.5
 ```
 
 ### Record key

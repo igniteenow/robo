@@ -23,9 +23,12 @@ import {
   isRemoteShellSession
 } from '../../../lib/terminalSetup.js'
 import type { Msg, PanelSection } from '../../../types.js'
+import { rewindLastTurn, trimFromLastUser } from '../../editLastMessage.js'
 import type { StatusBarMode } from '../../interfaces.js'
 import { patchOverlayState } from '../../overlayStore.js'
-import { patchUiState } from '../../uiStore.js'
+import { isSessionBusyError } from '../../submissionCore.js'
+import { turnController } from '../../turnController.js'
+import { getUiState, patchUiState } from '../../uiStore.js'
 import type { SlashCommand } from '../types.js'
 
 const flagFromArg = (arg: string, current: boolean): boolean | null => {
@@ -738,6 +741,66 @@ export const coreCommands: SlashCommand[] = [
           }
         })
       )
+    }
+  },
+
+  {
+    help: 'edit your last message and let Robo start again from there (stops it first if it is working)',
+    name: 'edit',
+    run: (_arg, ctx) => {
+      const sid = ctx.sid
+
+      if (!sid) {
+        return ctx.transcript.sys('nothing to edit yet')
+      }
+
+      const queued = ctx.composer.queueRef.current.length
+
+      if (queued > 0) {
+        // The queue drains the moment the session settles — right when the
+        // interrupt below lands — and would race the rewind with a fresh
+        // turn. The user decides what happens to those messages, not /edit.
+        return ctx.transcript.sys(
+          `/edit: ${queued} queued message(s) would be sent the moment Robo stops — ` +
+            'remove them first (↑ into the queue, Ctrl+X removes) or send them with Ctrl+K'
+        )
+      }
+
+      const live = getUiState()
+
+      if (live.busy) {
+        // Like editing a message mid-reply in a chat app: Robo stops, the
+        // edit is what it reads next. The rewind below waits for the turn
+        // to actually unwind before it backs the history up.
+        ctx.transcript.sys('✎ stopping Robo so you can edit…')
+        turnController.interruptTurn({
+          appendMessage: ctx.transcript.appendMessage,
+          gw: ctx.gateway.gw,
+          sid,
+          sys: ctx.transcript.sys
+        })
+      }
+
+      const deps = {
+        isBusyError: isSessionBusyError,
+        request: (method: string, params: Record<string, unknown>) => ctx.gateway.gw.request(method, params),
+        sleep: (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+      }
+
+      rewindLastTurn(sid, deps)
+        .then(result => {
+          if (!result) {
+            return ctx.transcript.sys('nothing to edit yet')
+          }
+
+          ctx.transcript.setHistoryItems((prev: Msg[]) => trimFromLastUser(prev))
+          ctx.composer.setInput(result.message)
+          patchUiState({ editingLast: true })
+          ctx.transcript.sys(
+            '✎ editing your last message · Enter sends it and Robo starts again from here · Esc Esc keeps the text'
+          )
+        })
+        .catch(ctx.guardedErr)
     }
   },
 

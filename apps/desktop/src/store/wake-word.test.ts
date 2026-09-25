@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type * as RoboModule from '@/robo'
+
 import {
   $wakeWord,
   applyWakeStartResult,
@@ -12,6 +14,13 @@ import {
   type WakeRequester
 } from './wake-word'
 
+const warmUpTranscription = vi.fn(async () => ({ ok: true, scheduled: true }))
+
+vi.mock('@/robo', async importActual => ({
+  ...(await importActual<typeof RoboModule>()),
+  warmUpTranscription: () => warmUpTranscription()
+}))
+
 const requester = (impl: (method: string, params?: Record<string, unknown>) => unknown) =>
   vi.fn(async (method: string, params: Record<string, unknown> = {}) =>
     impl(method, params)
@@ -19,6 +28,7 @@ const requester = (impl: (method: string, params?: Record<string, unknown>) => u
 
 beforeEach(() => {
   resetWakeWordState()
+  warmUpTranscription.mockClear()
 })
 
 describe('applyWakeStatus', () => {
@@ -251,6 +261,36 @@ describe('applyWakeStartResult', () => {
     applyWakeStartResult({ phrase: 'computer', provider: 'porcupine', started: true })
 
     expect($wakeWord.get()).toMatchObject({ available: true, listening: true, phrase: 'computer' })
+  })
+})
+
+describe('STT warm-up on arm', () => {
+  // "Hey robo" is followed by the first sentence at once: the whisper model
+  // must already be loaded by then, not when the voice chat starts.
+  it('preloads local STT the moment the listener is armed', () => {
+    applyWakeStartResult({ phrase: 'hey robo', started: true })
+    expect(warmUpTranscription).toHaveBeenCalledTimes(1)
+
+    applyWakeStatus({ available: true, listening: true, phrase: 'hey robo' })
+    expect(warmUpTranscription).toHaveBeenCalledTimes(2)
+  })
+
+  it('does nothing while the ear is off', () => {
+    applyWakeStartResult({ reason: 'disabled', started: false })
+    applyWakeStatus({ available: true, listening: false, phrase: 'hey robo' })
+    applyWakeStopResult({ stopped: true })
+
+    expect(warmUpTranscription).not.toHaveBeenCalled()
+  })
+
+  it('never lets a failed warm-up reach the caller', () => {
+    warmUpTranscription.mockImplementationOnce(() => {
+      throw new Error('no bridge')
+    })
+    expect(() => applyWakeStartResult({ phrase: 'hey robo', started: true })).not.toThrow()
+
+    warmUpTranscription.mockImplementationOnce(() => Promise.reject(new Error('offline')))
+    expect(() => applyWakeStatus({ available: true, listening: true, phrase: 'hey robo' })).not.toThrow()
   })
 })
 

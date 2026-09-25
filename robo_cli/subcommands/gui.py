@@ -19,7 +19,16 @@ def build_gui_parser(subparsers, *, cmd_gui: Callable) -> None:
         description=(
             "Launch the Robo Electron desktop app. By default this installs "
             "workspace Node dependencies, builds the current OS's unpacked "
-            "Electron app, then launches that packaged artifact."
+            "Electron app, then launches that packaged artifact detached — "
+            "the app keeps running after this terminal closes."
+        ),
+    )
+    gui_parser.add_argument(
+        "--foreground",
+        action="store_true",
+        help=(
+            "Keep the app attached to this terminal (its output here, exit code "
+            "mirrored) instead of launching it detached"
         ),
     )
     gui_parser.add_argument(

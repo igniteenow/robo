@@ -103,7 +103,7 @@ Keybindings match the [Classic CLI](cli.md#keybindings) exactly. The only behavi
 - **`/terminal-setup`** installs local VS Code / Cursor / Windsurf terminal bindings for better `Cmd+Enter` and undo/redo parity on macOS.
 - **Slash autocompletion** opens as a floating panel with descriptions, not an inline dropdown.
 - **`Ctrl+X`** opens the live session switcher. When a queued message is highlighted (sent while the agent was still running), it still deletes that queued message instead. **`Esc`** cancels editing and unhighlights without deleting.
-- **`Ctrl+G` / `Ctrl+X Ctrl+E`** — open the current input buffer in `$EDITOR` for multi-line / long-prompt composition; save-and-exit sends the contents back as the prompt.
+- **`Ctrl+G` (or `Alt+G` inside VS Code / Cursor)** — open the current input buffer in `$EDITOR` for multi-line / long-prompt composition; save-and-exit sends the contents back as the prompt. The classic CLI's `Ctrl+X Ctrl+E` alias is not available here because `Ctrl+X` opens the session switcher.
 
 ## Slash commands
 
@@ -122,6 +122,17 @@ All slash commands work unchanged. A few are TUI-owned — they produce richer o
 | `/mouse [on\|off\|toggle\|wheel\|buttons\|all]` | Pick a mouse tracking preset at runtime (also persists to `display.mouse_tracking` in `config.yaml`). `wheel` (1000+1006) keeps scroll-wheel scrolling without the hover events that make tmux spam "No image in clipboard" over the prompt row; `buttons` adds drag-to-select; `all` is the default with hover-driven UI. |
 
 Every other slash command (including installed skills, quick commands, and personality toggles) works identically to the classic CLI. See [Slash Commands Reference](../reference/slash-commands.md).
+
+## The chat box
+
+The composer is a box on all four sides whose tag and colour say what it is doing: `◆ ROBO` for chat, `$ SHELL` when the line starts with `!`, `● REC` / `◉ STT` while the microphone captures and transcribes, `✎ EDIT` while you edit your last message. The top edge shows the keys that apply right now; the bottom edge shows the voice state. While a question or approval prompt owns the keyboard, the input row reads *waiting on the prompt above* instead of disappearing — answer it, or Esc to dismiss.
+
+**Changing your mind while Robo works.** You are never locked out while a turn runs:
+
+- **Type and send a new message** — Robo reads it at once and redirects the live turn, keeping in mind what it was already doing (`display.busy_input_mode: interrupt`, the default). `queue` parks the message for the next turn instead; `steer` hands it over only after the current step finishes, which for a long tool run or a slow reply feels like the message never arrived — the box's hint tells you which mode is on, `/busy status` shows it and `/busy interrupt` switches (persisted to `config.yaml`).
+- **`/edit`** — Robo stops, the exchange is backed out of history, and your last message comes back into the box under `✎ EDIT`. Change it and press Enter: Robo starts again from that point as if the first version had never been sent. Esc Esc keeps the text in ↑ history. With messages still queued, `/edit` refuses — they would be sent the moment Robo stops — so remove them first (↑ into the queue, Ctrl+X) or send them (Ctrl+K).
+- **Ctrl+C** — stop the turn and send nothing.
+- **Enter twice on an empty box** — stop the turn (the same as Ctrl+C, for when your hands are on Enter).
 
 ## Live session switcher
 

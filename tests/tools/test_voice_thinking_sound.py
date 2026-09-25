@@ -25,15 +25,48 @@ np = pytest.importorskip(
 import tools.voice_mode as vm
 
 
-class _FakeSD:
-    def __init__(self):
-        self.played = []
+class _FakeStream:
+    """Stand-in for sd.OutputStream: records what was written and drained."""
 
-    def play(self, audio, samplerate=None):
-        self.played.append((audio, samplerate))
+    def __init__(self, owner, samplerate):
+        self._owner = owner
+        self._samplerate = samplerate
+        self.drained = False
+
+    def start(self):
+        pass
+
+    def write(self, audio):
+        self._owner.played.append((audio, self._samplerate))
 
     def stop(self):
-        pass
+        self.drained = True
+        self._owner.drained += 1
+
+    def abort(self):
+        self._owner.aborted += 1
+
+    def close(self):
+        self._owner.closed += 1
+
+
+class _FakeSD:
+    """Blips play on a private, drained OutputStream — never sd.play()/stop()."""
+
+    def __init__(self):
+        self.played = []
+        self.drained = 0
+        self.aborted = 0
+        self.closed = 0
+
+    def OutputStream(self, samplerate=None, channels=1, dtype="int16"):  # noqa: N802
+        return _FakeStream(self, samplerate)
+
+    def play(self, audio, samplerate=None):
+        raise AssertionError("shared sd.play() must not be used for blips")
+
+    def stop(self):
+        raise AssertionError("shared sd.stop() must not be used for blips")
 
 
 def _reset():
@@ -92,6 +125,13 @@ class TestLoopLifecycle:
             t.join(timeout=3.0)
         assert fake.played, "loop never played a blip"
         assert not t.is_alive()
+        # Each blip was written in full, drained (stop) and closed — never
+        # aborted, so no driver is left looping a half-played buffer.
+        audio, rate = fake.played[0]
+        assert rate == vm.SAMPLE_RATE
+        assert audio.dtype == np.int16 and audio.ndim == 2
+        assert fake.drained == len(fake.played) == fake.closed
+        assert fake.aborted == 0
 
 
     def test_start_is_idempotent_and_stop_clears(self):

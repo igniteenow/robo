@@ -26,6 +26,50 @@ def test_schtasks_encoding_falls_back_to_utf8(monkeypatch):
 
 
 
+def test_force_startup_env_switch_parses_truthy_values():
+    """``ROBO_GATEWAY_FORCE_STARTUP=1`` (documented in the Windows guide) picks
+    the Startup-folder login item over a Scheduled Task. It was documented
+    long before anything read it."""
+    force = gateway_windows._force_startup_folder
+    assert force({"ROBO_GATEWAY_FORCE_STARTUP": "1"}) is True
+    assert force({"ROBO_GATEWAY_FORCE_STARTUP": " true "}) is True
+    assert force({"ROBO_GATEWAY_FORCE_STARTUP": "YES"}) is True
+    assert force({"ROBO_GATEWAY_FORCE_STARTUP": "0"}) is False
+    assert force({"ROBO_GATEWAY_FORCE_STARTUP": ""}) is False
+    assert force({}) is False
+
+
+def test_install_honours_force_startup(monkeypatch, tmp_path):
+    """With the switch set, install() never touches schtasks: it writes the
+    task script and goes straight to the Startup-folder fallback."""
+    calls = {}
+
+    monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
+    monkeypatch.setattr(
+        gateway_windows, "_prompt_install_choices", lambda start_now, start_on_login: (False, True)
+    )
+    monkeypatch.setattr(gateway_windows, "get_task_name", lambda: "RoboGateway")
+    monkeypatch.setattr(gateway_windows, "_write_task_script", lambda: tmp_path / "gateway.cmd")
+    monkeypatch.setattr(
+        gateway_windows,
+        "_install_startup_fallback",
+        lambda script_path, start_now, detail: calls.update(script=script_path, start_now=start_now, detail=detail),
+    )
+
+    def _no_schtasks(*args, **kwargs):
+        raise AssertionError("schtasks must not be consulted when ROBO_GATEWAY_FORCE_STARTUP is set")
+
+    monkeypatch.setattr(gateway_windows, "_install_scheduled_task", _no_schtasks)
+    monkeypatch.setattr(gateway_windows, "_is_running_as_admin", _no_schtasks)
+    monkeypatch.setenv("ROBO_GATEWAY_FORCE_STARTUP", "1")
+
+    gateway_windows.install()
+
+    assert calls["script"] == tmp_path / "gateway.cmd"
+    assert calls["start_now"] is False
+    assert "ROBO_GATEWAY_FORCE_STARTUP" in calls["detail"]
+
+
 def test_build_gateway_argv_keeps_venv_console_python_for_uv_venv(monkeypatch, tmp_path):
     """No pythonw / base-interpreter detour: the venv console python.exe is
     launched hidden (CREATE_NO_WINDOW) so descendants inherit its hidden

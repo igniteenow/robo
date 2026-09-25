@@ -246,6 +246,35 @@ describe('StatusRule session count click target', () => {
   })
 })
 
+describe('StatusRule pre-first-turn context estimate', () => {
+  // Before the first reply the gateway sends an estimate of the request the
+  // first turn will make, so the gauge is on screen at "ready" — marked
+  // approximate with a leading ~ until a real provider count replaces it.
+  it('marks the gauge approximate while it is the startup estimate', () => {
+    const element = StatusRule({
+      ...baseProps,
+      usage: { ...baseProps.usage, context_estimated: true }
+    })
+
+    const rendered = textContent(element)
+
+    expect(rendered).toContain('~50k/200k')
+    expect(rendered).toContain('25%')
+  })
+
+  it('drops the ~ once a real count arrives', () => {
+    const element = StatusRule({
+      ...baseProps,
+      usage: { ...baseProps.usage, context_estimated: false }
+    })
+
+    const rendered = textContent(element)
+
+    expect(rendered).toContain('50k/200k')
+    expect(rendered).not.toContain('~50k')
+  })
+})
+
 describe('StatusRule credits notice render priority', () => {
   it('replaces the idle status with the notice text and keeps model + context', () => {
     const element = StatusRule({
@@ -468,5 +497,17 @@ describe('StatusRule idle-since read-out', () => {
     })
 
     expect(findComponentByName(element, 'IdleSince')).toBeNull()
+  })
+
+  // useMainApp seeds lastTurnEndedAt from session start until the first
+  // reply lands, so the bar carries the idle clock at "ready" too.
+  it('shows the clock when the caller seeds it from session start (no turn yet)', () => {
+    const element = StatusRule({
+      ...baseProps,
+      lastTurnEndedAt: Date.now() - 21_000,
+      sessionStartedAt: Date.now() - 21_000
+    })
+
+    expect(findComponentByName(element, 'IdleSince')).not.toBeNull()
   })
 })

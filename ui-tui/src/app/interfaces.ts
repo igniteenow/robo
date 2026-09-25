@@ -75,6 +75,10 @@ export const INDICATOR_STYLES = ['ascii', 'emoji', 'kaomoji', 'unicode'] as cons
 export type IndicatorStyle = (typeof INDICATOR_STYLES)[number]
 export const DEFAULT_INDICATOR_STYLE: IndicatorStyle = 'kaomoji'
 
+// display.tui_idle_exit_minutes default: a TUI nobody has touched for an hour
+// quits instead of sitting on the gateway forever. 0 disables.
+export const DEFAULT_IDLE_EXIT_MINUTES = 60
+
 export interface SelectionApi {
   captureScrolledRows: (firstRow: number, lastRow: number, side: 'above' | 'below') => void
   clearSelection: () => void
@@ -315,6 +319,23 @@ export interface TranscriptRow {
   msg: Msg
 }
 
+// What the gateway did with a mid-turn send. 'redirected' = the live turn is
+// reading it now; 'steered' = handed over after the current step (the
+// display.busy_input_mode: steer policy); 'queued' = parked for the next turn;
+// 'sent' = accepted, disposition unknown (older gateways).
+export type MidTurnSentStatus = 'queued' | 'redirected' | 'sending' | 'sent' | 'steered'
+
+// A message the user sent while a turn was already running. Its transcript
+// bubble lands above the live reply block — off-screen once that block is
+// tall — so the composer also lists it (components/midTurnSent.tsx) until the
+// turn ends: 'sending' until the gateway answers, then 'sent' (the live turn
+// has it) or 'queued' (the gateway parked it for the next turn).
+export interface MidTurnSentItem {
+  id: number
+  status: MidTurnSentStatus
+  text: string
+}
+
 export interface UiState {
   battery: boolean
   batteryStatus: BatteryInfo | null
@@ -324,12 +345,20 @@ export interface UiState {
   compact: boolean
   detailsMode: DetailsMode
   detailsModeCommandOverride: boolean
+  // /edit: the composer holds the user's last message, already backed out of
+  // history, waiting to be resent as a fresh turn. Drives the ✎ EDIT tag on
+  // the chat box; cleared by the send, by Esc Esc, or by an empty composer.
+  editingLast: boolean
   // Focus view (/focus) — display-only reduced-output mode. Drives the
   // persistent `◉ focus` status-bar badge; never affects request payloads.
   focusView: boolean
+  // display.tui_idle_exit_minutes — quit after this long with no input and
+  // nothing running (0 = never). See useIdleExit.ts.
+  idleExitMinutes: number
   info: null | SessionInfo
   liveSessionCount: number
   inlineDiffs: boolean
+  midTurnSent: MidTurnSentItem[]
   mouseTracking: MouseTrackingMode
   notice: Notice | null
   pasteCollapseLines: number
@@ -345,6 +374,9 @@ export interface UiState {
   streaming: boolean
   theme: Theme
   usage: Usage
+  // wake_word.enabled from config: an armed "Hey Robo" listener is a way of
+  // using the TUI without touching the keyboard, so idle-exit stays off.
+  wakeWordEnabled: boolean
 }
 
 export interface VirtualHistoryState {
@@ -466,6 +498,12 @@ export interface GatewayEventHandlerContext {
     setInput: StateSetter<string>
   }
   gateway: GatewayServices
+  prompts?: {
+    // Answers the open clarify prompt (free text) — a ref so the memoized
+    // handler always calls the current closure without re-creating on every
+    // overlay change.
+    answerClarifyRef: MutableRefObject<(answer: string) => void>
+  }
   session: {
     STARTUP_RESUME_ID: string
     colsRef: MutableRefObject<number>
@@ -531,6 +569,7 @@ export interface SlashHandlerContext {
   }
   slashFlightRef: MutableRefObject<number>
   transcript: {
+    appendMessage: (msg: Msg) => void
     page: (text: string, title?: string) => void
     panel: (title: string, sections: PanelSection[]) => void
     send: (text: string, showUserMessage?: boolean, displayText?: string) => void

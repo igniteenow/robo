@@ -248,6 +248,41 @@ export interface Translations {
     openKeybinds: string
     layoutEditor: string
     layoutEditorTitle: string
+    switchToLight: string
+    switchToDark: string
+    appearanceTitle: string
+  }
+
+  // The full-screen hands-free voice chat view.
+  voiceScreen: {
+    title: string
+    subtitle: string
+    status: {
+      idle: string
+      listening: string
+      transcribing: string
+      thinking: string
+      speaking: string
+    }
+    muted: string
+    mute: string
+    unmute: string
+    sendNow: string
+    end: string
+    // `key` is the live `composer.voice` chord (⌃B on macOS, Alt+B elsewhere,
+    // or whatever the user rebound it to), null when unbound.
+    hint: (key: string | null) => string
+    hintWithPhrase: (phrase: string, key: string | null) => string
+    // Where the time went in the last spoken turn (see store/voice-timing).
+    timing: {
+      words: string
+      firstWord: string
+      voice: string
+      total: string
+      sentence: string
+      streamed: string
+      whole: string
+    }
   }
 
   keybinds: {
@@ -2428,6 +2463,8 @@ export interface Translations {
     setProfileFailed: string
     sttDisabled: string
     stopFailed: string
+    redirectDelivered: string
+    redirectQueued: string
     regenerateFailed: string
     editFailed: string
     resumeFailed: string

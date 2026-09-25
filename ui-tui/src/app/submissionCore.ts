@@ -2,6 +2,7 @@ import type { GatewayClient } from '../gatewayClient.js'
 import type { InputDetectDropResponse, PromptSubmitResponse } from '../gatewayTypes.js'
 import type { Msg } from '../types.js'
 
+import type { MidTurnSentStatus } from './interfaces.js'
 import { turnController } from './turnController.js'
 import { getUiState, patchUiState } from './uiStore.js'
 
@@ -70,6 +71,64 @@ export function consumeLocalUserEcho(text: string): boolean {
   return true
 }
 
+// ── Mid-turn sends ───────────────────────────────────────────────────
+//
+// A message sent while a turn is running gets its transcript bubble like any
+// other — but that bubble is appended to settled history, which renders ABOVE
+// the live reply block (streamed text, tool trail, reasoning). Once that block
+// is taller than the viewport the bubble is out of sight, and the user has no
+// way to tell whether Enter did anything until the model reacts, seconds or
+// minutes later. So the composer pane also lists every mid-turn send
+// (components/midTurnSent.tsx) — 'sending' at once, then what the gateway did
+// with it — until the turn ends (turnController.idle() clears the list).
+const MID_TURN_SENT_LIMIT = 5
+let midTurnSentSeq = 0
+
+export function trackMidTurnSend(text: string, status: MidTurnSentStatus = 'sending'): number {
+  const id = ++midTurnSentSeq
+  const label = text.trim()
+
+  patchUiState(state => ({
+    ...state,
+    midTurnSent: [...state.midTurnSent, { id, status, text: label }].slice(-MID_TURN_SENT_LIMIT)
+  }))
+
+  return id
+}
+
+// Resolve a tracked send once the gateway has answered. 'dropped' removes the
+// row: the text went back to the local queue (its own panel shows it) or the
+// send errored (a sys note says so) — either way the strip must not claim it
+// reached the live turn.
+export function settleMidTurnSend(id: number, status: 'dropped' | MidTurnSentStatus): void {
+  patchUiState(state => {
+    if (!state.midTurnSent.some(item => item.id === id)) {
+      return state
+    }
+
+    return {
+      ...state,
+      midTurnSent:
+        status === 'dropped'
+          ? state.midTurnSent.filter(item => item.id !== id)
+          : state.midTurnSent.map(item => (item.id === id ? { ...item, status } : item))
+    }
+  })
+}
+
+export function clearMidTurnSends(): void {
+  if (getUiState().midTurnSent.length) {
+    patchUiState({ midTurnSent: [] })
+  }
+}
+
+// Maps the gateway's answer to a mid-turn prompt.submit / session.steer onto a
+// strip status. 'queued' means "runs as the next turn"; anything else the
+// gateway accepted ('redirected', 'steered', a legacy bare ok) reached the
+// live turn.
+export const midTurnStatusFromGateway = (status: unknown): MidTurnSentStatus =>
+  status === 'queued' || status === 'redirected' || status === 'steered' ? status : 'sent'
+
 // Submit a ready prompt (already resolved to be neither a slash command nor a
 // shell escape, with a live session). Pulled out of useSubmission so the
 // synchronous-busy and synchronous-message-display invariants above are
@@ -78,11 +137,16 @@ export function consumeLocalUserEcho(text: string): boolean {
 // `displayOverride` is what the transcript shows when it differs from what the
 // agent receives — a `/skill` invocation expands into the whole skill body, and
 // that scaffolding is model-facing only.
+//
+// `midTurn` marks a send made while a turn was already running (the busy
+// interrupt/redirect policy): it is tracked in the composer strip until the
+// gateway says what became of it. A fresh turn clears any stale strip.
 export function submitPrompt(
   text: string,
   deps: SubmitPromptDeps,
   showUserMessage = true,
-  displayOverride?: string
+  displayOverride?: string,
+  midTurn = false
 ): void {
   const sid = getUiState().sid
 
@@ -100,6 +164,12 @@ export function submitPrompt(
   // respond, but nothing on screen showed it had been sent at all.
   markSubmitting()
 
+  if (!midTurn) {
+    clearMidTurnSends()
+  }
+
+  const tracked = midTurn ? trackMidTurnSend(displayOverride || text) : null
+
   if (showUserMessage) {
     deps.setLastUserMsg(text)
     deps.appendMessage({ role: 'user', text: displayOverride || text })
@@ -110,7 +180,18 @@ export function submitPrompt(
     const liveSid = getUiState().sid
 
     if (!liveSid) {
+      if (tracked !== null) {
+        settleMidTurnSend(tracked, 'dropped')
+      }
+
       return deps.sys('session not ready yet')
+    }
+
+    // The gateway echoes back the text it received — the expanded payload,
+    // not the composer text with its [[ paste ]] tokens — so remember that
+    // form too or the echo would paint a second bubble.
+    if (showUserMessage && submitText !== text) {
+      rememberLocalUserEcho(submitText)
     }
 
     turnController.clearStatusTimer()
@@ -122,6 +203,10 @@ export function submitPrompt(
     deps.gw
       .request<PromptSubmitResponse>('prompt.submit', { session_id: liveSid, text: submitText })
       .then(r => {
+        if (tracked !== null) {
+          settleMidTurnSend(tracked, midTurnStatusFromGateway(r?.status))
+        }
+
         // The gateway consumed a typed voice stop phrase server-side (voice
         // chat ended, no turn started) — release the busy latch; the
         // voice.transcript {stop_phrase} event handles the mode flags + notice.
@@ -130,6 +215,10 @@ export function submitPrompt(
         }
       })
       .catch((e: Error) => {
+        if (tracked !== null) {
+          settleMidTurnSend(tracked, 'dropped')
+        }
+
         // Defensive: prompt.submit no longer rejects a mid-turn send with
         // "session busy" (the gateway queues it and returns success), but keep
         // the re-queue path as a safety net for any future/legacy gateway that

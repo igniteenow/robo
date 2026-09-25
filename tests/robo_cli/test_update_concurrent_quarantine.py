@@ -24,7 +24,7 @@ from robo_cli import main as cli_main
 # helper (and need the autouse stub in tests/robo_cli/conftest.py disabled),
 # or supply their own explicit return value via patch.object. Mark the whole
 # module so the conftest fixture skips its default stub.
-pytestmark = pytest.mark.real_concurrent_gate
+pytestmark = [pytest.mark.real_concurrent_gate, pytest.mark.real_windows_update_helpers]
 
 
 # ---------------------------------------------------------------------------

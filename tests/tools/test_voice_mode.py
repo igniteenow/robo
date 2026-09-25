@@ -2,12 +2,22 @@
 
 import os
 import struct
+import sys
 import time
 import wave
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# Linux-only surfaces: PulseAudio's Unix-domain socket (CPython on Windows
+# has no socket.AF_UNIX) and the WSL2 PowerShell playback fallback, which
+# play_audio_file() only reaches when platform.system() == "Linux". Neither
+# exists on native Windows, so these cases run in CI (Ubuntu) and skip on a
+# Windows checkout instead of failing on a feature the OS does not have.
+_linux_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="Linux-only surface (Unix sockets / WSL2)"
+)
 
 
 def _non_wsl_proc_version(real_open):
@@ -120,6 +130,7 @@ def fake_clock(monkeypatch):
 # detect_audio_environment — WSL / SSH / Docker detection
 # ============================================================================
 
+@_linux_only
 class TestPulseSocketReachable:
     def test_stale_socket_file_not_reachable(self, monkeypatch, tmp_path):
         """A socket file with no listener should not count as reachable."""
@@ -343,7 +354,9 @@ class TestTermuxAudioRecorder:
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
         monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
         monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: True)
-        monkeypatch.setattr("tools.voice_mode.time.strftime", lambda fmt: "20260409_120000")
+        # *_ : the logging module calls strftime(fmt, struct_time) while this
+        # patch is live (it patches the real time module), so accept both.
+        monkeypatch.setattr("tools.voice_mode.time.strftime", lambda fmt, *_: "20260409_120000")
         monkeypatch.setattr("tools.voice_mode.subprocess.run", fake_run)
 
         from tools.voice_mode import TermuxAudioRecorder
@@ -368,7 +381,9 @@ class TestTermuxAudioRecorder:
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
         monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
         monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: True)
-        monkeypatch.setattr("tools.voice_mode.time.strftime", lambda fmt: "20260409_120000")
+        # *_ : the logging module calls strftime(fmt, struct_time) while this
+        # patch is live (it patches the real time module), so accept both.
+        monkeypatch.setattr("tools.voice_mode.time.strftime", lambda fmt, *_: "20260409_120000")
         monkeypatch.setattr("tools.voice_mode.subprocess.run", fake_run)
 
         from tools.voice_mode import TermuxAudioRecorder
@@ -689,24 +704,131 @@ class TestCleanupTempRecordings:
 # ============================================================================
 
 class TestPlayBeep:
-    def test_beep_calls_sounddevice_play(self, mock_sd):
+    def test_beep_plays_on_a_private_drained_stream(self, mock_sd):
         np = pytest.importorskip("numpy")
 
         from tools.voice_mode import play_beep
 
-        # play_beep uses polling (get_stream) + sd.stop() instead of sd.wait()
-        mock_stream = MagicMock()
-        mock_stream.active = False
-        mock_sd.get_stream.return_value = mock_stream
+        stream = MagicMock()
+        mock_sd.OutputStream.return_value = stream
 
         play_beep(frequency=880, duration=0.1, count=1)
 
-        mock_sd.play.assert_called_once()
-        mock_sd.stop.assert_called()
-        # Verify audio data is int16 numpy array
-        audio_arg = mock_sd.play.call_args[0][0]
+        # One private stream: written in full, STOPPED (drained), closed —
+        # never aborted, and never the shared sd.play()/sd.stop() pair that
+        # another thread's tone could cut off mid-buffer.
+        mock_sd.OutputStream.assert_called_once()
+        stream.start.assert_called_once()
+        stream.write.assert_called_once()
+        stream.stop.assert_called_once()
+        stream.close.assert_called_once()
+        stream.abort.assert_not_called()
+        mock_sd.play.assert_not_called()
+        mock_sd.stop.assert_not_called()
+        # Verify audio data is int16 numpy array, shaped (frames, 1)
+        audio_arg = stream.write.call_args[0][0]
         assert audio_arg.dtype == np.int16
+        assert audio_arg.ndim == 2 and audio_arg.shape[1] == 1
         assert len(audio_arg) > 0
+
+    def test_double_beep_is_one_buffer(self, mock_sd):
+        """count=2 is a single write (tone, gap, tone) — no second stream."""
+        np = pytest.importorskip("numpy")
+
+        from tools.voice_mode import SAMPLE_RATE, play_beep
+
+        stream = MagicMock()
+        mock_sd.OutputStream.return_value = stream
+
+        play_beep(frequency=660, duration=0.1, count=2)
+
+        stream.write.assert_called_once()
+        audio_arg = stream.write.call_args[0][0]
+        assert len(audio_arg) == 2 * int(SAMPLE_RATE * 0.1) + int(SAMPLE_RATE * 0.06)
+
+
+class TestPlayTonePcm:
+    """Every beep / blip goes through _play_tone_pcm: serialized, drained.
+
+    The old shared ``sd.play()``/``sd.stop()`` let the recorder's stop beep,
+    the transcribing-cue blips and the CLI's beeps close each other's
+    stream mid-buffer from different threads — garbled tones, and on some
+    Windows drivers an aborted output stream keeps looping its last buffer
+    (the "weird noise that stays" until the device is reset).
+    """
+
+    def test_tones_never_overlap_across_threads(self, mock_sd):
+        np = pytest.importorskip("numpy")
+        import threading
+        import time as real_time
+
+        from tools.voice_mode import SAMPLE_RATE, _play_tone_pcm
+
+        windows = []
+        windows_lock = threading.Lock()
+
+        def _make_stream(**_kwargs):
+            stream = MagicMock()
+
+            def _write(_pcm):
+                start = real_time.monotonic()
+                real_time.sleep(0.03)
+                with windows_lock:
+                    windows.append((start, real_time.monotonic()))
+
+            stream.write.side_effect = _write
+            return stream
+
+        mock_sd.OutputStream.side_effect = _make_stream
+        tone = np.zeros(int(SAMPLE_RATE * 0.01), dtype=np.int16)
+
+        threads = [
+            threading.Thread(target=_play_tone_pcm, args=(tone, SAMPLE_RATE))
+            for _ in range(4)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5.0)
+
+        assert len(windows) == 4
+        windows.sort()
+        for (_, prev_end), (next_start, _) in zip(windows, windows[1:]):
+            assert next_start >= prev_end, "two tones were on the device at once"
+
+    def test_stalled_device_is_aborted_not_waited_on_forever(self, mock_sd, monkeypatch):
+        np = pytest.importorskip("numpy")
+        import threading
+        import time as real_time
+
+        import tools.voice_mode as voice_mode
+
+        monkeypatch.setattr(voice_mode, "TONE_STALL_GRACE_SECONDS", 0.05)
+        release = threading.Event()
+        stream = MagicMock()
+        stream.stop.side_effect = lambda: release.wait(5.0)  # device never drains
+        mock_sd.OutputStream.return_value = stream
+
+        tone = np.zeros(int(voice_mode.SAMPLE_RATE * 0.01), dtype=np.int16)
+        started = real_time.monotonic()
+        try:
+            ok = voice_mode._play_tone_pcm(tone, voice_mode.SAMPLE_RATE)
+        finally:
+            release.set()
+
+        assert ok is False
+        assert real_time.monotonic() - started < 2.0
+        stream.abort.assert_called_once()
+        stream.close.assert_called_once()
+
+    def test_returns_false_without_audio_libs(self, monkeypatch):
+        import tools.voice_mode as voice_mode
+
+        def _boom():
+            raise ImportError("no sounddevice")
+
+        monkeypatch.setattr(voice_mode, "_import_audio", _boom)
+        assert voice_mode._play_tone_pcm([0, 0, 0], voice_mode.SAMPLE_RATE) is False
 
 # ============================================================================
 # Silence detection
@@ -1038,6 +1160,192 @@ class TestConfigurableSilenceParams:
         assert recorder._has_spoken is True
 
         recorder.cancel()
+
+
+# ============================================================================
+# Adaptive noise floor (voice.noise_floor_multiplier)
+# ============================================================================
+
+class TestAdaptiveNoiseFloor:
+    """The speech/silence threshold follows the room — but only upward, and
+    only when the room is louder than the configured threshold.
+
+    A laptop mic with a fan next to it never reports RMS below 200, so with
+    a fixed threshold the recorder saw "speech" forever after the user
+    stopped talking and only gave up at the recording cap — the "still
+    recording after I finished" lag. The recorder now tracks the ambient
+    floor (min-follower: drops instantly, climbs slowly, seeded at 0) and,
+    when that floor is at or above ``silence_threshold``, uses
+    ``floor × multiplier`` instead. Below it the configured value is used
+    untouched, so a quiet mic catches exactly the words it caught before.
+    """
+
+    @staticmethod
+    def _np():
+        return pytest.importorskip("numpy")
+
+    def _start(self, mock_sd, on_silence=None):
+        mock_sd.InputStream.return_value = MagicMock()
+        from tools.voice_mode import AudioRecorder
+
+        recorder = AudioRecorder()
+        recorder._silence_duration = 0.05
+        recorder._min_speech_duration = 0.05
+        recorder.start(on_silence_stop=on_silence)
+        callback = mock_sd.InputStream.call_args.kwargs.get("callback")
+        if callback is None:
+            callback = mock_sd.InputStream.call_args[1]["callback"]
+        return recorder, callback
+
+    def _calibrate(self, callback, fake_clock, rms, seconds):
+        """Feed *seconds* of a steady *rms* so the (slow-rising) floor settles."""
+        frame = self._np().full((1600, 1), rms, dtype="int16")
+        for _ in range(int(seconds)):
+            callback(frame, 1600, None, None)
+            fake_clock.advance(1.0)
+
+    def test_quiet_room_uses_the_configured_threshold_untouched(self, mock_sd, fake_clock):
+        """Floor below silence_threshold: no multiplier, no seed, nothing —
+        the old fixed behaviour, so no word a quiet mic caught is lost."""
+        recorder, callback = self._start(mock_sd, on_silence=lambda: None)
+        assert recorder.effective_silence_threshold == 200  # before any audio
+
+        self._calibrate(callback, fake_clock, 150, 8)  # a fan, but under 200
+        assert recorder.noise_floor == 150
+        assert recorder.effective_silence_threshold == 200  # not 150 x 1.5 = 225
+
+        # Soft speech barely over the fixed threshold is still speech.
+        soft = self._np().full((1600, 1), 230, dtype="int16")
+        callback(soft, 1600, None, None)
+        assert recorder._speech_start > 0
+        recorder.cancel()
+
+    def test_noisy_room_auto_stops_after_speech(self, mock_sd, fake_clock):
+        import threading
+
+        fired = threading.Event()
+        recorder, callback = self._start(mock_sd)
+        recorder.cancel()  # stream open, idle: the floor calibrates here
+
+        # A 400-RMS hum is above the fixed 200: with the old rule a recording
+        # in this room never ended. Let the floor climb to it.
+        self._calibrate(callback, fake_clock, 400, 12)
+        assert recorder.noise_floor == 400
+        assert recorder.effective_silence_threshold == 600  # 400 x 1.5
+
+        recorder.start(on_silence_stop=fired.set)
+        hum = self._np().full((1600, 1), 400, dtype="int16")
+        callback(hum, 1600, None, None)
+        fake_clock.advance(0.06)
+        callback(hum, 1600, None, None)
+        assert recorder._has_spoken is False  # the hum itself is not speech
+
+        speech = self._np().full((1600, 1), 5000, dtype="int16")
+        callback(speech, 1600, None, None)
+        fake_clock.advance(0.06)
+        callback(speech, 1600, None, None)
+        assert recorder._has_spoken is True
+
+        # Back to the hum: that IS silence now, so the recording ends.
+        hum = self._np().full((1600, 1), 400, dtype="int16")
+        callback(hum, 1600, None, None)
+        fake_clock.advance(0.06)
+        callback(hum, 1600, None, None)
+        assert fired.wait(timeout=5.0) is True
+        recorder.cancel()
+
+    def test_floor_is_tracked_between_recordings_without_capturing(self, mock_sd, fake_clock):
+        recorder, callback = self._start(mock_sd)
+        recorder.cancel()  # idle, stream still open
+        assert recorder.is_recording is False
+
+        self._calibrate(callback, fake_clock, 350, 10)
+
+        assert recorder.noise_floor == 350  # calibrated while idle...
+        assert recorder._frames == []  # ...but nothing was recorded
+        assert recorder.current_rms == 0
+
+        # The next recording starts already calibrated.
+        recorder.start()
+        assert recorder.effective_silence_threshold == 525
+
+    def test_floor_drops_instantly_but_climbs_slowly(self, mock_sd, fake_clock):
+        from tools.voice_mode import NOISE_FLOOR_RISE_PER_SECOND
+
+        recorder, callback = self._start(mock_sd)
+        recorder.cancel()  # idle: the room is measured here
+        assert recorder.noise_floor == 0  # seeded at silence, not at 200
+        self._calibrate(callback, fake_clock, 100, 4)
+        assert recorder.noise_floor == 100
+
+        # A louder room (idle, so nothing here is speech) drags the floor up
+        # by at most the rise rate per elapsed second (1 s since the last
+        # calibration chunk + 1 s here).
+        loud = self._np().full((1600, 1), 5000, dtype="int16")
+        for _ in range(10):
+            fake_clock.advance(0.1)
+            callback(loud, 1600, None, None)
+        assert 100 < recorder.noise_floor <= 100 + 2 * NOISE_FLOOR_RISE_PER_SECOND + 1e-6
+
+        # The first quiet chunk resets it at once.
+        fake_clock.advance(0.1)
+        callback(self._np().full((1600, 1), 80, dtype="int16"), 1600, None, None)
+        assert recorder.noise_floor == 80
+
+    def test_speech_never_raises_the_floor_while_recording(self, mock_sd, fake_clock):
+        """A long dictation must not drag the threshold up under the speaker's
+        own voice: while recording, only chunks at or below the threshold
+        (the room between words) feed the floor."""
+        recorder, callback = self._start(mock_sd, on_silence=lambda: None)
+        recorder.cancel()
+        self._calibrate(callback, fake_clock, 100, 4)
+        assert recorder.noise_floor == 100
+
+        recorder.start(on_silence_stop=lambda: None)
+        speech = self._np().full((1600, 1), 1200, dtype="int16")
+        for _ in range(600):  # a full minute of talking
+            fake_clock.advance(0.1)
+            callback(speech, 1600, None, None)
+        assert recorder.noise_floor == 100
+        assert recorder.effective_silence_threshold == 200  # not a threshold of 1800+
+
+        # The room between words still counts (and only ever lowers it here).
+        fake_clock.advance(0.1)
+        callback(self._np().full((1600, 1), 60, dtype="int16"), 1600, None, None)
+        assert recorder.noise_floor == 60
+        recorder.cancel()
+
+    def test_threshold_is_capped_for_very_loud_rooms(self, mock_sd, fake_clock):
+        from tools.voice_mode import NOISE_FLOOR_MAX_THRESHOLD
+
+        recorder, callback = self._start(mock_sd)
+        recorder.cancel()  # idle: the room is measured here
+        self._calibrate(callback, fake_clock, 10000, 300)
+        assert recorder.noise_floor == 10000
+        assert recorder.effective_silence_threshold == NOISE_FLOOR_MAX_THRESHOLD
+
+    def test_multiplier_zero_restores_the_fixed_threshold(self, mock_sd, fake_clock):
+        recorder, callback = self._start(mock_sd)
+        recorder.cancel()
+        recorder._floor_multiplier = 0
+        self._calibrate(callback, fake_clock, 400, 12)
+        assert recorder.noise_floor == 400
+        assert recorder.effective_silence_threshold == 200
+
+    def test_stop_keeps_every_capture_the_fixed_rule_kept(self, mock_sd, fake_clock, temp_voice_dir):
+        """The too-quiet discard stays the fixed 200: a capture the recorder
+        used to hand to STT still is, whatever the floor says."""
+        from tools.voice_mode import SAMPLE_RATE
+
+        recorder, callback = self._start(mock_sd)
+        recorder.cancel()
+        self._calibrate(callback, fake_clock, 400, 12)  # floor 400, measured idle
+        assert recorder.noise_floor == 400
+        recorder.start()
+        callback(self._np().full((SAMPLE_RATE, 1), 450, dtype="int16"), SAMPLE_RATE, None, None)
+        assert recorder._peak_rms == 450
+        wav_path = recorder.stop()
+        assert wav_path is not None and os.path.isfile(wav_path)
 
 
 # ============================================================================
@@ -1385,6 +1693,7 @@ class TestWSL2PowerShellFallback:
             return next(it)
         return _side_effect
 
+    @_linux_only
     def test_powershell_pipeline_preserves_real_exit_status(self, sample_wav):
         """Regression (review of #63768): the shell pipeline must preserve
         the (ffmpeg && powershell) exit status past the unconditional
@@ -1434,6 +1743,7 @@ class TestWSL2PowerShellFallback:
             "Shell pipeline must preserve the real exit status past cleanup: " + sh_script
         )
 
+    @_linux_only
     def test_wsl2_unique_temp_filename(self, monkeypatch, tmp_path, sample_wav):
         """Two concurrent calls must use different temp WAV filenames."""
         from unittest.mock import patch, MagicMock

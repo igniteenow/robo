@@ -21,8 +21,8 @@ import { GatewayConnectingOverlay } from '@/components/gateway-connecting-overla
 import { NotificationStack } from '@/components/notifications'
 import { DesktopOnboardingOverlay } from '@/components/onboarding'
 import { $newSessionTabAction, registerPaneCloser } from '@/components/pane-shell/tree/store'
-import { FloatingPet } from '@/components/pet/floating-pet'
 import { RemoteDisplayBanner } from '@/components/remote-display-banner'
+import { VoiceConversationScreen } from '@/components/voice/voice-conversation-screen'
 import { emitGatewayEvent } from '@/contrib/events'
 import { type ChatMessage, chatMessageText, preserveLocalAssistantErrors, toChatMessages } from '@/lib/chat-messages'
 import { sessionMessagesSignature } from '@/lib/session-signatures'
@@ -983,7 +983,8 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   // Pane-registered tools (preview's monitor/devtools cluster) anchor flush
   // against the static system cluster — in the tree layout the titlebar band
   // sits ABOVE the grid, so AppShell's pane-width anchoring doesn't apply.
-  const SYSTEM_TOOL_COUNT = 4
+  // layout · haptics · keybinds · appearance · settings (see TitlebarControls)
+  const SYSTEM_TOOL_COUNT = 5
   const paneToolCount = rightTitlebarTools.filter(tool => !tool.hidden).length
   const systemToolsWidth = `calc(${SYSTEM_TOOL_COUNT} * (var(--titlebar-control-size) + 0.25rem))`
 
@@ -1113,8 +1114,11 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       {/* Toasts above everything. */}
       <NotificationStack />
 
-      {/* Petdex floating mascot — renders nothing unless installed + enabled. */}
-      <FloatingPet />
+      {/* Robo's status face: fixed top-right of the chat zone, never draggable. */}
+
+      {/* Hands-free voice chat: the chat zone shows only the face + controls
+          while it is on; the transcript is back the moment it ends. */}
+      <VoiceConversationScreen />
 
       {/* Single persistent xterm host chasing the terminal pane's slot rect. */}
       <PersistentTerminal onAddSelectionToChat={composer.addTerminalSelectionAttachment} />

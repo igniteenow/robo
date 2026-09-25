@@ -21,6 +21,9 @@ const buildCtx = (appended: Msg[]) =>
       gw: { request: () => undefined },
       rpc: async () => null
     },
+    prompts: {
+      answerClarifyRef: { current: () => undefined }
+    },
     session: {
       STARTUP_RESUME_ID: '',
       colsRef: ref(80),

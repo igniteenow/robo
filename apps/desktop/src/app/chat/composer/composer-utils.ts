@@ -19,6 +19,22 @@ export const COMPOSER_COMPACT_PILL_PX = 440
 // which is when the composer should expand to the stacked layout.
 export const COMPOSER_SINGLE_LINE_MAX_PX = 36
 
+/**
+ * Where the docked composer sits. A fresh, empty chat opens with the composer
+ * in the middle of the chat zone, under the logo and the intro line — the
+ * conversation starts where the eye already is; the first message sends it
+ * to the bottom, where it stays. Floating (popped out) has its own position.
+ */
+export function composerDockPlacementClass(poppedOut: boolean, centered: boolean): string {
+  if (poppedOut) {
+    return 'fixed max-w-[calc(100vw-1.5rem)]'
+  }
+
+  return centered
+    ? 'absolute top-1/2 left-1/2 max-w-full -translate-x-1/2 -translate-y-1/2'
+    : 'absolute bottom-0 left-1/2 max-w-full -translate-x-1/2'
+}
+
 export const COMPOSER_FADE_BACKGROUND =
   'linear-gradient(to bottom, transparent, color-mix(in srgb, var(--dt-background) 10%, transparent))'
 

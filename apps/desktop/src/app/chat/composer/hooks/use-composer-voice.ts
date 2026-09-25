@@ -9,6 +9,11 @@ import { $voiceConversationStartRequest, takeVoiceConversationStart } from '@/st
 import { resetBrowseState } from '@/store/composer-input-history'
 import { $gateway } from '@/store/gateway'
 import { notify, notifyError } from '@/store/notifications'
+import {
+  registerVoiceConversationControls,
+  resetVoiceConversation,
+  setVoiceConversationView
+} from '@/store/voice-conversation'
 import { $autoSpeakReplies, $voiceStopPhrase, setAutoSpeakReplies } from '@/store/voice-prefs'
 import { resumeWakeAfterVoice } from '@/store/wake-word'
 
@@ -119,7 +124,9 @@ export function useComposerVoice({
     triggerHaptic('submit')
     resetBrowseState(sessionId)
     clearDraft()
-    await onSubmit(text)
+    // Flagged as spoken: the gateway keeps the reply short and plain for the
+    // ear, and the transcript still shows exactly what was said.
+    await onSubmit(text, { voice: true })
   }
 
   const wakePausedRef = useRef(false)
@@ -268,6 +275,45 @@ export function useComposerVoice({
     setVoiceConversationActive(false)
     void conversation.end()
   }, [conversation])
+
+  // Mirror the MAIN chat's conversation app-wide (store/voice-conversation):
+  // the full-screen voice view, the completion chime and the status face
+  // follow it from there. Tile composers keep theirs to themselves.
+  useEffect(() => {
+    if (target !== 'main') {
+      return
+    }
+
+    setVoiceConversationView({
+      active: voiceConversationActive,
+      level: voiceConversationActive ? conversation.level : 0,
+      muted: conversation.muted,
+      status: voiceConversationActive ? conversation.status : 'idle'
+    })
+  }, [conversation.level, conversation.muted, conversation.status, target, voiceConversationActive])
+
+  useEffect(() => {
+    if (target !== 'main') {
+      return
+    }
+
+    registerVoiceConversationControls({
+      end: endConversation,
+      stopTurn: conversation.stopTurn,
+      toggleMute: conversation.toggleMute
+    })
+
+    return () => registerVoiceConversationControls(null)
+  }, [conversation.stopTurn, conversation.toggleMute, endConversation, target])
+
+  useEffect(
+    () => () => {
+      if (target === 'main') {
+        resetVoiceConversation()
+      }
+    },
+    [target]
+  )
 
   const handleToggleAutoSpeak = useCallback(() => {
     void setAutoSpeakReplies(!$autoSpeakReplies.get()).catch(error =>

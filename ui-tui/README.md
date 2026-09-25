@@ -291,7 +291,7 @@ Primary event types the client handles today:
 | `secret.request`           | `{ prompt, env_var, request_id }`                                           |
 | `secret.expire`            | `{ request_id }` clears a timed-out secret prompt                           |
 | `background.complete`      | `{ task_id, text }`                                                         |
-| `billing.step_up.verification` | `{ verification_url, user_code }`                                       |
+| `billing.step_up.verification` | `{ verification_url, user_code }` — legacy; the gateway no longer emits it |
 | `review.summary`           | `{ text }`                                                                  |
 | `browser.progress`         | `{ message }`                                                               |
 | `voice.status`             | `{ state }`                                                                 |

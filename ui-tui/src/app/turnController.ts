@@ -285,7 +285,9 @@ class TurnController {
       tools: [],
       turnTrail: []
     })
-    patchUiState({ busy: false })
+    // The turn the mid-turn sends were aimed at is over: their bubbles are in
+    // the transcript, so the composer strip has nothing left to vouch for.
+    patchUiState({ busy: false, midTurnSent: [] })
     resetFlowOverlays()
   }
 

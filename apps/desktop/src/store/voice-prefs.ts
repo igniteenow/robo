@@ -37,15 +37,25 @@ export function applyVoiceStopPhraseFromConfig(
   $voiceStopPhrase.set(first ?? null)
 }
 
-// `voice.thinking_sound` — ambient bubble blips while the agent works during a
-// voice conversation (default on, matching the backend default).
-export const $thinkingSoundEnabled = atom<boolean>(true)
+// `voice.thinking_sound` — the turn-long bubble blips while the agent works
+// during a voice conversation. Same meaning as the backend's mode: only the
+// explicit "ambient" opt-in (also "always" / "turn") turns the loop on. The
+// default (true / "cue") keeps a voice chat silent while Robo works — nothing
+// but Robo talking; the short transcription cue is the backend's, not ours.
+export const $thinkingSoundEnabled = atom<boolean>(false)
+
+const AMBIENT_MODES = new Set(['ambient', 'always', 'turn'])
+
+/** True only for the explicit turn-long opt-in. */
+export function thinkingSoundAmbientFromConfig(value: unknown): boolean {
+  return typeof value === 'string' && AMBIENT_MODES.has(value.trim().toLowerCase())
+}
 
 /** Seed the thinking-sound gate from a loaded config payload. */
 export function applyThinkingSoundFromConfig(
   config: { voice?: { thinking_sound?: unknown } | null } | null | undefined
 ) {
-  $thinkingSoundEnabled.set(config?.voice?.thinking_sound !== false)
+  $thinkingSoundEnabled.set(thinkingSoundAmbientFromConfig(config?.voice?.thinking_sound))
 }
 
 /**

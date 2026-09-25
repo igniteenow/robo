@@ -66,6 +66,19 @@ def _resolve_key(env_var: str, provider_id: str) -> str:
 SPEECH_INTERRUPTED_NOTE = (
     "[Note: the user interrupted your previous spoken reply before it finished.]"
 )
+
+# Model-facing note for a turn that arrived by voice and will be read aloud.
+# API-local like SPEECH_INTERRUPTED_NOTE — the persisted user message stays the
+# clean transcript. Shapes the reply for the ear: lead with the answer, short,
+# plain sentences, no markup; still do the work when asked.
+SPOKEN_TURN_NOTE = (
+    "[Voice chat: the user is speaking with you and will hear your reply read "
+    "aloud. Answer the way you would out loud — warm, direct and precise. Lead "
+    "with the answer; two to four short sentences unless they ask for detail. "
+    "Plain spoken sentences only: no markdown, lists, headings, code or URLs. "
+    "If they ask you to do something, do it with your tools, then tell them "
+    "what you did in a sentence or two.]"
+)
 _INTERRUPT_TTL_S = 120.0
 _interrupted_at: Optional[float] = None
 

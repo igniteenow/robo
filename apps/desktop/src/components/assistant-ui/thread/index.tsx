@@ -8,7 +8,7 @@ import { ThreadTimeline } from '@/components/assistant-ui/thread/timeline'
 import { type RestoreMessageTarget } from '@/components/assistant-ui/thread/types'
 import { UserEditComposer } from '@/components/assistant-ui/thread/user-edit-composer'
 import { UserMessage } from '@/components/assistant-ui/thread/user-message'
-import { Intro, type IntroProps } from '@/components/chat/intro'
+import { Intro } from '@/components/chat/intro'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useI18n } from '@/i18n'
 import type { RoboGateway } from '@/robo'
@@ -20,7 +20,8 @@ interface ThreadProps {
   clampToComposer?: boolean
   cwd?: string | null
   gateway?: RoboGateway | null
-  intro?: IntroProps
+  /** A fresh, empty chat with no composer to hold the logo: show it here. */
+  intro?: boolean
   loading?: ThreadLoadingState
   onBranchInNewChat?: (messageId: string) => void
   onCancel?: () => Promise<void> | void
@@ -134,7 +135,7 @@ export const Thread = memo(function Thread({
 
   const emptyPlaceholder = intro ? (
     <div className="flex min-h-0 w-full flex-col items-center justify-center pt-[var(--composer-measured-height)]">
-      <Intro {...intro} />
+      <Intro />
     </div>
   ) : undefined
 

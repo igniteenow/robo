@@ -1,6 +1,7 @@
 import type { HapticInput, TriggerOptions } from 'web-haptics'
 
 import { $hapticsMuted } from '@/store/haptics'
+import { isVoiceConversationActive } from '@/store/voice-conversation'
 
 export type HapticIntent =
   | 'cancel'
@@ -101,7 +102,12 @@ export function registerHapticTrigger(trigger: HapticTrigger | null) {
 }
 
 export function triggerHaptic(intent: HapticIntent = 'selection') {
-  if ($hapticsMuted.get() || !registeredTrigger) {
+  // web-haptics renders every pulse as audio. On a laptop without a haptic
+  // trackpad that audio comes out of the speakers — a click on submit, a
+  // thump when the reply starts and ends — which in a voice chat is just
+  // noise between Robo's words (and feeds the mic). A voice chat is silent
+  // apart from Robo talking: no haptics while one is on.
+  if ($hapticsMuted.get() || !registeredTrigger || isVoiceConversationActive()) {
     return
   }
 

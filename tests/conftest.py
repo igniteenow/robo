@@ -91,6 +91,15 @@ if _robo_home_points_at_production(os.environ.get("ROBO_HOME", "")):
     os.environ["ROBO_HOME"] = _SESSION_ROBO_HOME
     atexit.register(shutil.rmtree, _SESSION_ROBO_HOME, True)
 
+# `tui_gateway/server.py` starts the background update check at MODULE level
+# (`prefetch_update_check()`), so merely importing it at collection ran a
+# `git fetch` against origin from the operator's checkout — network traffic
+# and a cache write from a test run. Switch the check off before any test
+# module can import the gateway; the per-test `_hermetic_environment` clears
+# the variable again (it is in `_ROBO_BEHAVIORAL_VARS`), so the update-checker
+# tests still exercise the real thing.
+os.environ.setdefault("ROBO_NO_UPDATE_CHECK", "1")
+
 #: ROBO_HOME as it stood when conftest was imported - i.e. before any test
 #: module could import code that configures logging. Recorded so the guard in
 #: tests/test_log_isolation.py can assert the sandbox existed AT THAT MOMENT.
@@ -280,6 +289,9 @@ _ROBO_BEHAVIORAL_VARS = frozenset({
     "ROBO_EXEC_ASK",
     "ROBO_HOME_MODE",
     "ROBO_AGENT_USE_LEGACY_SESSION_KEYS",
+    # Set at conftest import (above) to stop the gateway's module-level update
+    # prefetch; cleared per test so tests of the checker see a clean slate.
+    "ROBO_NO_UPDATE_CHECK",
     # Kanban path/board pins must never leak from a developer shell or
     # dispatched worker into tests; otherwise tests can write fake tasks to
     # the real ~/.robo/kanban.db instead of the per-test ROBO_HOME.

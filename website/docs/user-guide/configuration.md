@@ -1844,6 +1844,8 @@ stt:
     model: "base"              # tiny, base, small, medium, large-v3
     language: ""               # per-provider override of stt.language
     initial_prompt: ""         # optional whisper prompt to bias vocabulary/script (e.g. Simplified Chinese)
+    beam_size: 1               # greedy decode (default) — fastest for live voice turns; 5 = beam search for long recordings
+    remember_language: true    # with language on auto: reuse the language detected last time instead of re-detecting every turn
     vad: true                  # Silero VAD filter (default on) — silence never reaches whisper; false = raw behavior (music/ambient)
     vad_min_silence_ms: 500    # min silence (ms) that splits speech chunks when vad is on
     no_speech_prob_threshold: 0.6  # drop a segment only when no_speech_prob > this...
@@ -1862,7 +1864,7 @@ Set `stt.echo_transcripts: false` when the gateway should transcribe voice notes
 
 Provider behavior:
 
-- `local` uses `faster-whisper` running on your machine. Install it separately with `pip install faster-whisper`. Silence-hallucination hardening is on by default: a Silero VAD filter keeps silence/noise from ever reaching Whisper, cross-window conditioning is disabled, and segments the model itself flags as probably-not-speech *and* low-confidence are dropped. Set `stt.local.vad: false` to transcribe non-speech audio (music, ambient) with the raw behavior.
+- `local` uses `faster-whisper` running on your machine. Install it separately with `pip install faster-whisper`. Silence-hallucination hardening is on by default: a Silero VAD filter keeps silence/noise from ever reaching Whisper, cross-window conditioning is disabled, and segments the model itself flags as probably-not-speech *and* low-confidence are dropped. Set `stt.local.vad: false` to transcribe non-speech audio (music, ambient) with the raw behavior. Decoding is greedy by default (`stt.local.beam_size: 1`) — a spoken turn is a few seconds of clean speech, where beam search buys nothing audible and costs two to three times the decode time; set `beam_size: 5` if you transcribe long recordings and want the search back.
 - `groq` uses Groq's Whisper-compatible endpoint and reads `GROQ_API_KEY`. Pass `stt.groq.language` (or the global `ROBO_LOCAL_STT_LANGUAGE` env var) to skip auto-detection and reduce latency.
 - `openai` uses the OpenAI speech API and reads `VOICE_TOOLS_OPENAI_KEY`.
 
@@ -1884,11 +1886,14 @@ voice:
   record_key: "ctrl+b"         # Push-to-talk key inside the CLI
   max_recording_seconds: 120    # Hard stop for long recordings
   auto_tts: false               # Enable spoken replies automatically when /voice on
-  beep_enabled: true            # Play record start/stop beeps in CLI voice mode
-  beep_volume: 0.3              # Beep amplitude (0.0-1.0); raise it on quiet systems / headphones
-  silence_threshold: 200        # RMS threshold for speech detection
-  silence_duration: 3.0         # Seconds of silence before auto-stop
+  beep_volume: 0.3              # Volume of the transcribing blips (0.0-1.0); raise it on quiet systems / headphones
+  silence_threshold: 200        # RMS threshold for speech detection (floor of the adaptive threshold)
+  silence_duration: 1.5         # Seconds of silence after you stop talking before auto-stop
+  noise_floor_multiplier: 1.5   # Only when the room is louder than silence_threshold: threshold = room noise x this; 0 = fixed threshold only
+  reasoning_effort: "none"      # Reasoning for SPOKEN turns only: "none" (default, thinking off) | minimal | low | medium | high | "inherit" (the model's own setting)
 ```
+
+A spoken turn answers fast: with `reasoning_effort: "none"` (the default) a reasoning model skips its deliberation for that one turn and starts talking right away; typed turns keep the model's own reasoning setting. Set `"inherit"` to leave spoken turns alone. Providers without a reasoning control ignore it.
 
 Use `/voice on` in the CLI to enable microphone mode, `record_key` to start/stop recording, and `/voice tts` to toggle spoken replies. See [Voice Mode](/user-guide/features/voice-mode) for end-to-end setup and platform-specific behavior.
 
@@ -2029,6 +2034,8 @@ human_delay:
   min_ms: 800                  # Minimum delay (custom mode)
   max_ms: 2500                 # Maximum delay (custom mode)
 ```
+
+The gateway reads this block at startup and it is authoritative over the `ROBO_HUMAN_DELAY_MODE` / `ROBO_HUMAN_DELAY_MIN_MS` / `ROBO_HUMAN_DELAY_MAX_MS` environment variables, which remain for deployments without a `config.yaml`.
 
 ## Code Execution
 
@@ -2365,9 +2372,12 @@ dashboard:
   theme: "default"            # "default" | "midnight" | "ember" | "mono" | "cyberpunk" | "rose"
   show_token_analytics: false # Re-enable the (local-estimate-only) token/cost analytics surfaces
   public_url: ""              # Full public authority for OAuth redirect_uri (env: ROBO_DASHBOARD_PUBLIC_URL)
-  oauth:                      # Portal OAuth gate (engaged with --host and not --insecure)
-    client_id: ""             # agent:{instance_id} — Portal provisions this
-    portal_url: ""            # blank → plugin default (production Portal)
+  oauth:                      # OAuth gate (engaged with --host and not --insecure)
+    self_hosted:              # bundled self-hosted OIDC provider (env: ROBO_DASHBOARD_OIDC_*)
+      issuer: ""              # OIDC issuer URL — required to activate
+      client_id: ""           # public client (authorization code + PKCE) — required
+      client_secret: ""       # optional; confidential clients only
+      scopes: ""              # blank → "openid profile email"
   basic_auth:                 # Self-hosted username/password gate (dashboard_auth/basic plugin)
     username: ""              # blank → plugin no-op
     password_hash: ""         # scrypt$... (preferred — no plaintext at rest)

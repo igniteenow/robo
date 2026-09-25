@@ -58,6 +58,8 @@ export type GatewayEventPayload = {
   fast?: boolean
   approval_mode?: string
   yolo?: boolean
+  /** `message.user`: the gateway accepted this text while a turn was running. */
+  mid_turn?: boolean
   running?: boolean
   cwd?: string
   branch?: string

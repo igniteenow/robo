@@ -30,7 +30,7 @@ import { applyDelegationStatus, getDelegationState } from './delegationStore.js'
 import type { GatewayEventHandlerContext } from './interfaces.js'
 import { getOverlayState, patchOverlayState } from './overlayStore.js'
 import { flashGoodVibes, flashPet } from './petFlashStore.js'
-import { consumeLocalUserEcho } from './submissionCore.js'
+import { consumeLocalUserEcho, midTurnStatusFromGateway, trackMidTurnSend } from './submissionCore.js'
 import { turnController } from './turnController.js'
 import { getTurnState, patchTurnState } from './turnStore.js'
 import { getUiState, patchUiState } from './uiStore.js'
@@ -391,6 +391,10 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
   const { bellOnComplete, stdout, sys } = ctx.system
   const { appendMessage, panel, setHistoryItems } = ctx.transcript
   const { setInput } = ctx.composer
+  // Optional for callers that predate the clarify-answer path (test
+  // fixtures, embedders): without it a spoken reply to an open clarify falls
+  // back to the mid-turn submit.
+  const answerClarifyRef = ctx.prompts?.answerClarifyRef ?? null
   const { submitRef } = ctx.submission
   const { setProcessing: setVoiceProcessing, setRecording: setVoiceRecording, setVoiceEnabled } = ctx.voice
 
@@ -776,10 +780,12 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
         return
       case 'message.user': {
         // Authoritative echo of a message the gateway accepted mid-turn
-        // (interrupt/redirect busy mode). Skip it when this client already
-        // painted the bubble at submit time; render it otherwise so a message
-        // sent from another attached client, or one whose local echo was
-        // lost, still shows up the moment it is accepted.
+        // (busy policy, session.steer, session.redirect). Skip it when this
+        // client already painted the bubble at submit time; render it
+        // otherwise so a message sent from another attached client, or one
+        // whose local echo was lost, still shows up the moment it is
+        // accepted — in the transcript and, while the turn runs, in the
+        // composer strip, already settled to what the gateway did with it.
         const text = String(ev.payload?.text ?? '')
 
         if (!text.trim() || consumeLocalUserEcho(text)) {
@@ -787,6 +793,10 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
         }
 
         appendMessage({ role: 'user', text })
+
+        if (ev.payload?.mid_turn && getUiState().busy) {
+          trackMidTurnSend(text, midTurnStatusFromGateway(ev.payload.status))
+        }
 
         return
       }
@@ -943,6 +953,14 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
           setVoiceProcessing(false)
           sys('voice: stop phrase — voice chat ended')
 
+          // Robo may be blocked in a clarify prompt right now. The stop
+          // phrase ends the voice chat, and it is also the answer to that
+          // question — otherwise the picker stays open and the tool never
+          // returns, so "stop" changes nothing until the user finds Ctrl+C.
+          if (answerClarifyRef && getOverlayState().clarify) {
+            answerClarifyRef.current(String(ev.payload?.text ?? '').trim() || 'stop')
+          }
+
           return
         }
 
@@ -1019,6 +1037,18 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
           sys(
             'approval: I did not recognize that choice · say allow once, allow for this session, deny, wait, or show command'
           )
+
+          return
+        }
+
+        // A clarify prompt is open: Robo is blocked inside its tool waiting
+        // for the answer, so what the user just said IS the answer. Sent as a
+        // mid-turn message instead it would sit "delivered" and parked until
+        // the prompt was cancelled or timed out — "I said stop and nothing
+        // happened until I pressed Ctrl+C". The picker's own "Other (type
+        // your answer)" path takes the same free text.
+        if (answerClarifyRef && getOverlayState().clarify) {
+          answerClarifyRef.current(text)
 
           return
         }

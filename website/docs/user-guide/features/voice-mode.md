@@ -130,13 +130,12 @@ Then use these commands inside the CLI:
 ### How It Works
 
 1. Start the CLI with `robo` and enable voice mode with `/voice on`
-2. **Press Ctrl+B** — a beep plays (880Hz), recording starts
+2. **Press Ctrl+B** — recording starts (the status line shows it; there is no beep)
 3. **Speak** — a live audio level bar shows your input: `● [▁▂▃▅▇▇▅▂] ❯`
-4. **Stop speaking** — after 3 seconds of silence, recording auto-stops
-5. **Two beeps** play (660Hz) confirming the recording ended
-6. Audio is transcribed via Whisper and sent to the agent
-7. If TTS is enabled, the agent's reply is spoken aloud
-8. Recording **automatically restarts** — speak again without pressing any key
+4. **Stop speaking** — after 1.5 seconds of silence, recording auto-stops
+5. Audio is transcribed via Whisper and sent to the agent — soft blips play while that happens (`voice.thinking_sound`)
+6. If TTS is enabled, the agent's reply is spoken aloud
+7. Recording **automatically restarts** — speak again without pressing any key
 
 This loop continues until you press **Ctrl+B** during recording (exits continuous mode) or 3 consecutive recordings detect no speech.
 
@@ -148,12 +147,14 @@ The record key is configurable via `voice.record_key` in `~/.robo/config.yaml` (
 
 Two-stage algorithm detects when you've finished speaking:
 
-1. **Speech confirmation** — waits for audio above the RMS threshold (200) for at least 0.3s, tolerating brief dips between syllables
-2. **End detection** — once speech is confirmed, triggers after 3.0 seconds of continuous silence
+1. **Speech confirmation** — waits for audio above the speech threshold for at least 0.3s, tolerating brief dips between syllables
+2. **End detection** — once speech is confirmed, triggers after 1.5 seconds of continuous silence
+
+The speech threshold is your `silence_threshold` exactly, for as long as the room is quieter than it — a quiet mic keeps every word it used to catch. The recorder also keeps measuring the ambient noise floor (fan, air conditioning, laptop hum) whenever the microphone is open, and only when the room itself is louder than `silence_threshold` — where a fixed value could never see silence and a recording would run until the cap — does the threshold become `noise floor × noise_floor_multiplier` (default 1.5, never above 5000). A noisy laptop mic therefore no longer keeps a recording open after you stop talking.
 
 If no speech is detected at all for 15 seconds, recording stops automatically.
 
-Both `silence_threshold` and `silence_duration` are configurable in `config.yaml`. You can also disable the record start/stop beeps with `voice.beep_enabled: false`.
+`silence_threshold`, `silence_duration` and `noise_floor_multiplier` are configurable in `config.yaml` (set `noise_floor_multiplier: 0` for the old fixed threshold). Recording start and stop are silent — the only sounds in a voice chat are Robo's spoken replies and, while your words are being transcribed, the soft blips controlled by `voice.thinking_sound` (`false` to turn them off) and `voice.beep_volume`.
 
 ### Ending a voice chat by voice
 
@@ -408,10 +409,11 @@ voice:
   record_key: "ctrl+b"            # Key to start/stop recording
   max_recording_seconds: 120       # Maximum recording length
   auto_tts: false                  # Auto-enable TTS when voice mode starts
-  beep_enabled: true               # Play record start/stop beeps
-  silence_threshold: 200           # RMS level (0-32767) below which counts as silence
-  silence_duration: 3.0            # Seconds of silence before auto-stop
+  silence_threshold: 200           # RMS level (0-32767) below which counts as silence (floor of the adaptive threshold)
+  silence_duration: 1.5            # Seconds of silence after you stop talking before auto-stop
+  noise_floor_multiplier: 1.5      # Only when the room is louder than silence_threshold: threshold = room noise x this; 0 = fixed threshold only
   stop_phrases: ["stop"]           # Saying exactly one of these ends the voice chat; [] disables
+  reasoning_effort: "none"         # Reasoning for spoken turns only (thinking off by default); "inherit" keeps the model's setting
 
 # Speech-to-Text
 stt:
@@ -555,5 +557,5 @@ The bot requires an @mention by default in server channels. Make sure you:
 The hallucination filter catches most cases automatically. If you're still getting phantom transcripts:
 
 - Use a quieter environment
-- Adjust `silence_threshold` in config (higher = less sensitive)
+- Raise `silence_threshold` (higher = less sensitive); in a loud room also `noise_floor_multiplier` (default 1.5) so only audio well above the room noise counts as speech
 - Try a different STT model

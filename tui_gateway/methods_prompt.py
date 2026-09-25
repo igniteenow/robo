@@ -111,6 +111,12 @@ def _(rid, params: dict) -> dict:
     session, err = _sess_nowait(params, rid)
     if err:
         return err
+    # A turn that arrived by voice (the desktop's hands-free chat sends
+    # `voice: true`) is shaped for the ear by the runner — see
+    # SPOKEN_TURN_NOTE. Latched on the session right before the turn runs (or
+    # on the queued envelope, if the session is busy) so it never leaks into a
+    # later typed turn.
+    spoken = bool(params.get("voice"))
     if (limit_message := _ensure_active_session_slot(sid, session)) is not None:
         return _err(rid, 4090, limit_message)
     if truncate_user_ordinal is not None and isinstance(text, str):
@@ -142,6 +148,7 @@ def _(rid, params: dict) -> dict:
         busy_response = _handle_busy_submit(
             rid, sid, session, text, busy_transport,
             queued=bool(params.get("queued")),
+            voice=spoken,
         )
         if busy_response is not None:
             return busy_response
@@ -323,6 +330,7 @@ def _(rid, params: dict) -> dict:
                     },
                 )
                 return
+        session["_spoken_turn"] = spoken
         _run_prompt_submit(rid, sid, session, text)
 
     run_thread = threading.Thread(target=run_after_agent_ready, daemon=True)

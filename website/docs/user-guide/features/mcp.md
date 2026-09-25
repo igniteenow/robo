@@ -324,6 +324,7 @@ Robo reads MCP config from `~/.robo/config.yaml` under `mcp_servers`.
 | `args` | list | Arguments for the stdio server |
 | `env` | mapping | Environment variables passed to the stdio server |
 | `url` | string | HTTP MCP endpoint |
+| `transport` | string | Remote transport: `http` (Streamable HTTP, the default) or `sse` for servers that only implement the older SSE transport. `robo mcp add <name> --url … --transport sse` sets it. |
 | `headers` | mapping | HTTP headers for remote servers |
 | `client_cert` | string \| list | Client certificate for mTLS — a combined PEM path, or `[cert, key]` / `[cert, key, password]` |
 | `client_key` | string | Client private-key PEM path (when separate from `client_cert`) |

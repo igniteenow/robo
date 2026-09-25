@@ -705,11 +705,24 @@ export function usePromptActions({
               : state
           })
 
+        // The optimistic bubble sits above the live reply, which is exactly
+        // where a bottom-pinned thread is NOT looking while a long answer
+        // streams. A quiet ambient toast is the confirmation that Enter did
+        // something, and says whether the running turn got the text or the
+        // gateway parked it for the next one.
+        const confirmDelivery = (title: string) =>
+          notify({
+            kind: 'success',
+            title,
+            message: text.length > 120 ? `${text.slice(0, 119)}…` : text
+          })
+
         try {
           const result = await requestGateway<SessionRedirectResponse>('session.redirect', { session_id: id, text })
 
           if (result?.status === 'redirected') {
             triggerHaptic('submit')
+            confirmDelivery(copy.redirectDelivered)
 
             return true
           }
@@ -719,6 +732,7 @@ export function usePromptActions({
             // active reply, so retain the optimistic row at the tail.
             moveOptimisticMessageToEnd()
             triggerHaptic('submit')
+            confirmDelivery(copy.redirectQueued)
 
             return true
           }
@@ -765,7 +779,15 @@ export function usePromptActions({
 
       return false
     },
-    [activeSessionIdRef, appendSessionTextMessage, requestGateway, selectedStoredSessionIdRef, updateSessionState]
+    [
+      activeSessionIdRef,
+      appendSessionTextMessage,
+      copy.redirectDelivered,
+      copy.redirectQueued,
+      requestGateway,
+      selectedStoredSessionIdRef,
+      updateSessionState
+    ]
   )
 
   const reloadFromMessage = useCallback(

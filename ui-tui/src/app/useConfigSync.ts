@@ -10,6 +10,7 @@ import { asRpcResult } from '../lib/rpc.js'
 import { applyConfiguredTuiTheme } from './createGatewayEventHandler.js'
 import {
   type BusyInputMode,
+  DEFAULT_IDLE_EXIT_MINUTES,
   DEFAULT_INDICATOR_STYLE,
   INDICATOR_STYLES,
   type IndicatorStyle,
@@ -49,6 +50,19 @@ export const normalizeBusyInputMode = (raw: unknown): BusyInputMode => {
   const v = raw.trim().toLowerCase() as BusyInputMode
 
   return BUSY_MODES.has(v) ? v : TUI_BUSY_DEFAULT
+}
+
+// `display.tui_idle_exit_minutes`: whole minutes, 0 = never quit. Anything
+// unparseable or negative falls back to the default rather than disabling the
+// feature by accident.
+export const normalizeIdleExitMinutes = (raw: unknown): number => {
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw.trim()) : NaN
+
+  if (!Number.isFinite(n) || n < 0) {
+    return DEFAULT_IDLE_EXIT_MINUTES
+  }
+
+  return Math.round(n)
 }
 
 const INDICATOR_STYLE_SET: ReadonlySet<IndicatorStyle> = new Set(INDICATOR_STYLES)
@@ -278,6 +292,7 @@ export const applyDisplay = (
     detailsMode: resolveDetailsMode(d),
     detailsModeCommandOverride: false,
     focusView: !!d.focus_view,
+    idleExitMinutes: normalizeIdleExitMinutes(d.tui_idle_exit_minutes),
     indicatorStyle: normalizeIndicatorStyle(d.tui_status_indicator),
     inlineDiffs: d.inline_diffs !== false,
     mouseTracking: normalizeMouseTracking(d),
@@ -286,7 +301,8 @@ export const applyDisplay = (
     sections: resolveSections(d.sections),
     showReasoning: !!d.show_reasoning,
     statusBar: normalizeStatusBar(d.tui_statusbar),
-    streaming: d.streaming !== false
+    streaming: d.streaming !== false,
+    wakeWordEnabled: cfg?.config?.wake_word?.enabled === true
   })
 }
 

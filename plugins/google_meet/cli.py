@@ -92,8 +92,12 @@ def register_cli(subparser: argparse.ArgumentParser) -> None:
         # If the node module fails to import for any reason (optional dep
         # missing at import time etc.), leave the subparser present but
         # flag it. The argparse dispatch will surface a clear error.
-        def _node_unavailable(args):
-            print(f"robo meet node: module unavailable ({e})")
+        # Bind the message now: `e` is unbound once the except block ends,
+        # so reading it inside the closure would raise NameError instead.
+        reason = str(e)
+
+        def _node_unavailable(args, _reason=reason):
+            print(f"robo meet node: module unavailable ({_reason})")
             return 1
         node_p.set_defaults(func=_node_unavailable)
 

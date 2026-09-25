@@ -264,7 +264,7 @@ relaunch the gateway after that nonzero exit. For systemd, use
 unsuccessful exits. Without that policy, a requested restart leaves the gateway
 stopped.
 
-`robo gateway enroll` accepts `--token`, `--connector-url`, `--gateway-id`, and `--wake-url`. It exchanges the enrollment token with the connector and writes the resulting `GATEWAY_RELAY_ID`, `GATEWAY_RELAY_SECRET`, `GATEWAY_RELAY_DELIVERY_KEY`, optional `GATEWAY_RELAY_URL`, and (when `--wake-url` is given) `GATEWAY_RELAY_WAKE_URL` values to the active profile's `.env`.
+Relay credentials (`GATEWAY_RELAY_ID`, `GATEWAY_RELAY_SECRET`, `GATEWAY_RELAY_DELIVERY_KEY`, `GATEWAY_RELAY_URL`, optional `GATEWAY_RELAY_WAKE_URL`) are set in the active profile's `.env` or provisioned automatically at boot — see [Relay](/user-guide/messaging/relay#credentials). There is no `robo gateway enroll` subcommand.
 
 :::tip WSL users
 Use `robo gateway run` instead of `robo gateway start` — WSL's systemd support is unreliable. Wrap it in tmux for persistence: `tmux new -s robo 'robo gateway run'`. See [WSL FAQ](/reference/faq#wsl-gateway-keeps-disconnecting-or-robo-gateway-start-fails) for details.

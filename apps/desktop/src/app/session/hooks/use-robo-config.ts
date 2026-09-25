@@ -12,8 +12,7 @@ import {
   setCurrentPersonality,
   setCurrentReasoningEffort,
   setCurrentServiceTier,
-  setDefaultReasoningEffort,
-  setIntroPersonality
+  setDefaultReasoningEffort
 } from '@/store/session'
 import {
   applyAutoSpeakFromConfig,
@@ -74,7 +73,6 @@ export function useRoboConfig({ activeSessionIdRef }: RoboConfigOptions) {
           typeof config.display?.personality === 'string' ? config.display.personality : ''
         )
 
-        setIntroPersonality(personality)
         // Active sessions keep their per-session value; standalone falls back to config.
         setCurrentPersonality(prev => (activeSessionIdRef.current ? prev || personality : personality))
         setAvailablePersonalities([

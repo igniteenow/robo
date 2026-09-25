@@ -6,7 +6,7 @@ import { ZERO } from '../domain/usage.js'
 import { bootTheme } from '../lib/themeBoot.js'
 import { DEFAULT_THEME } from '../theme.js'
 
-import { DEFAULT_INDICATOR_STYLE, type UiState } from './interfaces.js'
+import { DEFAULT_IDLE_EXIT_MINUTES, DEFAULT_INDICATOR_STYLE, type UiState } from './interfaces.js'
 
 const buildUiState = (): UiState => ({
   battery: false,
@@ -17,11 +17,14 @@ const buildUiState = (): UiState => ({
   compact: false,
   detailsMode: 'collapsed',
   detailsModeCommandOverride: false,
+  editingLast: false,
   focusView: false,
+  idleExitMinutes: DEFAULT_IDLE_EXIT_MINUTES,
   indicatorStyle: DEFAULT_INDICATOR_STYLE,
   info: null,
   liveSessionCount: 0,
   inlineDiffs: true,
+  midTurnSent: [],
   mouseTracking: MOUSE_TRACKING,
   notice: null,
   pasteCollapseLines: 5,
@@ -36,7 +39,8 @@ const buildUiState = (): UiState => ({
   // Last session's resolved theme paints frame one (flash-free boot, like
   // the desktop's robo-boot-* keys); DEFAULT_THEME only on first launch.
   theme: bootTheme ?? DEFAULT_THEME,
-  usage: ZERO
+  usage: ZERO,
+  wakeWordEnabled: false
 })
 
 export const $uiState = atom<UiState>(buildUiState())

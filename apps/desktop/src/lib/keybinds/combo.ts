@@ -225,6 +225,13 @@ export function isEditableTarget(target: EventTarget | null): boolean {
 
 // A primary modifier (Cmd/Ctrl/Control) fires even while typing (e.g. ⌘K or
 // ⌃Tab from the composer); bare/Shift-only combos are suppressed in inputs.
+// Off macOS, Alt is a plain accelerator too (Alt+B voice, Alt+1…9 session
+// slots ship there), so those fire from the composer as well. On macOS Option
+// composes glyphs and dead keys, so `alt+…` stays suppressed while typing.
 export function comboAllowedInInput(combo: string): boolean {
-  return /^(?:mod|ctrl)(?:\+|$)/.test(combo)
+  if (/^(?:mod|ctrl)(?:\+|$)/.test(combo)) {
+    return true
+  }
+
+  return !IS_MAC && /^alt(?:\+|$)/.test(combo)
 }

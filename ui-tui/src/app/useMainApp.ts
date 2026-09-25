@@ -1,3 +1,5 @@
+import { writeSync } from 'node:fs'
+
 import { useStore } from '@nanostores/react'
 import {
   forceRedraw,
@@ -31,6 +33,7 @@ import type {
 import { pruneVirtualHeightCache, useVirtualHistory } from '../hooks/useVirtualHistory.js'
 import { composerPromptWidth } from '../lib/inputMetrics.js'
 import { appendTranscriptMessage, capTranscriptHistory } from '../lib/messages.js'
+import { recordParentLifecycle } from '../lib/parentLog.js'
 import { DEFAULT_VOICE_RECORD_KEY, isMac, type ParsedVoiceRecordKey } from '../lib/platform.js'
 import { createResizeCoalescer } from '../lib/resizeCoalescer.js'
 import { asRpcResult, rpcErrorMessage } from '../lib/rpc.js'
@@ -54,6 +57,7 @@ import { $uiState, getUiState, patchUiState } from './uiStore.js'
 import { useBatteryPoll } from './useBatteryPoll.js'
 import { useComposerState } from './useComposerState.js'
 import { useConfigSync } from './useConfigSync.js'
+import { idleExitGoodbye, useIdleExit } from './useIdleExit.js'
 import { useInputHandlers } from './useInputHandlers.js'
 import { useLongRunToolCharms } from './useLongRunToolCharms.js'
 import { useSessionLifecycle } from './useSessionLifecycle.js'
@@ -224,6 +228,7 @@ export function useMainApp(gw: GatewayClient) {
   const scrollRef = useRef<null | ScrollBoxHandle>(null)
   const onEventRef = useRef<(ev: GatewayEvent) => void>(() => {})
   const sysRef = useRef<(text: string) => void>(() => {})
+  const answerClarifyRef = useRef<(answer: string) => void>(() => {})
   const submitRef = useRef<(value: string) => void>(() => {})
   const terminalHintsShownRef = useRef(new Set<string>())
   const historyItemsRef = useRef(historyItems)
@@ -530,6 +535,36 @@ export function useMainApp(gw: GatewayClient) {
     [exit, gw]
   )
 
+  // Same teardown as /quit, plus a breadcrumb in the lifecycle log and one
+  // plain line in the shell so an empty terminal an hour later is not a
+  // mystery crash.
+  const idleExit = useCallback(
+    (minutes: number) => {
+      recordParentLifecycle(`idle-exit: no input for ${minutes} min → quitting`)
+      gw.kill('idle-exit')
+      exit()
+
+      // writeSync, like resetTerminalModes: a TTY write is asynchronous on
+      // Windows and process.exit() right after would drop it.
+      try {
+        writeSync(1, `\n${idleExitGoodbye(PRODUCT_SHORT_NAME, minutes)}\n`)
+      } catch {
+        // stdout may already be gone (terminal closed); nothing to say then.
+      }
+
+      process.exit(0)
+    },
+    [exit, gw]
+  )
+
+  useIdleExit({
+    composerText: composerState.input,
+    enabled: !DASHBOARD_TUI_MODE,
+    onExit: idleExit,
+    sys,
+    voiceEnabled
+  })
+
   const session = useSessionLifecycle({
     colsRef,
     composerActions,
@@ -691,7 +726,7 @@ export function useMainApp(gw: GatewayClient) {
             text: '',
             tools: [buildToolTrailLine('clarify', clarify.question)]
           })
-          appendMessage({ role: 'user', text: answer })
+          appendMessage({ kind: 'clarify', role: 'user', text: answer })
           patchUiState({ status: 'running…' })
         } else {
           // Esc / Ctrl+C cancel: persist the question + options as a system
@@ -710,6 +745,7 @@ export function useMainApp(gw: GatewayClient) {
   )
 
   sysRef.current = sys
+  answerClarifyRef.current = answerClarify
 
   const { dispatchSubmission, send, sendQueued, submit } = useSubmission({
     appendMessage,
@@ -776,6 +812,7 @@ export function useMainApp(gw: GatewayClient) {
       createGatewayEventHandler({
         composer: { setInput: composerActions.setInput },
         gateway,
+        prompts: { answerClarifyRef },
         session: {
           STARTUP_RESUME_ID,
           colsRef,
@@ -899,10 +936,19 @@ export function useMainApp(gw: GatewayClient) {
           setSessionStartedAt
         },
         slashFlightRef,
-        transcript: { page, panel, send, setHistoryItems, sys, trimLastExchange: session.trimLastExchange },
+        transcript: {
+          appendMessage,
+          page,
+          panel,
+          send,
+          setHistoryItems,
+          sys,
+          trimLastExchange: session.trimLastExchange
+        },
         voice: { setVoiceEnabled, setVoiceRecordKey, setVoiceTts }
       }),
     [
+      appendMessage,
       catalog,
       composerActions,
       composerRefs,
@@ -1166,7 +1212,10 @@ export function useMainApp(gw: GatewayClient) {
       // when cwdLabel is empty.
       cwdLabel: '',
       goodVibesTick,
-      lastTurnEndedAt: ui.sid ? lastTurnEndedAt : null,
+      // The idle clock counts from the last reply — or, before the first
+      // one, from session start, so the bar reads the same at "ready" as
+      // it does one turn later instead of growing a segment mid-session.
+      lastTurnEndedAt: ui.sid ? (lastTurnEndedAt ?? sessionStartedAt) : null,
       sessionStartedAt: ui.sid ? sessionStartedAt : null,
       showStickyPrompt: !!stickyPrompt,
       statusColor: statusColorOf(ui.status, ui.theme.color),

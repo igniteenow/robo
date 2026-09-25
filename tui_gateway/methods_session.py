@@ -2014,6 +2014,78 @@ def _(rid, params: dict) -> dict:
         return _err(rid, 5031, f"pet.hatch failed: {exc}")
 
 
+# ---------------------------------------------------------------------------
+# Ignitee Now billing was removed (robo_cli/igniteenow_billing.py is a
+# raise-always shim), but the TUI's /topup and /subscription still ask the
+# gateway for state and the desktop/TUI billing dialogs still call the
+# mutations. Answer the way the shim answers — logged out, nothing to
+# charge, one plain sentence — instead of "unknown method: billing.state".
+# Handler bodies are self-contained on purpose: they are rebound onto
+# server.py's globals at install (method_ctx.py), so module constants here
+# would not be visible to them.
+# ---------------------------------------------------------------------------
+
+
+@method("billing.state")
+def _(rid, params: dict) -> dict:
+    return _ok(
+        rid,
+        {
+            "ok": True,
+            "logged_in": False,
+            "is_admin": False,
+            "can_charge": False,
+            "cli_billing_enabled": False,
+            "auto_reload": None,
+            "balance_display": "",
+            "balance_usd": None,
+            "card": None,
+            "charge_presets": [],
+            "charge_presets_display": [],
+            "max_usd": None,
+            "min_usd": None,
+            "monthly_cap": None,
+            "error": "Ignitee Now billing is no longer available.",
+        },
+    )
+
+
+@method("subscription.state")
+def _(rid, params: dict) -> dict:
+    return _ok(
+        rid,
+        {
+            "ok": True,
+            "logged_in": False,
+            "is_admin": False,
+            "can_change_plan": False,
+            "org_name": None,
+            "org_id": None,
+            "error": "Ignitee Now billing is no longer available.",
+        },
+    )
+
+
+@method("billing.charge")
+@method("billing.charge_status")
+@method("billing.auto_reload")
+@method("billing.step_up")
+@method("subscription.preview")
+@method("subscription.change")
+@method("subscription.resume")
+@method("subscription.upgrade")
+def _(rid, params: dict) -> dict:
+    return _ok(
+        rid,
+        {
+            "ok": False,
+            "granted": False,
+            "code": "billing_unavailable",
+            "message": "Ignitee Now billing is no longer available.",
+        },
+    )
+
+
 @method("usage.bars")
 def _(rid, params: dict) -> dict:
     """Shared dollar usage model (two-bar view) for /usage + /subscription.
@@ -2879,6 +2951,9 @@ def _(rid, params: dict) -> dict:
         with session["history_lock"]:
             _record_inflight_correction(session, text)
             session["last_active"] = time.time()
+        # Echo it now, not when the model reads it on the next tool boundary:
+        # the user must see their message land the moment it is accepted.
+        _emit_mid_turn_user_echo(params.get("session_id", ""), text, "steered")
     return _ok(rid, {"status": "queued" if accepted else "rejected", "text": text})
 
 
@@ -2900,6 +2975,7 @@ def _(rid, params: dict) -> dict:
     if agent is None and session.get("running"):
         _enqueue_prompt(session, text, current_transport() or _stdio_transport)
         session["last_active"] = time.time()
+        _emit_mid_turn_user_echo(params.get("session_id", ""), text, "queued")
         return _ok(rid, {"status": "queued", "text": text})
     if (
         agent is None
@@ -2915,6 +2991,7 @@ def _(rid, params: dict) -> dict:
         with session["history_lock"]:
             _record_inflight_correction(session, text)
             session["last_active"] = time.time()
+        _emit_mid_turn_user_echo(params.get("session_id", ""), text, "redirected")
     return _ok(
         rid,
         {"status": "redirected" if accepted else "rejected", "text": text},

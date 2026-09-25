@@ -435,6 +435,7 @@ export function useSessionLifecycle(opts: UseSessionLifecycleOptions) {
       resumeById,
       trimLastExchange: trimTail
     }),
+    // trimTail is a module-level function, not a dependency.
     [
       activateLiveSession,
       closeSession,
@@ -443,8 +444,7 @@ export function useSessionLifecycle(opts: UseSessionLifecycleOptions) {
       newSession,
       resetSession,
       resetVisibleHistory,
-      resumeById,
-      trimTail
+      resumeById
     ]
   )
 }

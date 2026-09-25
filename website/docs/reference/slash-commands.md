@@ -43,6 +43,7 @@ Type `/` in the CLI to open the autocomplete menu. Built-in commands are case-in
 | `/prompt` (alias: `/compose`) | Compose your next prompt in `$EDITOR` (markdown) instead of the inline input — useful for long, multi-line, or carefully-formatted prompts. |
 | `/retry` | Retry the last message (resend to agent) |
 | `/undo` | Remove the last user/assistant exchange |
+| `/edit` | Edit your last message and let Robo start again from there. If Robo is still working on it, it is stopped first; the exchange is backed out of history, the text comes back into the chat box under an `✎ EDIT` tag, Enter sends the edited version as a fresh turn. Esc Esc keeps the text in ↑ history. Refuses while messages are queued (they would be sent the moment Robo stops): remove them with ↑ into the queue and Ctrl+X, or send them with Ctrl+K. (TUI) |
 | `/title` | Set a title for the current session (usage: /title My Session Name) |
 | `/compress [here [N] \| focus topic]` | Manually compress conversation context (flush memories + summarize). `/compress here [N]` summarizes everything except the most recent N exchanges (default 2), kept verbatim — pick your own compression boundary. A focus topic narrows what a full summary preserves. |
 | `/rollback` | List or restore filesystem checkpoints (usage: /rollback [number]) |

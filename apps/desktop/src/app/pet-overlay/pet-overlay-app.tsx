@@ -1,10 +1,10 @@
 import { useStore } from '@nanostores/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { BrandMark } from '@/components/brand-mark'
 import { PetHeartField, playVibeHearts } from '@/components/chat/vibe-hearts'
 import { PetBubble } from '@/components/pet/pet-bubble'
 import { type PetZoomAnchor, usePetZoomGesture } from '@/components/pet/use-pet-zoom-gesture'
-import { RoboLiveFace } from '@/components/robo/robo-face'
 import { useI18n } from '@/i18n'
 import { Mail } from '@/lib/icons'
 import { $petActivity, $petInfo, setPetInfo } from '@/store/pet'
@@ -431,7 +431,7 @@ export function PetOverlayApp() {
           <PetBubble />
         </div>
         <div style={{ lineHeight: 0, position: 'relative' }}>
-          <RoboLiveFace className="h-[210px] w-[210px] rounded-[28px]" fps={30} />
+          <BrandMark className="size-[210px] rounded-[22%] bg-transparent" />
 
           {/* Hearts on the popped-out pet — identical to in-window. */}
           <PetHeartField

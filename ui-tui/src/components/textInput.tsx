@@ -157,6 +157,36 @@ export function applyPrintableInsert(
 
 export const shouldRouteMultiCharInputAsPaste = (text: string): boolean => text.includes('\n')
 
+/** Two returns for the same text closer together than this are one submit. */
+export const SUBMIT_REPEAT_GUARD_MS = 400
+
+export interface SubmitGuardState {
+  at: number
+  value: string
+}
+
+/**
+ * Key-repeat / replayed-Enter guard. The terminal can hand the app a burst of
+ * returns — a held key, or stdin buffered while the gateway was busy and the
+ * UI could not paint. The parent clears the composer only on its next render,
+ * so every replayed return would resubmit the same text ("/voice off" forty
+ * times over). One submit per value per burst: a return for the same
+ * non-empty value within SUBMIT_REPEAT_GUARD_MS of the previous return is
+ * dropped, and the window slides with every return, so a long burst stays
+ * suppressed until the text changes or the burst stops. Empty returns are
+ * never touched — a double Enter on an empty composer is the interrupt
+ * gesture, and hammering Enter at an unresponsive turn should still stop it.
+ * Mutates *state* (a ref) so the caller stays a one-liner.
+ */
+export function shouldSuppressRepeatSubmit(state: SubmitGuardState, value: string, now: number): boolean {
+  const repeat = value.trim() !== '' && value === state.value && now - state.at < SUBMIT_REPEAT_GUARD_MS
+
+  state.at = now
+  state.value = value
+
+  return repeat
+}
+
 export function shouldPreserveCtrlJNewline(env: MinimalEnv = process.env): boolean {
   if (env.WT_SESSION) {
     return true
@@ -644,6 +674,7 @@ export function TextInput({
   const lastClickRef = useRef<{ at: number; offset: number }>({ at: 0, offset: -1 })
   const undo = useRef<{ cursor: number; value: string }[]>([])
   const redo = useRef<{ cursor: number; value: string }[]>([])
+  const submitGuard = useRef<SubmitGuardState>({ at: 0, value: '' })
 
   const cbChange = useRef(onChange)
   const cbSubmit = useRef(onSubmit)
@@ -747,6 +778,9 @@ export function TextInput({
       lineWidthRef.current = stringWidth(value.includes('\n') ? value.slice(value.lastIndexOf('\n') + 1) : value)
       undo.current = []
       redo.current = []
+      // A parent-driven value (the clear after a submit, a recalled history
+      // entry) starts a fresh submit — the repeat guard only spans a burst.
+      submitGuard.current = { at: 0, value: '' }
     }
   }, [value])
 
@@ -1172,7 +1206,7 @@ export function TextInput({
 
         if (k.shift || k.ctrl || preserveBareLineFeed || (isMac ? isActionMod(k) : k.meta)) {
           commit(ins(vRef.current, curRef.current, '\n'), curRef.current + 1)
-        } else {
+        } else if (!shouldSuppressRepeatSubmit(submitGuard.current, vRef.current, Date.now())) {
           cbSubmit.current?.(vRef.current)
         }
 

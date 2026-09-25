@@ -5,7 +5,6 @@ import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
 import { useOnProfileSwitch } from '@/app/hooks/use-on-profile-switch'
 import { useRouteOverlayActive } from '@/app/hooks/use-route-overlay-active'
 import { PetHeartField } from '@/components/chat/vibe-hearts'
-import { RoboLiveFace } from '@/components/robo/robo-face'
 import { persistString, storedString } from '@/lib/storage'
 import { $changeEventsAvailable, $petChange } from '@/store/live-sync'
 import {
@@ -95,103 +94,6 @@ function loadPosition(): Point {
  */
 const PET_POLL_MS = 3000
 const PET_ACTIVE_REFRESH_MS = 15000
-
-/**
- * Robo's in-window body. It uses the same live activity atoms as the chat,
- * approvals, tools, and long-running task stream. Shift-click moves the face
- * into the existing always-on-top OS overlay; that choice persists.
- */
-export function FloatingPet() {
-  const overlayActive = useStore($petOverlayActive)
-  const [position, setPosition] = useState<Point>(loadPosition)
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const dragRef = useRef<{ dx: number; dy: number } | null>(null)
-  const faceSize = 172
-
-  useEffect(() => {
-    if (isSecondaryWindow()) {
-      return
-    }
-
-    const dispose = initPetOverlayBridge()
-    restorePetOverlay()
-
-    return dispose
-  }, [])
-
-  const onPointerDown = useCallback((event: React.PointerEvent) => {
-    const element = containerRef.current
-
-    if (!element) {
-      return
-    }
-
-    const rect = element.getBoundingClientRect()
-
-    if (event.shiftKey && !isSecondaryWindow()) {
-      popOutPet({ height: rect.height, width: rect.width, x: rect.left, y: rect.top })
-
-      return
-    }
-
-    dragRef.current = { dx: event.clientX - rect.left, dy: event.clientY - rect.top }
-    element.setPointerCapture(event.pointerId)
-    element.style.cursor = 'grabbing'
-  }, [])
-
-  const onPointerMove = useCallback((event: React.PointerEvent) => {
-    const drag = dragRef.current
-
-    if (!drag) {
-      return
-    }
-
-    setPosition(
-      clampPoint(event.clientX - drag.dx, event.clientY - drag.dy, faceSize, faceSize)
-    )
-  }, [])
-
-  const onPointerUp = useCallback((event: React.PointerEvent) => {
-    dragRef.current = null
-    containerRef.current?.releasePointerCapture?.(event.pointerId)
-
-    if (containerRef.current) {
-      containerRef.current.style.cursor = 'grab'
-    }
-
-    persistString(POSITION_KEY, JSON.stringify(position))
-  }, [position])
-
-  if (isSecondaryWindow() || overlayActive) {
-    return null
-  }
-
-  return (
-    <div
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      ref={containerRef}
-      style={{
-        border: '1px solid color-mix(in srgb, var(--primary) 28%, transparent)',
-        borderRadius: 28,
-        boxShadow: '0 18px 55px rgba(0,0,0,.3)',
-        cursor: 'grab',
-        height: faceSize,
-        left: position.x,
-        overflow: 'hidden',
-        position: 'fixed',
-        top: position.y,
-        touchAction: 'none',
-        userSelect: 'none',
-        width: faceSize,
-        zIndex: 60
-      }}
-    >
-      <RoboLiveFace className="size-full" />
-    </div>
-  )
-}
 
 export function PetdexFloatingPet() {
   const { requestGateway } = useGatewayRequest()

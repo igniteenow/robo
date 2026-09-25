@@ -2096,6 +2096,56 @@ describe('usePromptActions redirectPrompt', () => {
     })
   })
 
+  it('confirms a delivered redirect with a quiet toast naming the text', async () => {
+    // The optimistic bubble lands above the live reply — off-screen while a
+    // long answer streams with the thread pinned to the bottom — so the toast
+    // is what tells the user their message reached the running turn.
+    clearNotifications()
+    const requestGateway = vi.fn(async () => ({ status: 'redirected' }) as never)
+
+    let handle: HarnessHandle | null = null
+    await actRender(
+      <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+    )
+
+    expect(await handle!.redirectPrompt('also check auth.log')).toBe(true)
+    expect($notifications.get()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'success', title: 'Sent to the running turn', message: 'also check auth.log' })
+      ])
+    )
+  })
+
+  it('confirms a build-window redirect as queued for the next turn', async () => {
+    clearNotifications()
+    const requestGateway = vi.fn(async () => ({ status: 'queued' }) as never)
+
+    let handle: HarnessHandle | null = null
+    await actRender(
+      <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+    )
+
+    expect(await handle!.redirectPrompt('after this one')).toBe(true)
+    expect($notifications.get()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'success', title: 'Queued for the next turn', message: 'after this one' })
+      ])
+    )
+  })
+
+  it('shows no toast when the redirect is rejected or fails', async () => {
+    clearNotifications()
+    const requestGateway = vi.fn(async () => ({ status: 'rejected' }) as never)
+
+    let handle: HarnessHandle | null = null
+    await actRender(
+      <Harness onReady={h => (handle = h)} refreshSessions={async () => undefined} requestGateway={requestGateway} />
+    )
+
+    expect(await handle!.redirectPrompt('too late')).toBe(false)
+    expect($notifications.get().some(item => item.kind === 'success')).toBe(false)
+  })
+
   it('reports rejection so the caller queues when the turn already ended', async () => {
     const requestGateway = vi.fn(async () => ({ status: 'rejected' }) as never)
 

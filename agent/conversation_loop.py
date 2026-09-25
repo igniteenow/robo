@@ -1354,6 +1354,13 @@ def run_conversation(
     interrupted = False
     failed = False
     codex_ack_continuations = 0
+    # Set once the user steers this turn mid-flight (a redirect / correction
+    # applied below). From then on the model's replies answer the user's live
+    # instruction, and no automatic "continue now" nudge may overrule it.
+    # A /steer delivered on a tool result sets the agent-level twin,
+    # ``_turn_user_steered`` (the tool executor applies those), reset here.
+    user_redirected_turn = False
+    agent._turn_user_steered = False
     length_continue_retries = 0
     truncated_tool_call_retries = 0
     truncated_response_parts: List[str] = []
@@ -1426,6 +1433,7 @@ def run_conversation(
 
         _redirect_text = agent._drain_pending_redirect()
         if _redirect_text:
+            user_redirected_turn = True
             _apply_active_turn_redirect(agent, messages, _redirect_text)
             if isinstance(original_user_message, str):
                 original_user_message = (
@@ -1538,6 +1546,7 @@ def run_conversation(
                         except Exception:
                             pass
                     _injected = True
+                    agent._turn_user_steered = True
                     logger.debug(
                         "Pre-API-call steer drain: injected into tool msg at index %d",
                         _si,
@@ -6935,21 +6944,19 @@ def run_conversation(
                 agent._emit_pending_fallback_notice()
                 agent._clear_status_buffer()
 
-                from agent.agent_runtime_helpers import (
-                    intent_ack_continuation_mode,
-                )
+                from agent.agent_runtime_helpers import should_nudge_intent_ack
 
-                _ack_mode = intent_ack_continuation_mode(agent)
-                if (
-                    _ack_mode != "off"
-                    and agent.valid_tool_names
-                    and codex_ack_continuations < 2
-                    and agent._looks_like_codex_intermediate_ack(
-                        user_message=user_message,
-                        assistant_content=final_response,
-                        messages=messages,
-                        require_workspace=(_ack_mode == "codex_only"),
-                    )
+                # One decision, owned by agent_runtime_helpers: the mode gate,
+                # the per-turn cap, the detector — and the rule that a turn the
+                # user steered mid-flight ("stop", a correction) is never
+                # nudged to "continue now" against the user's own instruction.
+                if should_nudge_intent_ack(
+                    agent,
+                    user_redirected_turn=user_redirected_turn,
+                    ack_count=codex_ack_continuations,
+                    user_message=user_message,
+                    assistant_content=final_response,
+                    messages=messages,
                 ):
                     codex_ack_continuations += 1
                     interim_msg = agent._build_assistant_message(assistant_message, "incomplete")

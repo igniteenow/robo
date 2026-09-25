@@ -3603,6 +3603,49 @@ def intent_ack_continuation_enabled(agent) -> bool:
     return intent_ack_continuation_mode(agent) != "off"
 
 
+def should_nudge_intent_ack(
+    agent,
+    *,
+    user_redirected_turn: bool,
+    ack_count: int,
+    user_message: Any,
+    assistant_content: str,
+    messages: List[Dict[str, Any]],
+) -> bool:
+    """The whole intent-ack continuation decision for one model reply.
+
+    True means: inject the ``[System: Continue now …]`` nudge and loop instead
+    of ending the turn. Besides the mode gate, the per-turn cap (2) and the
+    detector, one rule wins over all of them: a turn the user has steered
+    mid-flight is never nudged — whether by a redirect / correction the loop
+    applied (``user_redirected_turn``) or by a /steer delivered on a tool
+    result (``agent._turn_user_steered``, set by the steer drains and reset
+    per turn). After "stop" or any live correction the reply IS the answer
+    to the user's latest instruction; the detector keys on "I'll …" plus an
+    action verb, which a polite "Stopped — if you want to pick it up later,
+    I'll scope it properly" satisfies, and the nudge then has the model
+    arguing with itself about whether to proceed after the user said no.
+    """
+    if user_redirected_turn or getattr(agent, "_turn_user_steered", False):
+        return False
+    mode = intent_ack_continuation_mode(agent)
+    if mode == "off":
+        return False
+    if not getattr(agent, "valid_tool_names", None):
+        return False
+    if ack_count >= 2:
+        return False
+    # Through the agent's forwarder, not the module function: callers (and
+    # tests) that stub ``agent._looks_like_codex_intermediate_ack`` must stay
+    # in charge of the detector.
+    return bool(
+        agent._looks_like_codex_intermediate_ack(
+            user_message,
+            assistant_content,
+            messages,
+            require_workspace=(mode == "codex_only"),
+        )
+    )
 
 
 def copy_reasoning_content_for_api(agent, source_msg: dict, api_msg: dict) -> None:
@@ -3975,6 +4018,10 @@ def apply_pending_steer_to_tool_results(agent, messages: list, num_tool_msgs: in
             messages[target_idx]["content"] = f"{existing_content}{marker}"
     else:
         messages[target_idx]["content"] = existing_content + marker
+    # The user has now steered this turn: no automatic "continue now" nudge may
+    # overrule whatever the model replies to the steer (see
+    # should_nudge_intent_ack). Reset by the conversation loop per turn.
+    agent._turn_user_steered = True
     _ra().logger.info(
         "Delivered /steer to agent after tool batch (%d chars): %s",
         len(steer_text),
