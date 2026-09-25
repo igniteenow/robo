@@ -2,7 +2,7 @@
 
 <img src="assets/brand/robo-lockup-dark.svg" alt="Robo — by Ignitee Now" width="440">
 
-**A free, open-source AI agent that runs on your own computer.**
+**An, open-source AI agent that runs on your own computer.**
 
 Talk to it or type to it. Robo reads your files, browses the web, writes and
 runs code, and carries a task from start to finish, in your terminal, in a
