@@ -407,4 +407,8 @@ export interface SubmitTextOptions {
   /** Stable stored session id for optimistic/cache updates and stale-runtime
    *  recovery. Distinct from the runtime session id minted by the gateway. */
   storedSessionId?: string | null
+  /** The text was spoken (hands-free voice chat) and the reply will be read
+   *  aloud: the gateway shapes the answer for the ear (short, plain, spoken
+   *  sentences) without touching the persisted transcript. */
+  voice?: boolean
 }

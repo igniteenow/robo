@@ -33,6 +33,41 @@ class TestMemorySetupProviderRouting:
         assert "robo memory setup" in out
 
 
+class TestMemorySetupProviderFlags:
+    """Provider-specific flags travel through the parser to the provider.
+
+    ``robo memory setup mem0 --mode oss --oss-llm-key …`` is documented by the
+    mem0 plugin, which reads its flags from ``sys.argv`` in ``post_setup``.
+    argparse used to reject them as "unrecognized arguments" before the
+    provider ever ran."""
+
+    def _parser(self):
+        import argparse
+
+        from robo_cli.subcommands.memory import build_memory_parser
+
+        parser = argparse.ArgumentParser(prog="robo")
+        sub = parser.add_subparsers(dest="command")
+        build_memory_parser(sub, cmd_memory=lambda args: None)
+        return parser
+
+    def test_provider_flags_are_accepted(self):
+        args = self._parser().parse_args(
+            ["memory", "setup", "mem0", "--mode", "oss", "--oss-llm-key", "sk-x", "--dry-run"]
+        )
+        assert args.memory_command == "setup"
+        assert args.provider == "mem0"
+        assert args.provider_args == ["--mode", "oss", "--oss-llm-key", "sk-x", "--dry-run"]
+
+    def test_plain_forms_still_parse(self):
+        parser = self._parser()
+        assert parser.parse_args(["memory", "setup", "honcho"]).provider == "honcho"
+        assert parser.parse_args(["memory", "setup"]).provider is None
+        assert parser.parse_args(["memory", "status"]).memory_command == "status"
+        reset = parser.parse_args(["memory", "reset", "--yes", "--target", "user"])
+        assert (reset.yes, reset.target) == (True, "user")
+
+
 class TestInstallDependenciesRunner:
     """`_install_dependencies` must route through the canonical
     ``_pip_install`` ladder (uv → pip → ensurepip): uv when present, standard

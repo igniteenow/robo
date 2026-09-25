@@ -169,3 +169,29 @@ def test_profile_mcp_write_skips_dangerous_entry(tmp_path):
         reset_robo_home_override(token)
     assert "evil" not in config.get("mcp_servers", {})
     assert "clean" in config.get("mcp_servers", {})
+
+
+def test_dashboard_create_records_sse_transport():
+    """The dashboard's create path accepts ``transport`` for remote servers
+    and writes the same ``transport: sse`` key the CLI and the client use."""
+    from robo_cli.web_server import MCPServerCreate, _normalize_mcp_server_create
+
+    name, cfg, token = _normalize_mcp_server_create(
+        MCPServerCreate(name="legacy", url="https://legacy.example/sse", transport="sse")
+    )
+    assert (name, token) == ("legacy", None)
+    assert cfg == {"url": "https://legacy.example/sse", "transport": "sse"}
+
+    _, cfg, _ = _normalize_mcp_server_create(
+        MCPServerCreate(name="modern", url="https://modern.example/mcp", transport="http")
+    )
+    assert "transport" not in cfg
+
+    with pytest.raises(ValueError, match="Unsupported transport"):
+        _normalize_mcp_server_create(
+            MCPServerCreate(name="x", url="https://x.example/mcp", transport="grpc")
+        )
+    with pytest.raises(ValueError, match="only applies to remote"):
+        _normalize_mcp_server_create(
+            MCPServerCreate(name="x", command="npx", args=["-y", "x-mcp"], transport="sse")
+        )

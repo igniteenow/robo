@@ -138,7 +138,12 @@ terminal:
 display:
   interface: tui
   skin: robo
-  busy_input_mode: steer
+  # What a message sent while Robo is working does. interrupt (the code
+  # default): Robo reads it at once — the model request is cut and a running
+  # tool batch cancelled, everything already done is kept. steer only hands
+  # it over after the current step finishes, which for a long tool run or a
+  # slow model reply reads as "my message took forever to reach Robo".
+  busy_input_mode: interrupt
   busy_steer_ack_enabled: true
   show_reasoning: true
   show_commentary: true
@@ -219,7 +224,6 @@ voice:
   record_key: ctrl+b
   max_recording_seconds: 300
   auto_tts: false
-  beep_enabled: true
   thinking_sound: true
   barge_in: true
   stop_phrases:

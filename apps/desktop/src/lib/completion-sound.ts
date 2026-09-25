@@ -4,6 +4,7 @@
 import { ownsAmbientCue } from '@/store/ambient'
 import { $completionSoundVariantId, resolveCompletionSoundVariantId } from '@/store/completion-sound'
 import { $hapticsMuted } from '@/store/haptics'
+import { isVoiceConversationActive } from '@/store/voice-conversation'
 
 type OscType = OscillatorType
 
@@ -458,7 +459,9 @@ export function previewCompletionSound(variantId?: number) {
 // check runs first, so a muted window never claims the cue out from under an
 // audible peer.
 export function playCompletionSound(dedupeKey?: string) {
-  if ($hapticsMuted.get()) {
+  // In a hands-free voice chat the reply is spoken — a chime right before
+  // Robo starts talking is just noise in the conversation.
+  if ($hapticsMuted.get() || isVoiceConversationActive()) {
     return
   }
 

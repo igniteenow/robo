@@ -53,6 +53,7 @@ def _make_args(**kwargs):
         "preset": None,
         "env": None,
         "mcp_action": None,
+        "transport": None,
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -243,6 +244,58 @@ class TestMcpAdd:
             "DEBUG": "true",
         }
 
+
+    def test_add_sse_transport_is_recorded(self, tmp_path, capsys, monkeypatch):
+        """``--transport sse`` lands in config as ``transport: sse`` — the key
+        the MCP client reads (tools/mcp_tool.py) to pick the SSE transport.
+        Before the flag existed only hand-editing config.yaml could set it."""
+        fake_tools = [FakeTool("ping", "Ping")]
+        monkeypatch.setattr(
+            "robo_cli.mcp_config._probe_single_server",
+            lambda name, config, **kw: [(t.name, t.description) for t in fake_tools],
+        )
+        inputs = iter(["n", ""])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+        from robo_cli.mcp_config import cmd_mcp_add
+
+        cmd_mcp_add(_make_args(name="legacy", url="https://legacy.example/sse", transport="sse"))
+        assert "Saved" in capsys.readouterr().out
+
+        from robo_cli.config import load_config
+
+        srv = load_config()["mcp_servers"]["legacy"]
+        assert srv["url"] == "https://legacy.example/sse"
+        assert srv["transport"] == "sse"
+
+    def test_add_http_transport_writes_no_key(self, tmp_path, capsys, monkeypatch):
+        """Streamable HTTP is the default: ``--transport http`` records nothing."""
+        monkeypatch.setattr(
+            "robo_cli.mcp_config._probe_single_server",
+            lambda name, config, **kw: [("ping", "Ping")],
+        )
+        inputs = iter(["n", ""])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+        from robo_cli.mcp_config import cmd_mcp_add
+
+        cmd_mcp_add(_make_args(name="modern", url="https://modern.example/mcp", transport="http"))
+        assert "Saved" in capsys.readouterr().out
+
+        from robo_cli.config import load_config
+
+        assert "transport" not in load_config()["mcp_servers"]["modern"]
+
+    def test_add_transport_requires_url(self, tmp_path, capsys, monkeypatch):
+        """``--transport`` with a stdio command is refused, nothing is saved."""
+        from robo_cli.mcp_config import cmd_mcp_add
+
+        cmd_mcp_add(_make_args(name="stdio", mcp_command="npx", args=["x"], transport="sse"))
+        assert "--transport only applies to remote servers" in capsys.readouterr().out
+
+        from robo_cli.config import load_config
+
+        assert "stdio" not in load_config().get("mcp_servers", {})
 
     def test_add_preset_fills_transport(self, tmp_path, capsys, monkeypatch):
         """A preset fills in command/args when no explicit transport given."""

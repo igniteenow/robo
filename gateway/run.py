@@ -2218,6 +2218,21 @@ if _config_path.exists():
                 os.environ["ROBO_GATEWAY_BUSY_STEER_ACK_ENABLED"] = str(
                     _display_cfg["busy_steer_ack_enabled"]
                 )
+        # Human-like reply pacing: bridge the documented ``human_delay`` block
+        # to the ROBO_HUMAN_DELAY_* env vars BasePlatformAdapter reads. The
+        # block shipped in config defaults, the docs and the dashboard
+        # settings for a long time without anything reading it. Config is
+        # authoritative, like the display.* bridges above: a stale .env
+        # value must not shadow what config.yaml says.
+        _human_delay_cfg = _cfg.get("human_delay", {})
+        if _human_delay_cfg and isinstance(_human_delay_cfg, dict):
+            for _key, _env in (
+                ("mode", "ROBO_HUMAN_DELAY_MODE"),
+                ("min_ms", "ROBO_HUMAN_DELAY_MIN_MS"),
+                ("max_ms", "ROBO_HUMAN_DELAY_MAX_MS"),
+            ):
+                if _key in _human_delay_cfg:
+                    os.environ[_env] = str(_human_delay_cfg[_key])
         # Timezone: bridge config.yaml → ROBO_TIMEZONE env var.
         _tz_cfg = _cfg.get("timezone", "")
         if _tz_cfg and isinstance(_tz_cfg, str):

@@ -29,6 +29,9 @@ const buildCtx = (appended: Msg[]) =>
       gw: { request: vi.fn() },
       rpc: vi.fn(async () => null)
     },
+    prompts: {
+      answerClarifyRef: { current: vi.fn() }
+    },
     session: {
       STARTUP_RESUME_ID: '',
       colsRef: ref(80),
@@ -873,6 +876,17 @@ describe('createGatewayEventHandler', () => {
     expect(ctx.submission.submitRef.current).not.toHaveBeenCalled()
   })
 
+  it('a spoken stop phrase also answers an open clarify prompt so Robo is not left blocked', () => {
+    const ctx = buildCtx([])
+    patchOverlayState({ clarify: { choices: ['a', 'b'], question: 'Which?', requestId: 'c2' } })
+
+    createGatewayEventHandler(ctx)({ payload: { stop_phrase: true, text: 'stop' }, type: 'voice.transcript' } as any)
+
+    expect(ctx.voice.setVoiceEnabled).toHaveBeenCalledWith(false)
+    expect(ctx.prompts.answerClarifyRef.current).toHaveBeenCalledWith('stop')
+    expect(ctx.submission.submitRef.current).not.toHaveBeenCalled()
+  })
+
   it('ends voice mode on a typed stop phrase consumed server-side', () => {
     const ctx = buildCtx([])
     const onEvent = createGatewayEventHandler(ctx)
@@ -891,6 +905,23 @@ describe('createGatewayEventHandler', () => {
 
     await vi.waitFor(() => expect(ctx.submission.submitRef.current).toHaveBeenCalledWith('stop the docker container'))
     expect(ctx.voice.setVoiceEnabled).not.toHaveBeenCalled()
+  })
+
+  it('answers an open clarify prompt with the spoken text instead of parking it mid-turn', async () => {
+    const ctx = buildCtx([])
+    patchUiState({ sid: 'clarify-session' })
+    patchOverlayState({
+      clarify: { choices: ['libraries', 'example files'], question: 'What do you want?', requestId: 'c1' }
+    })
+
+    createGatewayEventHandler(ctx)({ payload: { text: 'stop' }, type: 'voice.transcript' } as any)
+
+    // Robo is blocked inside the clarify tool: a mid-turn submit would sit
+    // "delivered" until the prompt was cancelled. The words ARE the answer.
+    expect(ctx.prompts.answerClarifyRef.current).toHaveBeenCalledWith('stop')
+    await new Promise(resolve => setTimeout(resolve, 5))
+    expect(ctx.submission.submitRef.current).not.toHaveBeenCalled()
+    expect(ctx.composer.setInput).not.toHaveBeenCalled()
   })
 
   it('routes a spoken choice to the active approval instead of submitting a chat turn', async () => {

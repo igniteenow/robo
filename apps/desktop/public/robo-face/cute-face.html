@@ -43,7 +43,7 @@
 <canvas id="c"></canvas>
 <div class="panel" id="panel">
   <div class="row" id="buttons"></div>
-  <div class="hint">Keys <code>1–7</code> · <code>window.RobotFace.set('happy')</code> · <code>postMessage({emotion:'sad'})</code> · <code>?emotion=&amp;ui=0&amp;fps=30&amp;accent=3de0ff</code></div>
+  <div class="hint">Keys <code>1–9</code> · <code>window.RobotFace.set('happy')</code> · <code>postMessage({emotion:'sad'})</code> · <code>?emotion=&amp;ui=0&amp;fps=30&amp;accent=3de0ff</code></div>
 </div>
 
 <script src="three.r128.min.js"></script>
@@ -67,21 +67,31 @@
     confused:  { eyeH:.90,  eyeW:1.00, lidTop:.12, squint:.00, lookX:.30, lookY:.10, browL:-.30, browR: .18, mouth:-.05, open:.08, mouthW:.75,  skew:.55, tiltX:-.03,tiltY:.14, tiltZ:.22, glow:.95,  pulse:.8 },
     surprised: { eyeH:1.30, eyeW:1.10, lidTop:.00, squint:.00, lookX:0,   lookY:-.05,browL:-.22, browR: .22, mouth: .05, open:.70, mouthW:.70,  skew:0,   tiltX:-.10,tiltY:0,   tiltZ:0,   glow:1.50, pulse:1.0 },
     grumpy:    { eyeH:.55,  eyeW:1.00, lidTop:.40, squint:.10, lookX:0,   lookY:.00, browL: .42, browR:-.42, mouth:-.35, open:.00, mouthW:.85,  skew:0,   tiltX:.08, tiltY:0,   tiltZ:0,   glow:.85,  pulse:.9 },
-    sleepy:    { eyeH:.18,  eyeW:1.00, lidTop:.70, squint:.00, lookX:0,   lookY:.30, browL: .05, browR:-.05, mouth: .05, open:.04, mouthW:.70,  skew:0,   tiltX:.22, tiltY:0,   tiltZ:.08, glow:.35,  pulse:.08 }
+    sleepy:    { eyeH:.18,  eyeW:1.00, lidTop:.70, squint:.00, lookX:0,   lookY:.30, browL: .05, browR:-.05, mouth: .05, open:.04, mouthW:.70,  skew:0,   tiltX:.22, tiltY:0,   tiltZ:.08, glow:.35,  pulse:.08 },
+    // Pondering: eyes drift up and away, one brow lifts, the head cocks a
+    // touch, the glow breathes — distinct from "confused" (which skews the
+    // mouth and glances sideways) so "thinking" and "unsure" never read alike.
+    thinking:  { eyeH:.96,  eyeW:1.00, lidTop:.10, squint:.00, lookX:-.30, lookY:-.32,browL: .16, browR:-.06, mouth: .06, open:.03, mouthW:.85,  skew:0,   tiltX:-.05,tiltY:-.10,tiltZ:-.10,glow:1.10, pulse:.70 },
+    // Concentrating on a job: narrowed eyes, both brows down, mouth set, a
+    // strong steady glow — the "working" face, nothing like grumpy's scowl.
+    focused:   { eyeH:.78,  eyeW:1.02, lidTop:.20, squint:.18, lookX:0,   lookY:.08, browL: .20, browR:-.20, mouth: .12, open:.02, mouthW:.92,  skew:0,   tiltX:.04, tiltY:0,   tiltZ:0,   glow:1.30, pulse:1.00 }
   };
   var ALIASES = {
     success:'happy', ok:'happy', done:'happy', complete:'happy', pass:'happy', yay:'happy',
     fail:'sad', failed:'sad', error:'sad', fault:'sad', sorry:'sad',
-    confuse:'confused', unsure:'confused', thinking:'confused', unknown:'confused', huh:'confused',
+    confuse:'confused', unsure:'confused', unknown:'confused', huh:'confused',
+    think:'thinking', ponder:'thinking', reasoning:'thinking',
     wow:'surprised', alert:'surprised', detect:'surprised', found:'surprised', listening:'surprised',
-    angry:'grumpy', mad:'grumpy', stop:'grumpy', busy:'grumpy', working:'grumpy',
+    angry:'grumpy', mad:'grumpy', stop:'grumpy',
+    busy:'focused', working:'focused', focus:'focused', run:'focused',
     idle:'neutral', ready:'neutral', standby:'neutral',
     sleep:'sleepy', off:'sleepy', charging:'sleepy'
   };
   var BUTTONS = [
     ['happy','Happy','1'], ['sad','Sad','2'], ['confused','Confused','3'],
     ['surprised','Surprised','4'], ['grumpy','Grumpy','5'],
-    ['sleepy','Sleepy','6'], ['neutral','Neutral','7']
+    ['sleepy','Sleepy','6'], ['neutral','Neutral','7'],
+    ['thinking','Thinking','8'], ['focused','Focused','9']
   ];
 
   /* ------------------------------ colours ------------------------------- */

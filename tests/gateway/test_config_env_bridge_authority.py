@@ -49,6 +49,9 @@ def _run_gateway_import(robo_home: Path, initial_env: dict[str, str]) -> dict[st
             "ROBO_GATEWAY_BUSY_TEXT_MODE",
             "ROBO_GATEWAY_PLATFORM_CONNECT_TIMEOUT",
             "ROBO_TIMEZONE",
+            "ROBO_HUMAN_DELAY_MODE",
+            "ROBO_HUMAN_DELAY_MIN_MS",
+            "ROBO_HUMAN_DELAY_MAX_MS",
         ):
             v = os.environ.get(k)
             if v is not None:
@@ -57,8 +60,30 @@ def _run_gateway_import(robo_home: Path, initial_env: dict[str, str]) -> dict[st
     )
     env = dict(initial_env)
     env["ROBO_HOME"] = str(robo_home)
-    # Keep PATH / PYTHONPATH so venv imports resolve.
-    for k in ("PATH", "PYTHONPATH", "VIRTUAL_ENV", "HOME"):
+    # Keep PATH / PYTHONPATH so venv imports resolve. On Windows the child
+    # also needs the system variables: without SYSTEMROOT, Winsock cannot
+    # initialise and ``import socket`` (pulled in by asyncio during the
+    # gateway import) dies with ``WinError 10106`` before the bridge runs;
+    # tempfile / Path.home() want TEMP and USERPROFILE. None of these can
+    # shadow a ROBO_* variable the assertions look at.
+    passthrough = ["PATH", "PYTHONPATH", "VIRTUAL_ENV", "HOME"]
+    if sys.platform == "win32":
+        passthrough += [
+            "SYSTEMROOT",
+            "SYSTEMDRIVE",
+            "WINDIR",
+            "COMSPEC",
+            "PATHEXT",
+            "TEMP",
+            "TMP",
+            "USERPROFILE",
+            "HOMEDRIVE",
+            "HOMEPATH",
+            "LOCALAPPDATA",
+            "APPDATA",
+            "PROGRAMDATA",
+        ]
+    for k in passthrough:
         if k in os.environ and k not in env:
             env[k] = os.environ[k]
 
@@ -83,7 +108,8 @@ def _run_gateway_import(robo_home: Path, initial_env: dict[str, str]) -> dict[st
 
 
 def _write_config(home: Path, agent_cfg: dict | None = None, display_cfg: dict | None = None,
-                  timezone: str | None = None, gateway_cfg: dict | None = None) -> None:
+                  timezone: str | None = None, gateway_cfg: dict | None = None,
+                  human_delay_cfg: dict | None = None) -> None:
     import yaml
     cfg: dict = {}
     if agent_cfg:
@@ -94,6 +120,8 @@ def _write_config(home: Path, agent_cfg: dict | None = None, display_cfg: dict |
         cfg["gateway"] = gateway_cfg
     if timezone:
         cfg["timezone"] = timezone
+    if human_delay_cfg:
+        cfg["human_delay"] = human_delay_cfg
     (home / "config.yaml").write_text(yaml.safe_dump(cfg))
 
 
@@ -153,3 +181,28 @@ def test_env_platform_connect_timeout_wins_over_config(robo_home: Path) -> None:
     )
 
     assert env.get("ROBO_GATEWAY_PLATFORM_CONNECT_TIMEOUT") == "120"
+
+
+def test_config_human_delay_is_bridged_and_wins_over_stale_env(robo_home: Path) -> None:
+    """``human_delay`` shipped in config defaults, the docs and the dashboard
+    settings, but only the ROBO_HUMAN_DELAY_* env vars were ever read — the
+    documented block was a knob wired to nothing. It is bridged now, and like
+    every other config.yaml section it is authoritative over a stale .env."""
+    _write_config(robo_home, human_delay_cfg={"mode": "custom", "min_ms": 300, "max_ms": 900})
+    _write_env(robo_home, {"ROBO_HUMAN_DELAY_MODE": "off", "ROBO_HUMAN_DELAY_MIN_MS": "800"})
+
+    out = _run_gateway_import(robo_home, {})
+
+    assert out.get("ROBO_HUMAN_DELAY_MODE") == "custom"
+    assert out.get("ROBO_HUMAN_DELAY_MIN_MS") == "300"
+    assert out.get("ROBO_HUMAN_DELAY_MAX_MS") == "900"
+
+
+def test_human_delay_env_survives_without_a_config_block(robo_home: Path) -> None:
+    """No ``human_delay`` block in config.yaml → the env vars stay as set."""
+    _write_config(robo_home, timezone="UTC")
+    _write_env(robo_home, {"ROBO_HUMAN_DELAY_MODE": "natural"})
+
+    out = _run_gateway_import(robo_home, {})
+
+    assert out.get("ROBO_HUMAN_DELAY_MODE") == "natural"

@@ -612,7 +612,10 @@ export function useSubmitPrompt(deps: SubmitPromptDeps) {
           // the next turn untouched — without it, losing the settle race
           // (client saw idle, server still unwinding) redirects or interrupts
           // the live turn with text the user explicitly queued.
-          ...(options?.fromQueue && { queued: true })
+          ...(options?.fromQueue && { queued: true }),
+          // Spoken turn: the reply is read aloud, so the gateway shapes it for
+          // the ear (see SPOKEN_TURN_NOTE); the stored transcript stays clean.
+          ...(options?.voice && { voice: true })
         })
 
         // On sleep/wake the gateway's in-memory session may have been cleared

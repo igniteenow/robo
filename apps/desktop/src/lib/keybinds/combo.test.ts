@@ -127,4 +127,19 @@ describe('comboAllowedInInput', () => {
     expect(comboAllowedInInput('mod+k')).toBe(true)
     expect(comboAllowedInInput('shift+x')).toBe(false)
   })
+
+  it('keeps Option chords suppressed while typing on macOS (glyphs + dead keys)', async () => {
+    const { comboAllowedInInput } = await loadCombo('MacIntel')
+
+    expect(comboAllowedInInput('alt+b')).toBe(false)
+    expect(comboAllowedInInput('alt+1')).toBe(false)
+  })
+
+  it('lets Alt chords fire while typing off macOS (Alt+B voice, Alt+1…9 slots)', async () => {
+    const { comboAllowedInInput } = await loadCombo('Win32')
+
+    expect(comboAllowedInInput('alt+b')).toBe(true)
+    expect(comboAllowedInInput('alt+1')).toBe(true)
+    expect(comboAllowedInInput('shift+x')).toBe(false)
+  })
 })

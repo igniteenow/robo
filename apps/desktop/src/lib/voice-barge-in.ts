@@ -32,7 +32,9 @@ const PLAYBACK_GRACE_MS = 500
 const PLAYBACK_GAP_FOR_GRACE_MS = 1_000
 const FLOOR_SAMPLE_CAP = 200 // ~3s of quiet-phase levels at rAF cadence
 const PRE_ROLL_RESTART_MS = 5_000 // cap pre-roll: restart the recorder while quiet
-const UTTERANCE_SILENCE_MS = 1_250 // matches the voice loop's silenceMs
+// A little longer than the voice loop's turn-ending pause (650 ms): an
+// interruption is often "wait— no, do X", and the "no" must not be cut off.
+const UTTERANCE_SILENCE_MS = 900
 const UTTERANCE_MAX_MS = 30_000
 
 export interface BargeMonitorCallbacks {

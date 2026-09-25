@@ -7,6 +7,7 @@ import {
   type VoicePlaybackSource,
   type VoicePlaybackState
 } from '@/store/voice-playback'
+import { setVoicePlaybackMode } from '@/store/voice-timing'
 
 import { sanitizeTextForSpeech } from './speech-text'
 
@@ -15,6 +16,19 @@ import { sanitizeTextForSpeech } from './speech-text'
 // fails to start or stalls mid-stream for this long (rearmed on each progress
 // tick, so legitimately long speech is never cut off).
 const PLAYBACK_STALL_MS = 15_000
+
+// The same guard for the streaming session. Once the reply's text is complete
+// (`finish` sent) the server owes us the remaining sentences and then `end`;
+// a provider that hangs on one sentence, or a socket that died without a
+// close event, used to leave the voice chat "Speaking…" until the app was
+// restarted. Rearmed on every frame, so a long reply never trips it. Before
+// `finish` there is no deadline: the model may be running a tool for minutes
+// with nothing to say yet, and that session must stay open for the rest of
+// the reply.
+export const SPEECH_STREAM_STALL_MS = 15_000
+// A socket that never opens (a backend that stopped answering) falls back to
+// the POST path instead of waiting forever.
+export const SPEECH_STREAM_OPEN_TIMEOUT_MS = 8_000
 
 let currentAudio: HTMLAudioElement | null = null
 let currentStop: (() => void) | null = null
@@ -123,6 +137,12 @@ async function resolveSpeakStreamUrl(): Promise<null | string> {
       url.searchParams.set('profile', profile)
     }
 
+    // We can decode whole audio files (MP3/WAV/OGG) per sentence, so a
+    // provider with no chunked-PCM API (Edge, the free default) still speaks
+    // sentence by sentence instead of after the whole reply. An older
+    // backend ignores the flag and answers `fallback` as before.
+    url.searchParams.set('encoded', '1')
+
     return url.toString()
   } catch {
     return null
@@ -159,9 +179,24 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
   let started = false
   let settled = false
   let finished = false
+  // 'pcm': raw int16 frames scheduled as they land. 'encoded': one complete
+  // audio file per sentence, decoded (async, in order) then scheduled.
+  let format: 'encoded' | 'pcm' = 'pcm'
+  let decodeChain: Promise<void> = Promise.resolve()
+  // Audio bytes have landed (they may still be decoding): a close now is the
+  // end of a spoken reply, not an unavailable endpoint.
+  let audioSeen = false
   const pendingSends: string[] = []
 
   let settle: (value: 'done' | 'fallback') => void = () => undefined
+  let watchdog: null | number = null
+
+  const clearWatchdog = () => {
+    if (watchdog !== null) {
+      window.clearTimeout(watchdog)
+      watchdog = null
+    }
+  }
 
   const done = new Promise<'done' | 'fallback'>(resolve => {
     settle = value => {
@@ -171,6 +206,7 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
 
       settled = true
       currentStop = null
+      clearWatchdog()
 
       try {
         ws.close()
@@ -199,11 +235,50 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
   currentStop = () => settle('done')
 
   const finishWhenDrained = () => {
-    const remainingMs = context ? Math.max(0, nextStartAt - context.currentTime) * 1_000 : 0
-    window.setTimeout(() => settle('done'), remainingMs + 100)
+    // Encoded sentences may still be decoding: wait for the chain, then for
+    // the last scheduled buffer to play out.
+    void decodeChain.then(() => {
+      const remainingMs = context ? Math.max(0, nextStartAt - context.currentTime) * 1_000 : 0
+      window.setTimeout(() => settle('done'), remainingMs + 100)
+    })
   }
 
-  const schedule = (data: ArrayBuffer) => {
+  // Waiting on the server with a deadline: until it opens, and — once the
+  // reply's text is complete — until its remaining audio and `end` arrive.
+  const armWatchdog = (ms: number) => {
+    clearWatchdog()
+    watchdog = window.setTimeout(() => {
+      watchdog = null
+
+      if (started || audioSeen) {
+        finishWhenDrained() // play out what we have, then end the turn
+      } else {
+        settle('fallback') // nothing ever arrived: the POST path (bounded) takes over
+      }
+    }, ms)
+  }
+
+  /** Queue a decoded buffer right after whatever is already playing. */
+  const scheduleBuffer = (buffer: AudioBuffer) => {
+    if (!context) {
+      return
+    }
+
+    const source = context.createBufferSource()
+    source.buffer = buffer
+    source.connect(context.destination)
+
+    const startAt = Math.max(context.currentTime + 0.05, nextStartAt)
+    source.start(startAt)
+    nextStartAt = startAt + buffer.duration
+
+    if (!started) {
+      started = true
+      setVoicePlaybackState(currentState('speaking', options))
+    }
+  }
+
+  const schedulePcm = (data: ArrayBuffer) => {
     if (!context) {
       return
     }
@@ -237,32 +312,60 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
       channel[index] = pcm[index] / 32_768
     }
 
-    const source = context.createBufferSource()
-    source.buffer = buffer
-    source.connect(context.destination)
+    scheduleBuffer(buffer)
+  }
 
-    const startAt = Math.max(context.currentTime + 0.05, nextStartAt)
-    source.start(startAt)
-    nextStartAt = startAt + buffer.duration
+  // One sentence = one complete file. Decoding is async; chain the decodes so
+  // sentences play in the order they were spoken, and let one undecodable
+  // sentence drop rather than end the reply.
+  const scheduleEncoded = (data: ArrayBuffer) => {
+    decodeChain = decodeChain.then(async () => {
+      if (!context || settled) {
+        return
+      }
 
-    if (!started) {
-      started = true
-      setVoicePlaybackState(currentState('speaking', options))
+      try {
+        scheduleBuffer(await context.decodeAudioData(data.slice(0)))
+      } catch {
+        // Skip this sentence; the next one still plays.
+      }
+    })
+  }
+
+  const schedule = (data: ArrayBuffer) => {
+    audioSeen = true
+
+    if (format === 'encoded') {
+      scheduleEncoded(data)
+    } else {
+      schedulePcm(data)
     }
   }
 
+  armWatchdog(SPEECH_STREAM_OPEN_TIMEOUT_MS)
+
   ws.onopen = () => {
     pendingSends.splice(0).forEach(data => ws.send(data))
+
+    if (finished) {
+      armWatchdog(SPEECH_STREAM_STALL_MS)
+    } else {
+      clearWatchdog()
+    }
   }
 
   ws.onmessage = event => {
+    if (finished) {
+      armWatchdog(SPEECH_STREAM_STALL_MS)
+    }
+
     if (typeof event.data !== 'string') {
       schedule(event.data as ArrayBuffer)
 
       return
     }
 
-    let frame: { channels?: number; sample_rate?: number; type?: string }
+    let frame: { channels?: number; format?: string; sample_rate?: number; type?: string }
 
     try {
       frame = JSON.parse(event.data) as typeof frame
@@ -271,6 +374,8 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
     }
 
     if (frame.type === 'start') {
+      format = frame.format === 'encoded' ? 'encoded' : 'pcm'
+      setVoicePlaybackMode(format === 'encoded' ? 'sentence' : 'pcm')
       streamRate = frame.sample_rate || 24_000
       context = new AudioContext()
 
@@ -294,8 +399,8 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
   // A drop before any audio means the endpoint is unavailable (old backend,
   // auth, network) → fall back. After audio started, replaying the whole
   // message via POST would stutter — treat what played as the playback.
-  ws.onerror = () => settle(started ? 'done' : 'fallback')
-  ws.onclose = () => (started ? finishWhenDrained() : settle('fallback'))
+  ws.onerror = () => settle(started || audioSeen ? 'done' : 'fallback')
+  ws.onclose = () => (started || audioSeen ? finishWhenDrained() : settle('fallback'))
 
   return {
     // Raw deltas — the server strips markdown/emoji per *sentence*, which is
@@ -309,6 +414,12 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
       if (!finished && !settled) {
         finished = true
         send({ done: true })
+
+        // The socket now owes us the rest of the audio and `end`. (Still
+        // connecting: the open deadline is armed, and onopen takes over.)
+        if (ws.readyState === WebSocket.OPEN) {
+          armWatchdog(SPEECH_STREAM_STALL_MS)
+        }
       }
     },
     done
@@ -364,6 +475,7 @@ async function playSpeechDataUrl(
 
   const audio = new Audio(response.data_url)
   currentAudio = audio
+  setVoicePlaybackMode('whole')
   setVoicePlaybackState(currentState('speaking', options, audio))
 
   await new Promise<void>((resolve, reject) => {

@@ -12,13 +12,23 @@ three-layer fix at every local whisper call site:
 
 from types import SimpleNamespace
 
+import pytest
+
 from tools.transcription_tools import (
     _LOGPROB_THRESHOLD_DEFAULT,
     _NO_SPEECH_PROB_THRESHOLD_DEFAULT,
     _is_hallucinated_segment,
     _join_confident_segments,
     build_local_transcribe_kwargs,
+    forget_remembered_language,
 )
+
+
+@pytest.fixture(autouse=True)
+def _fresh_language_memory():
+    forget_remembered_language()
+    yield
+    forget_remembered_language()
 
 
 def _seg(text, no_speech_prob=0.0, avg_logprob=-0.2):
@@ -30,6 +40,18 @@ class TestBuildLocalTranscribeKwargs:
         kwargs = build_local_transcribe_kwargs({})
         assert kwargs["vad_filter"] is True
         assert kwargs["vad_parameters"] == {"min_silence_duration_ms": 500}
+
+    def test_greedy_decode_by_default_beam_configurable(self):
+        """A live voice turn is a few seconds of speech: greedy decoding is
+        2-3x faster than beam search and sounds the same. ``beam_size`` is a
+        config knob for long recordings; garbage and out-of-range values
+        clamp instead of breaking the call."""
+        assert build_local_transcribe_kwargs({"local": {}})["beam_size"] == 1
+        assert build_local_transcribe_kwargs({"local": {"beam_size": 5}})["beam_size"] == 5
+        assert build_local_transcribe_kwargs({"local": {"beam_size": "3"}})["beam_size"] == 3
+        assert build_local_transcribe_kwargs({"local": {"beam_size": 0}})["beam_size"] == 1
+        assert build_local_transcribe_kwargs({"local": {"beam_size": 99}})["beam_size"] == 10
+        assert build_local_transcribe_kwargs({"local": {"beam_size": "wide"}})["beam_size"] == 1
 
     def test_conditioning_always_off(self):
         assert build_local_transcribe_kwargs({})["condition_on_previous_text"] is False
@@ -132,3 +154,69 @@ class TestTranscribeLocalWiring:
         ]
         _, result = self._run(monkeypatch, {}, segments=segments)
         assert result["transcript"] == "real speech"
+
+
+class TestRememberedLanguage:
+    """With ``stt.language`` on auto-detect, whisper learns the language on
+    the first confident transcription and the next calls skip the detection
+    pass; a forced language always wins and the knob turns it off."""
+
+    def _run(self, monkeypatch, stt_config, *, language="de", probability=0.95, segments=None):
+        import tools.transcription_tools as tt
+
+        captured = {}
+
+        class FakeModel:
+            def transcribe(self, path, **kwargs):
+                captured.update(kwargs)
+                info = SimpleNamespace(language=language, language_probability=probability, duration=1.0)
+                return iter(segments or [_seg(" guten tag")]), info
+
+        monkeypatch.setattr(tt, "_HAS_FASTER_WHISPER", True)
+        monkeypatch.setattr(tt, "_local_model", FakeModel())
+        monkeypatch.setattr(tt, "_local_model_name", "base")
+        monkeypatch.setattr(tt, "_load_stt_config", lambda: stt_config)
+        monkeypatch.delenv("ROBO_LOCAL_STT_LANGUAGE", raising=False)
+        result = tt._transcribe_local("/tmp/fake.wav", "base")
+        return captured, result
+
+    def test_confident_detection_is_reused_on_the_next_call(self, monkeypatch):
+        forget_remembered_language()
+        first, _ = self._run(monkeypatch, {"language": ""})
+        assert "language" not in first  # auto-detect on the first call
+
+        second, _ = self._run(monkeypatch, {"language": ""})
+        assert second["language"] == "de"
+
+    def test_forced_language_always_wins(self, monkeypatch):
+        forget_remembered_language()
+        self._run(monkeypatch, {"language": ""})
+        forced, _ = self._run(monkeypatch, {"language": "en"})
+        assert forced["language"] == "en"
+
+    def test_knob_turns_it_off(self, monkeypatch):
+        forget_remembered_language()
+        self._run(monkeypatch, {"language": ""})
+        again, _ = self._run(monkeypatch, {"language": "", "local": {"remember_language": False}})
+        assert "language" not in again
+
+    def test_unsure_or_empty_results_are_not_remembered(self, monkeypatch):
+        forget_remembered_language()
+        self._run(monkeypatch, {"language": ""}, probability=0.4)
+        after_unsure, _ = self._run(monkeypatch, {"language": ""})
+        assert "language" not in after_unsure
+
+        forget_remembered_language()
+        silent = [_seg(" You", no_speech_prob=0.97, avg_logprob=-1.6)]
+        self._run(monkeypatch, {"language": ""}, segments=silent)
+        after_silence, _ = self._run(monkeypatch, {"language": ""})
+        assert "language" not in after_silence
+
+    def test_kwargs_builder_uses_the_memory_only_without_a_forced_language(self, monkeypatch):
+        import tools.transcription_tools as tt
+
+        monkeypatch.delenv("ROBO_LOCAL_STT_LANGUAGE", raising=False)
+        monkeypatch.setattr(tt, "_remembered_language", "fr")
+        assert build_local_transcribe_kwargs({"language": ""})["language"] == "fr"
+        assert build_local_transcribe_kwargs({"language": "en"})["language"] == "en"
+        assert "language" not in build_local_transcribe_kwargs({"language": "", "local": {"remember_language": "off"}})

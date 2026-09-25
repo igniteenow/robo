@@ -47,6 +47,22 @@ describe('applyDisplay', () => {
     expect(s.streaming).toBe(false)
   })
 
+  it('reads the idle-exit limit and the wake-word switch', () => {
+    const setBell = vi.fn()
+
+    applyDisplay({ config: { display: { tui_idle_exit_minutes: 0 }, wake_word: { enabled: true } } }, setBell)
+    expect($uiState.get().idleExitMinutes).toBe(0)
+    expect($uiState.get().wakeWordEnabled).toBe(true)
+
+    applyDisplay({ config: { display: { tui_idle_exit_minutes: '90' } } }, setBell)
+    expect($uiState.get().idleExitMinutes).toBe(90)
+    expect($uiState.get().wakeWordEnabled).toBe(false)
+
+    // Missing key: the hour default, not "off".
+    applyDisplay({ config: { display: {} } }, setBell)
+    expect($uiState.get().idleExitMinutes).toBe(60)
+  })
+
   it('coerces legacy true + "on" alias to top', () => {
     const setBell = vi.fn()
 

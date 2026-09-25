@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+import { SpeechEndpointer } from '@/lib/speech-endpointer'
 
 type BrowserAudioContext = typeof AudioContext
 
@@ -6,9 +8,22 @@ export interface MicRecorderOptions {
   onLevel?: (level: number) => void
   onError?: (error: Error) => void
   onSilence?: () => void
+  /** Absolute floor for the speech trigger; the room's own noise raises it
+   *  from there (see lib/speech-endpointer). */
   silenceLevel?: number
   silenceMs?: number
   idleSilenceMs?: number
+  /** End a turn this long after speech began even if it never goes quiet. */
+  maxSpeechMs?: number
+  /**
+   * Keep the microphone (and the level meter's audio graph) open after
+   * `stop()` so the next `start()` is instant. A voice chat listens again
+   * after every reply; re-opening the device each time cost a visible pause
+   * (permission check + getUserMedia + a new AudioContext, several hundred
+   * ms on Windows) before "Listening…" — and a real one, since anything said
+   * during it was lost. `cancel()` (mute, end, unmount) releases the device.
+   */
+  retainDevice?: boolean
 }
 
 export interface MicRecording {
@@ -75,26 +90,51 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
   const startedAtRef = useRef(0)
   const heardSpeechRef = useRef(false)
   const silenceTriggeredRef = useRef(false)
-  const silenceStartedAtRef = useRef<number | null>(null)
   const stopResolverRef = useRef<((recording: MicRecording | null) => void) | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
+  const retainRef = useRef(false)
 
-  const cleanup = () => {
-    if (animationRef.current) {
-      window.cancelAnimationFrame(animationRef.current)
-      animationRef.current = null
-    }
-
+  /** Let go of the device and the audio graph. */
+  const releaseDevice = useCallback(() => {
     void audioContextRef.current?.close()
     audioContextRef.current = null
+    analyserRef.current = null
     streamRef.current?.getTracks().forEach(track => track.stop())
     streamRef.current = null
-    recorderRef.current = null
-    setLevel(0)
-    setRecording(false)
-    silenceTriggeredRef.current = false
-  }
+    retainRef.current = false
+  }, [])
 
-  useEffect(() => () => cleanup(), [])
+  const cleanup = useCallback(
+    (release = true) => {
+      if (animationRef.current) {
+        window.cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
+      }
+
+      if (release) {
+        releaseDevice()
+      }
+
+      recorderRef.current = null
+      setLevel(0)
+      setRecording(false)
+      silenceTriggeredRef.current = false
+    },
+    [releaseDevice]
+  )
+
+  // Unmount: always let the device go, retained or not.
+  useEffect(() => () => cleanup(), [cleanup])
+
+  const liveStream = (): MediaStream | null => {
+    const stream = streamRef.current
+
+    if (!stream || !stream.getTracks().some(track => track.readyState === 'live')) {
+      return null
+    }
+
+    return stream
+  }
 
   const startMeter = (stream: MediaStream, options: MicRecorderOptions) => {
     const audioWindow = window as Window & { webkitAudioContext?: BrowserAudioContext }
@@ -105,18 +145,42 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
     }
 
     try {
-      const audioContext = new AudioContextCtor()
-      const analyser = audioContext.createAnalyser()
-      const source = audioContext.createMediaStreamSource(stream)
+      // A retained device keeps its analyser; a fresh one builds the graph.
+      let analyser = audioContextRef.current && analyserRef.current
 
-      analyser.fftSize = 256
+      if (!analyser) {
+        const audioContext = new AudioContextCtor()
+        const source = audioContext.createMediaStreamSource(stream)
+
+        analyser = audioContext.createAnalyser()
+        analyser.fftSize = 256
+        source.connect(analyser)
+        audioContextRef.current = audioContext
+        analyserRef.current = analyser
+      }
+
       const data = new Uint8Array(analyser.fftSize)
+      const meter = analyser
+      const speechThreshold = options.silenceLevel ?? 0
 
-      source.connect(analyser)
-      audioContextRef.current = audioContext
+      // Turn boundaries come from the endpointer, which learns the room's
+      // noise instead of trusting one fixed threshold (a fan or a boosted mic
+      // used to keep a turn "listening" forever).
+      const endpointer =
+        speechThreshold > 0 && options.onSilence
+          ? new SpeechEndpointer(
+              {
+                idleSilenceMs: options.idleSilenceMs ?? 0,
+                maxSpeechMs: options.maxSpeechMs ?? 0,
+                minLevel: speechThreshold,
+                silenceMs: options.silenceMs ?? 0
+              },
+              startedAtRef.current
+            )
+          : null
 
       const tick = () => {
-        analyser.getByteTimeDomainData(data)
+        meter.getByteTimeDomainData(data)
 
         let sum = 0
 
@@ -127,31 +191,17 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
 
         const rms = Math.sqrt(sum / data.length)
         const normalized = Math.min(1, rms / 42)
-        const now = Date.now()
 
         setLevel(normalized)
         options.onLevel?.(normalized)
 
-        const speechThreshold = options.silenceLevel ?? 0
-        const silenceMs = options.silenceMs ?? 0
-        const idleSilenceMs = options.idleSilenceMs ?? 0
+        if (endpointer && !silenceTriggeredRef.current) {
+          const event = endpointer.feed(normalized, Date.now())
+          heardSpeechRef.current = endpointer.heardSpeech
 
-        if (speechThreshold > 0 && options.onSilence && !silenceTriggeredRef.current) {
-          if (normalized >= speechThreshold) {
-            heardSpeechRef.current = true
-            silenceStartedAtRef.current = null
-          } else if (heardSpeechRef.current && silenceMs > 0) {
-            silenceStartedAtRef.current ??= now
-
-            if (now - silenceStartedAtRef.current >= silenceMs) {
-              silenceTriggeredRef.current = true
-              options.onSilence()
-
-              return
-            }
-          } else if (!heardSpeechRef.current && idleSilenceMs > 0 && now - startedAtRef.current >= idleSilenceMs) {
+          if (event) {
             silenceTriggeredRef.current = true
-            options.onSilence()
+            options.onSilence?.()
 
             return
           }
@@ -175,21 +225,27 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
       throw new Error(copy.microphoneUnsupported)
     }
 
-    const permitted = await window.roboDesktop?.requestMicrophoneAccess?.()
+    let stream = liveStream()
 
-    if (permitted === false) {
-      throw new Error(copy.microphoneAccessDenied)
+    if (!stream) {
+      releaseDevice()
+
+      const permitted = await window.roboDesktop?.requestMicrophoneAccess?.()
+
+      if (permitted === false) {
+        throw new Error(copy.microphoneAccessDenied)
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true }
+        })
+      } catch (error) {
+        throw micError(error, copy)
+      }
     }
 
-    let stream: MediaStream
-
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true }
-      })
-    } catch (error) {
-      throw micError(error, copy)
-    }
+    retainRef.current = Boolean(options.retainDevice)
 
     const mimeType =
       ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/wav'].find(
@@ -201,7 +257,7 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
     try {
       recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
     } catch (error) {
-      stream.getTracks().forEach(track => track.stop())
+      releaseDevice()
       throw micError(error, copy)
     }
 
@@ -210,7 +266,6 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
     recorderRef.current = recorder
     heardSpeechRef.current = false
     silenceTriggeredRef.current = false
-    silenceStartedAtRef.current = null
     startedAtRef.current = Date.now()
 
     recorder.ondataavailable = event => {
@@ -226,7 +281,7 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
       const heardSpeech = heardSpeechRef.current
 
       chunksRef.current = []
-      cleanup()
+      cleanup(!retainRef.current)
 
       const resolver = stopResolverRef.current
       stopResolverRef.current = null

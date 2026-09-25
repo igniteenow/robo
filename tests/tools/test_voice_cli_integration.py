@@ -134,13 +134,8 @@ class TestEnableVoiceModeReal:
         assert cli._voice_mode is True
 
 
-class TestVoiceBeepConfigReal:
-    """Tests the CLI voice beep toggle."""
-
-    @patch("robo_cli.config.load_config", return_value={"voice": {"beep_enabled": False}})
-    def test_beeps_can_be_disabled(self, _cfg):
-        cli = _make_voice_cli()
-        assert cli._voice_beeps_enabled() is False
+class TestNoRecordBeepsReal:
+    """The CLI never plays a record start/stop beep, whatever config says."""
 
     @patch("cli._cprint")
     @patch("cli.threading.Thread")
@@ -160,13 +155,13 @@ class TestVoiceBeepConfigReal:
         "robo_cli.config.load_config",
         return_value={
             "voice": {
-                "beep_enabled": False,
+                "beep_enabled": True,  # the old opt-in no longer exists
                 "silence_threshold": 200,
                 "silence_duration": 3.0,
             }
         },
     )
-    def test_start_recording_skips_beep_when_disabled(
+    def test_start_recording_never_beeps(
         self, _cfg, _req, mock_create, mock_beep, mock_thread, _cp
     ):
         recorder = MagicMock()
@@ -179,6 +174,7 @@ class TestVoiceBeepConfigReal:
 
         recorder.start.assert_called_once()
         mock_beep.assert_not_called()
+        assert not hasattr(cli, "_voice_beeps_enabled")
 
 
 class TestMaxRecordingSecondsConfigReal:

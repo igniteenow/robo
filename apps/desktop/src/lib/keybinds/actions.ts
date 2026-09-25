@@ -43,13 +43,17 @@ const PROFILE_SWITCH_ACTIONS: KeybindActionMeta[] = Array.from({ length: PROFILE
   defaults: [comboForSlot(i + 1)]
 }))
 
-// Positional jumps — ^1…^9, mirroring profiles' ⌘1…⌘9.
+// Positional jumps — ^1…^9 on macOS, mirroring profiles' ⌘1…⌘9. Off macOS
+// `ctrl` folds to `mod`, which IS the profiles' Ctrl+1…9, and the profile rows
+// come first in the index — so a `ctrl+N` default there would ship dead (and
+// flagged as a conflict in the panel). Alt+1…9 is free on Windows/Linux (the
+// app has no menu bar there, so Alt chords aren't mnemonics).
 export const SESSION_SLOT_COUNT = 9
 
 const SESSION_SLOT_ACTIONS: KeybindActionMeta[] = Array.from({ length: SESSION_SLOT_COUNT }, (_, i) => ({
   id: `session.slot.${i + 1}`,
   category: 'session' as const,
-  defaults: [`ctrl+${i + 1}`]
+  defaults: [IS_MAC ? `ctrl+${i + 1}` : `alt+${i + 1}`]
 }))
 
 export const KEYBIND_ACTIONS: readonly KeybindActionMeta[] = [
@@ -63,9 +67,9 @@ export const KEYBIND_ACTIONS: readonly KeybindActionMeta[] = [
   // Voice conversation toggle. Matches the documented `voice.record_key`
   // (Ctrl+B). On macOS that's literally ⌃B — distinct from the ⌘B sidebar
   // toggle. Off macOS `ctrl` folds to `mod`, which IS the ⌘B/Ctrl+B sidebar
-  // chord, so ship it unbound there (rebindable in the panel) rather than
-  // stealing the long-standing sidebar binding.
-  { id: 'composer.voice', category: 'composer', defaults: IS_MAC ? ['ctrl+b'] : [] },
+  // chord, so the same mnemonic ships on Alt+B there (free: no menu bar off
+  // macOS) rather than stealing the long-standing sidebar binding.
+  { id: 'composer.voice', category: 'composer', defaults: IS_MAC ? ['ctrl+b'] : ['alt+b'] },
 
   // ── Profiles ─────────────────────────────────────────────────────────────
   { id: 'profile.default', category: 'profiles', defaults: ['mod+d'] },

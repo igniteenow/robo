@@ -76,10 +76,10 @@ robo setup          # Or run the full setup wizard to configure everything at on
 One subscription covers 300+ models plus the [Tool Gateway](/user-guide/features/tool-gateway) (web search, image generation, TTS, cloud browser). Skip the per-tool key juggling:
 
 ```bash
-robo setup --portal
+robo setup
 ```
 
-That logs you in and sets up your provider in one command.
+Pick your provider once; the same setup wizard configures the Tool Gateway.
 :::
 
 ---

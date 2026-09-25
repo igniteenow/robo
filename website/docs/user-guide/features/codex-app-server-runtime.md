@@ -299,7 +299,7 @@ default_permissions = ":workspace"
 # end robo-engineer managed section
 ```
 
-Anything **outside** that block is yours. Re-running migration (via `/codex-runtime codex_app_server` or whenever you toggle the runtime on) replaces the managed block in place but preserves user content above and below it verbatim. This means you can:
+Anything **outside** that block is yours. Re-running migration (via `/codex-runtime codex_app_server` or whenever you toggle the runtime on) replaces the managed block in place but preserves user content above and below it verbatim. (The start marker's wording is a fixed label that Robo matches byte-for-byte to find the block — there is no `robo codex-runtime migrate` CLI subcommand; the `/codex-runtime` slash command is what regenerates it.) This means you can:
 
 - Add your own MCP servers Robo doesn't know about
 - Override `default_permissions` to `:read-only` if you prefer to be prompted

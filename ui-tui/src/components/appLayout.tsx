@@ -21,6 +21,7 @@ import {
   stableComposerColumns
 } from '../lib/inputMetrics.js'
 import { PerfPane } from '../lib/perfPane.js'
+import { formatVoiceRecordKey } from '../lib/platform.js'
 import { composerPromptText } from '../lib/prompt.js'
 import { ActiveWidgetSlot, AmbientDock, AmbientRail, useAmbientRailWidth } from '../sdk/host.js'
 
@@ -28,10 +29,20 @@ import { AgentsOverlay } from './agentsOverlay.js'
 import { GoodVibesHeart, StatusRule, StickyPromptTracker, TranscriptScrollbar } from './appChrome.js'
 import { FloatingOverlays, PromptZone } from './appOverlays.js'
 import { Banner, Panel, SessionPanel } from './branding.js'
+import {
+  busyComposerHint,
+  COMPOSER_FRAME_INSET,
+  COMPOSER_FRAME_MIN_COLS,
+  ComposerFrameBottom,
+  composerFrameStyle,
+  ComposerFrameTop,
+  composerMode
+} from './composerFrame.js'
 import { FpsOverlay } from './fpsOverlay.js'
 import { HelpHint } from './helpHint.js'
 import { Journey } from './journey.js'
 import { MessageLine } from './messageLine.js'
+import { MidTurnSent } from './midTurnSent.js'
 import { PetKitty, PetSprite } from './petSprite.js'
 import { QueuedMessages } from './queuedMessages.js'
 import { RoboCommandDeck } from './roboCommandDeck.js'
@@ -40,7 +51,9 @@ import { TextInput, type TextInputMouseApi } from './textInput.js'
 
 // Box geometry, kept here so the transcript's reservation math matches the
 // rendered overlay exactly.
-const PET_BOTTOM = 3 // rows the pet floats above the screen bottom (over the composer)
+// Rows the pet floats above the screen bottom, i.e. just over the chat box:
+// lift row + bottom edge + input + status + top edge.
+const PET_BOTTOM = 5
 const PET_PAD_LEFT = 2
 const PET_RIGHT = 1
 const PET_GUTTER_GAP = 1
@@ -290,10 +303,40 @@ const ComposerPane = memo(function ComposerPane({
 
   const promptWidth = composerPromptWidth(promptText)
   const promptBlank = ' '.repeat(promptWidth)
-  const inputColumns = stableComposerColumns(composer.cols, promptWidth, TERMUX_TUI_MODE)
+
+  // The chat box. Its side borders + inner padding take COMPOSER_FRAME_INSET
+  // columns on each side, so everything inside lays out against `innerCols`
+  // — the width the old bare composer had — instead of the terminal width.
+  // Termux and very narrow panes keep the frameless layout: four columns of
+  // chrome cost more than they give there.
+  const framed = !TERMUX_TUI_MODE && composer.cols >= COMPOSER_FRAME_MIN_COLS
+  const inset = framed ? COMPOSER_FRAME_INSET : 0
+  const innerCols = Math.max(1, composer.cols - 2 * inset)
+  const frameWidth = Math.max(4, composer.cols - 2) // outer paddingX={1} both sides
+  const editing = ui.editingLast && composer.input.trim() !== ''
+  const mode = composerMode(sh, status.voiceLabel, editing)
+  const frame = composerFrameStyle(mode, ui.theme)
+
+  // The edge hints name what the box can do RIGHT NOW. While Robo works,
+  // typing is not locked out: the message redirects the live turn (Robo reads
+  // it at once, keeping what it was doing in mind) — the old "Ctrl+C
+  // interrupt" alone read as if stopping were the only option.
+  const frameHint = editing
+    ? 'Enter resend from here · Esc Esc keep the text'
+    : ui.busy
+      ? busyComposerHint(ui.busyInputMode)
+      : `↑ history · ${formatVoiceRecordKey(composer.voiceRecordKey)} voice · /edit · /help`
+
+  const voiceEdgeColor =
+    mode === 'rec' ? ui.theme.color.error : mode === 'stt' ? ui.theme.color.warn : ui.theme.color.muted
+
+  // Exact cell width of a row inside the box (or of the bare composer):
+  // the rule and the input row both lay out against it so nothing can run
+  // over the right border.
+  const rowWidth = Math.max(1, innerCols - 2)
+  const inputColumns = stableComposerColumns(innerCols, promptWidth, TERMUX_TUI_MODE)
   const inputHeight = inputVisualHeight(composer.input, inputColumns)
   const inputMouseRef = useRef<null | TextInputMouseApi>(null)
-  const commandTopRule = '─'.repeat(Math.max(4, composer.cols - 16))
 
   const captureInputDrag = (e: GutterMouseEvent) => {
     if (e.button !== 0) {
@@ -324,10 +367,113 @@ const ComposerPane = memo(function ComposerPane({
     }
 
     e.stopImmediatePropagation?.()
-    inputMouseRef.current?.dragAt(0, (e.localCol ?? 0) - promptWidth)
+    inputMouseRef.current?.dragAt(0, (e.localCol ?? 0) - promptWidth - inset)
   }
 
   const endInputDrag = () => inputMouseRef.current?.end()
+
+  const composerBody = (
+    <>
+      <StatusRulePane at="top" cols={rowWidth} composer={composer} inFrame={framed} status={status} />
+
+      <Box flexDirection="column" marginTop={framed || ui.statusBar === 'top' ? 0 : 1} position="relative">
+        <FloatingOverlays
+          cols={innerCols}
+          compIdx={composer.compIdx}
+          completions={composer.completions}
+          onActiveSessionClose={actions.closeLiveSession}
+          onActiveSessionSelect={actions.activateLiveSession}
+          onModelSelect={actions.onModelSelect}
+          onNewLiveSession={actions.newLiveSession}
+          onNewPromptSession={actions.newPromptSession}
+          onResumeSelect={actions.resumeById}
+          pagerPageSize={composer.pagerPageSize}
+        />
+
+        {composer.input === '?' && !composer.inputBuf.length && <HelpHint t={ui.theme} />}
+
+        {/* A prompt (clarify / approval / picker…) owns the keyboard: the input
+            row steps aside, but the box stays and says why, instead of the
+            whole chat area vanishing until the user finds Esc. */}
+        {isBlocked && (
+          <Box width={rowWidth}>
+            <Box width={promptWidth}>
+              <PromptPrefix color={ui.theme.color.muted} promptText={promptText} width={promptWidth} />
+            </Box>
+
+            <Text color={ui.theme.color.muted} wrap="truncate-end">
+              waiting on the prompt above · answer it, or Esc to dismiss
+            </Text>
+          </Box>
+        )}
+
+        {!isBlocked && (
+          <>
+            {composer.inputBuf.map((line, i) => (
+              <Box key={i}>
+                <Box width={promptWidth}>
+                  {i === 0 ? (
+                    <PromptPrefix color={ui.theme.color.muted} promptText={promptText} width={promptWidth} />
+                  ) : (
+                    <Text color={ui.theme.color.muted}>{promptBlank}</Text>
+                  )}
+                </Box>
+
+                <Text color={ui.theme.color.text}>{line || ' '}</Text>
+              </Box>
+            ))}
+
+            <Box
+              onMouseDown={captureInputDrag}
+              onMouseDrag={dragFromPromptRow}
+              onMouseUp={endInputDrag}
+              position="relative"
+              width={rowWidth}
+            >
+              <Box width={promptWidth}>
+                {sh ? (
+                  <PromptPrefix color={ui.theme.color.shellDollar} promptText={promptText} width={promptWidth} />
+                ) : composer.inputBuf.length ? (
+                  <Text color={ui.theme.color.prompt}>{promptBlank}</Text>
+                ) : (
+                  <PromptPrefix bold color={ui.theme.color.prompt} promptText={promptText} width={promptWidth} />
+                )}
+              </Box>
+
+              <Box flexGrow={0} flexShrink={0} height={inputHeight} width={inputColumns}>
+                {/* Reserve the transcript scrollbar gutter too so typing never rewraps when the scrollbar column repaints. */}
+                <TextInput
+                  color={ui.theme.color.text}
+                  columns={inputColumns}
+                  mouseApiRef={inputMouseRef}
+                  onChange={composer.updateInput}
+                  onPaste={composer.handleTextPaste}
+                  onSubmit={composer.submit}
+                  placeholder={composer.empty ? PLACEHOLDER : ui.busy ? busyComposerHint(ui.busyInputMode) : ''}
+                  // Exactly the "(and N more toolsets…)" tone. `muted` is a
+                  // MID-luminance family tone, so it reads receded on both
+                  // poles even when polarity detection is wrong (transparent
+                  // terminals lie about their background); anything blended
+                  // toward the resolved surface inherits that wrong polarity.
+                  placeholderColor={ui.theme.color.muted}
+                  value={composer.input}
+                  voiceRecordKey={composer.voiceRecordKey}
+                />
+              </Box>
+
+              <Box position="absolute" right={0}>
+                <GoodVibesHeart t={ui.theme} tick={status.goodVibesTick} />
+              </Box>
+            </Box>
+          </>
+        )}
+      </Box>
+
+      {!composer.empty && !ui.sid && <Text color={ui.theme.color.muted}>◆ {ui.status}</Text>}
+
+      <StatusRulePane at="bottom" cols={rowWidth} composer={composer} inFrame={framed} status={status} />
+    </>
+  )
 
   return (
     <NoSelect
@@ -341,6 +487,8 @@ const ComposerPane = memo(function ComposerPane({
       }}
       paddingX={1}
     >
+      <MidTurnSent cols={composer.cols} items={ui.midTurnSent} t={ui.theme} />
+
       <QueuedMessages
         cols={composer.cols}
         queued={composer.queuedDisplay}
@@ -364,94 +512,46 @@ const ComposerPane = memo(function ComposerPane({
         <Box height={1} onMouseDown={captureInputDrag} onMouseDrag={dragFromSpacer} onMouseUp={endInputDrag} />
       )}
 
-      <Text color={ui.theme.color.border} wrap="truncate-end">
-        ┌─ <Text bold color={ui.theme.color.primary}>COMMAND</Text> {commandTopRule}┐
-      </Text>
-      <StatusRulePane at="top" composer={composer} status={status} />
       <AmbientDock placement="dock-top" />
 
-      <Box flexDirection="column" marginTop={ui.statusBar === 'top' ? 0 : 1} position="relative">
-        <FloatingOverlays
-          cols={composer.cols}
-          compIdx={composer.compIdx}
-          completions={composer.completions}
-          onActiveSessionClose={actions.closeLiveSession}
-          onActiveSessionSelect={actions.activateLiveSession}
-          onModelSelect={actions.onModelSelect}
-          onNewLiveSession={actions.newLiveSession}
-          onNewPromptSession={actions.newPromptSession}
-          onResumeSelect={actions.resumeById}
-          pagerPageSize={composer.pagerPageSize}
+      <ComposerFrameTop
+        color={frame.color}
+        hint={framed ? frameHint : ''}
+        hintColor={ui.theme.color.muted}
+        open={!framed}
+        tag={frame.tag}
+        width={frameWidth}
+      />
+
+      {framed ? (
+        <Box
+          borderBottom={false}
+          borderColor={frame.color}
+          borderStyle="round"
+          borderTop={false}
+          flexDirection="column"
+          paddingX={1}
+          width={frameWidth}
+        >
+          {composerBody}
+        </Box>
+      ) : (
+        composerBody
+      )}
+
+      {framed ? (
+        <ComposerFrameBottom
+          color={frame.color}
+          label={status.voiceLabel}
+          labelColor={voiceEdgeColor}
+          width={frameWidth}
         />
-
-        {composer.input === '?' && !composer.inputBuf.length && <HelpHint t={ui.theme} />}
-
-        {!isBlocked && (
-          <>
-            {composer.inputBuf.map((line, i) => (
-              <Box key={i}>
-                <Box width={promptWidth}>
-                  {i === 0 ? (
-                    <PromptPrefix color={ui.theme.color.muted} promptText={promptText} width={promptWidth} />
-                  ) : (
-                    <Text color={ui.theme.color.muted}>{promptBlank}</Text>
-                  )}
-                </Box>
-
-                <Text color={ui.theme.color.text}>{line || ' '}</Text>
-              </Box>
-            ))}
-
-            <Box
-              onMouseDown={captureInputDrag}
-              onMouseDrag={dragFromPromptRow}
-              onMouseUp={endInputDrag}
-              position="relative"
-              width={Math.max(1, composer.cols - 2)}
-            >
-              <Box width={promptWidth}>
-                {sh ? (
-                  <PromptPrefix color={ui.theme.color.shellDollar} promptText={promptText} width={promptWidth} />
-                ) : composer.inputBuf.length ? (
-                  <Text color={ui.theme.color.prompt}>{promptBlank}</Text>
-                ) : (
-                  <PromptPrefix bold color={ui.theme.color.prompt} promptText={promptText} width={promptWidth} />
-                )}
-              </Box>
-
-              <Box flexGrow={0} flexShrink={0} height={inputHeight} width={inputColumns}>
-                {/* Reserve the transcript scrollbar gutter too so typing never rewraps when the scrollbar column repaints. */}
-                <TextInput
-                  color={ui.theme.color.text}
-                  columns={inputColumns}
-                  mouseApiRef={inputMouseRef}
-                  onChange={composer.updateInput}
-                  onPaste={composer.handleTextPaste}
-                  onSubmit={composer.submit}
-                  placeholder={composer.empty ? PLACEHOLDER : ui.busy ? 'Ctrl+C to interrupt…' : ''}
-                  // Exactly the "(and N more toolsets…)" tone. `muted` is a
-                  // MID-luminance family tone, so it reads receded on both
-                  // poles even when polarity detection is wrong (transparent
-                  // terminals lie about their background); anything blended
-                  // toward the resolved surface inherits that wrong polarity.
-                  placeholderColor={ui.theme.color.muted}
-                  value={composer.input}
-                  voiceRecordKey={composer.voiceRecordKey}
-                />
-              </Box>
-
-              <Box position="absolute" right={0}>
-                <GoodVibesHeart t={ui.theme} tick={status.goodVibesTick} />
-              </Box>
-            </Box>
-          </>
-        )}
-      </Box>
-
-      {!composer.empty && !ui.sid && <Text color={ui.theme.color.muted}>◆ {ui.status}</Text>}
+      ) : null}
 
       <AmbientDock placement="dock-bottom" />
-      <StatusRulePane at="bottom" composer={composer} status={status} />
+
+      {/* The box floats one row above the terminal's bottom edge. */}
+      {framed ? <Box height={1} /> : null}
     </NoSelect>
   )
 })
@@ -480,22 +580,26 @@ const JourneyPane = memo(function JourneyPane() {
 
 const StatusRulePane = memo(function StatusRulePane({
   at,
+  cols,
   composer,
+  inFrame,
   status
-}: Pick<AppLayoutProps, 'composer' | 'status'> & { at: 'bottom' | 'top' }) {
+}: Pick<AppLayoutProps, 'composer' | 'status'> & { at: 'bottom' | 'top'; cols: number; inFrame: boolean }) {
   const ui = useStore($uiState)
 
   if (ui.statusBar !== at) {
     return null
   }
 
+  // Inside the chat box the voice state lives on the frame's bottom edge
+  // (always visible, never budgeted away), so the rule does not repeat it.
   return (
-    <Box marginTop={at === 'top' ? 1 : 0}>
+    <Box marginTop={at === 'top' && !inFrame ? 1 : 0}>
       <StatusRule
         battery={ui.battery ? ui.batteryStatus : null}
         bgCount={ui.bgTasks.size}
         busy={ui.busy}
-        cols={composer.cols}
+        cols={cols}
         cwdLabel={status.cwdLabel}
         focusView={ui.focusView}
         indicatorStyle={ui.indicatorStyle}
@@ -512,7 +616,7 @@ const StatusRulePane = memo(function StatusRulePane({
         t={ui.theme}
         turnStartedAt={status.turnStartedAt}
         usage={ui.usage}
-        voiceLabel={status.voiceLabel}
+        voiceLabel={inFrame ? '' : status.voiceLabel}
       />
     </Box>
   )

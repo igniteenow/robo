@@ -2476,9 +2476,9 @@ def _index_upload_in_background(target: Path) -> None:
                 return
             KnowledgeStore().add_file(target)
         except KnowledgeError as exc:
-            logger.debug("upload not indexed: %s", exc)
+            _log.debug("upload not indexed: %s", exc)
         except Exception as exc:  # pragma: no cover
-            logger.debug("upload indexing failed for %s: %s", target, exc)
+            _log.debug("upload indexing failed for %s: %s", target, exc)
 
     threading.Thread(target=work, name="robo-knowledge-index", daemon=True).start()
 
@@ -4298,6 +4298,43 @@ async def check_robo_update(force: bool = False):
     return payload
 
 
+def _start_desktop_stt_warm_up(profile: Optional[str]) -> bool:
+    """Kick off the local STT model load on a daemon thread, scoped to
+    *profile*'s home. Never inside the test process (same guard idiom as the
+    TUI's voice warm-up). Returns True when a load was scheduled."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+
+    def _warm_scoped():
+        try:
+            from tools.transcription_tools import warm_up_local_stt
+
+            with _config_profile_scope(profile):
+                warm_up_local_stt()
+        except Exception as exc:
+            _log.debug("Desktop STT warm-up skipped: %s", exc)
+
+    try:
+        threading.Thread(target=_warm_scoped, daemon=True, name="desktop-stt-warmup").start()
+    except Exception as exc:
+        _log.debug("Desktop STT warm-up thread failed to start: %s", exc)
+        return False
+    return True
+
+
+@app.post("/api/audio/warm-up")
+async def warm_up_audio_transcription(profile: Optional[str] = None):
+    """Preload the local STT model before the first spoken turn.
+
+    The desktop's voice conversation calls this the moment it starts, so the
+    first utterance is transcribed as fast as every later one instead of
+    paying the faster-whisper load as a silent pause. Same helper the TUI's
+    /voice on uses: local provider only, model already on disk, never a
+    download. Returns at once; the load runs on a worker thread.
+    """
+    return {"ok": True, "scheduled": _start_desktop_stt_warm_up(profile)}
+
+
 @app.post("/api/audio/transcribe")
 async def transcribe_audio_upload(
     payload: AudioTranscriptionRequest, profile: Optional[str] = None
@@ -4609,25 +4646,70 @@ def _split_text_for_speak_stream(text: str, cap: int) -> list:
     return pieces
 
 
+def _speak_sentence_encoded(text: str) -> Optional[bytes]:
+    """One sentence → one complete audio file (MP3/WAV/OGG bytes) through the
+    configured provider's ordinary synthesis path — the same call the POST
+    endpoint makes for a whole reply, made per sentence instead.
+
+    Providers with no chunked-PCM API (Edge, the free default; Piper,
+    KittenTTS, …) used to force the desktop to wait for the ENTIRE reply and
+    then synthesize it in one go before a single word was heard. Sentence by
+    sentence, the first line plays while the model is still writing the
+    second. Returns ``None`` when synthesis fails (the caller skips that
+    sentence and keeps the reply going).
+    """
+    from tools.tts_tool import text_to_speech_tool
+
+    result_json = text_to_speech_tool(text)
+    try:
+        result = json.loads(result_json) if isinstance(result_json, str) else result_json
+    except Exception:
+        return None
+    if not isinstance(result, dict) or not result.get("success"):
+        _log.warning(
+            "speak-stream: sentence synthesis failed: %s",
+            (result or {}).get("error") if isinstance(result, dict) else result,
+        )
+        return None
+    file_path = result.get("file_path")
+    if not file_path or not os.path.isfile(file_path):
+        return None
+    try:
+        with open(file_path, "rb") as fh:
+            return fh.read()
+    except OSError:
+        return None
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(file_path)
+
+
 @app.websocket("/api/audio/speak-stream")
 async def speak_stream_ws(ws: "WebSocket") -> None:
-    """Streaming TTS for the desktop: text in, raw int16 PCM frames out.
+    """Streaming TTS for the desktop: text in, audio frames out.
 
     The socket is a per-reply speech *session*: the client feeds text
     incrementally as LLM deltas arrive, the server cuts sentences
     (``SentenceChunker`` — same cutter as the CLI/TUI speaker pipeline) and
-    streams each one's PCM the moment it's ready. Speech overlaps generation,
-    exactly like the token→sentence→TTS pipelining the realtime-voice
-    literature converges on.
+    streams each one's audio the moment it's ready. Speech overlaps
+    generation, exactly like the token→sentence→TTS pipelining the
+    realtime-voice literature converges on.
 
     Protocol:
       client → ``{"text": "..."}`` frames (incremental; may combine with done),
                ``{"done": true}`` when the reply is complete,
                ``{"stop": true}`` or disconnect = barge-in
       server → ``{"type": "start", "sample_rate": N, "channels": 1}``,
-               binary PCM frames, then ``{"type": "end"}``
-      server → ``{"type": "fallback"}`` when the configured provider has no
-               chunked API — the client uses the POST endpoint instead.
+               binary int16 PCM frames, then ``{"type": "end"}`` — providers
+               with a chunked-PCM API (ElevenLabs, OpenAI, Gemini, xAI);
+      server → ``{"type": "start", "format": "encoded"}``, one binary frame per
+               sentence holding a complete audio file (MP3/WAV/OGG — the
+               client decodes it), then ``{"type": "end"}`` — every other
+               provider (Edge, Piper, …), when the client asked for it with
+               ``?encoded=1``;
+      server → ``{"type": "fallback"}`` for a client that did not opt into
+               encoded frames and a provider with no chunked API — that
+               client uses the POST endpoint instead.
     """
     if not _ws_auth_ok(ws):
         await ws.close(code=4401)
@@ -4642,6 +4724,7 @@ async def speak_stream_ws(ws: "WebSocket") -> None:
     # the dashboard's own. The streamer captures its config at resolve time,
     # so scoping resolution scopes the whole session.
     profile = (ws.query_params.get("profile") or "").strip() or None
+    encoded_ok = (ws.query_params.get("encoded") or "").strip().lower() in {"1", "true", "yes"}
 
     loop = asyncio.get_running_loop()
 
@@ -4652,7 +4735,7 @@ async def speak_stream_ws(ws: "WebSocket") -> None:
         with _config_profile_scope(profile):
             cfg = _load_tts_config()
             streamer = resolve_streaming_provider(cfg)
-            cap = _resolve_max_text_length(_get_provider(cfg), cfg) if streamer else 0
+            cap = _resolve_max_text_length(_get_provider(cfg), cfg) if (streamer or encoded_ok) else 0
         return streamer, cap
 
     try:
@@ -4660,19 +4743,33 @@ async def speak_stream_ws(ws: "WebSocket") -> None:
     except Exception:
         _log.exception("speak-stream provider resolution failed")
         streamer, cap = None, 0
-    if streamer is None:
+    if streamer is None and not encoded_ok:
         with contextlib.suppress(Exception):
             await ws.send_json({"type": "fallback"})
             await ws.close()
         return
 
-    await ws.send_json(
-        {"type": "start", "sample_rate": streamer.sample_rate, "channels": streamer.channels}
-    )
+    if streamer is not None:
+        await ws.send_json(
+            {"type": "start", "sample_rate": streamer.sample_rate, "channels": streamer.channels}
+        )
+    else:
+        await ws.send_json({"type": "start", "format": "encoded"})
 
     stop = threading.Event()
     text_q: queue.Queue = queue.Queue()  # str deltas; None = end-of-text
-    chunks: asyncio.Queue = asyncio.Queue()  # PCM out; None = synthesis done
+    chunks: asyncio.Queue = asyncio.Queue()  # audio out; None = synthesis done
+
+    def _synthesize(piece: str):
+        # PCM streamers yield as they go; the encoded path yields one whole
+        # file per sentence (or nothing, when that sentence failed).
+        if streamer is not None:
+            yield from streamer.stream(piece)
+            return
+        with _config_profile_scope(profile):
+            data = _speak_sentence_encoded(piece)
+        if data:
+            yield data
 
     def _produce():
         from tools.tts_streaming import SentenceChunker
@@ -4716,7 +4813,9 @@ async def speak_stream_ws(ws: "WebSocket") -> None:
                 if not cleaned:
                     continue
                 for piece in _split_text_for_speak_stream(cleaned, cap):
-                    for chunk in streamer.stream(piece):
+                    if stop.is_set():
+                        return
+                    for chunk in _synthesize(piece):
                         if stop.is_set():
                             return
                         loop.call_soon_threadsafe(chunks.put_nowait, chunk)
@@ -11855,6 +11954,7 @@ def _normalize_mcp_server_create(
     url = (body.url or "").strip()
     command = (body.command or "").strip()
     auth = (body.auth or "none").strip().lower()
+    transport = (body.transport or "").strip().lower() or None
     bearer_token = (
         body.bearer_token.get_secret_value()
         if body.bearer_token is not None
@@ -11865,6 +11965,10 @@ def _normalize_mcp_server_create(
         raise ValueError("Provide exactly one of URL (HTTP/SSE) or command (stdio)")
     if auth not in {"none", "header", "oauth"}:
         raise ValueError(f"Unsupported auth mode: {auth}")
+    if transport not in {None, "http", "sse"}:
+        raise ValueError(f"Unsupported transport: {transport}")
+    if transport and not url:
+        raise ValueError("Transport only applies to remote (URL) MCP servers")
 
     server_config: Dict[str, Any] = {}
     if url:
@@ -11883,6 +11987,8 @@ def _normalize_mcp_server_create(
             raise ValueError("Bearer token requires header authentication")
 
         server_config["url"] = url
+        if transport == "sse":
+            server_config["transport"] = "sse"
         if auth == "oauth":
             server_config["auth"] = "oauth"
     else:
@@ -17262,6 +17368,52 @@ def _maybe_open_browser(
     threading.Thread(target=_open, daemon=True).start()
 
 
+def _lan_addresses() -> list[str]:
+    """Best-effort list of this machine's non-loopback IPv4 addresses, for the
+    "reachable at" hint under an all-interfaces bind. Never raises."""
+    import socket as _socket
+
+    found: list[str] = []
+    try:
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        try:
+            s.connect(("10.255.255.255", 1))
+            found.append(s.getsockname()[0])
+        finally:
+            s.close()
+    except Exception:
+        pass
+    try:
+        for info in _socket.getaddrinfo(_socket.gethostname(), None, _socket.AF_INET):
+            addr = info[4][0]
+            if addr not in found and not addr.startswith("127."):
+                found.append(addr)
+    except Exception:
+        pass
+    return found
+
+
+def _reachable_address_lines(host: str, port: int, *, headless: bool) -> list[str]:
+    """Lines to print under the bind banner when the server is bound to every
+    interface: the bind address ``0.0.0.0`` is not something a user can type
+    into another machine, so spell out the addresses that are, and where they
+    go (Settings → Gateway → Remote in the desktop app; the browser for the
+    dashboard). Empty for a loopback or specific-address bind."""
+    if host not in ("0.0.0.0", "::", ""):
+        return []
+    addrs = _lan_addresses()
+    if not addrs:
+        return []
+    lines = ["  Reachable from other machines at:"]
+    for addr in addrs:
+        lines.append(f"    http://{addr}:{port}")
+    if headless:
+        lines.append("  Desktop app: Settings → Gateway → Remote gateway → paste one of those URLs → Sign in")
+    else:
+        lines.append("  Browser: open one of those URLs · Desktop app: Settings → Gateway → Remote gateway → paste it → Sign in")
+    return lines
+
+
 def start_server(
     host: str = "127.0.0.1",
     port: int = 9119,
@@ -17465,6 +17617,8 @@ def start_server(
                 print(f"  Robo backend listening on {host}:{actual_port}")
             else:
                 print(f"  Robo Web UI → http://{host}:{actual_port}")
+            for line in _reachable_address_lines(host, actual_port, headless=headless):
+                print(line)
             _maybe_open_browser(host, actual_port, open_browser, initial_profile)
 
             # Collapse the peer-hangup teardown flood (#50005). When the Desktop

@@ -1,6 +1,7 @@
 import { atom } from 'nanostores'
 
 import { type ClientWakeCaptureHandle, startClientWakeCapture } from '@/lib/wake-client-capture'
+import { warmUpTranscription } from '@/robo'
 import { $gateway } from '@/store/gateway'
 
 // "Hey Robo" wake-word listener state for the composer toggle. The gateway is
@@ -36,6 +37,21 @@ export const $wakeWord = atom<WakeWordState>(INITIAL_WAKE_WORD_STATE)
 
 /** Active client mic stream for remote wake (capture: client). */
 let clientCapture: ClientWakeCaptureHandle | null = null
+
+/**
+ * Preload local STT the moment the ear is armed. After "hey robo" the user
+ * speaks at once, and the first turn must not pay the whisper model load as
+ * a silent pause — the voice chat's own warm-up (on start) is too late for
+ * that first sentence. Idempotent on the backend; nothing to do without the
+ * desktop bridge (tests).
+ */
+export function warmUpSttForWake(): void {
+  try {
+    void warmUpTranscription().catch(() => undefined)
+  } catch {
+    // No desktop bridge — nothing to warm.
+  }
+}
 
 /** Stop client-side PCM capture (also called on wake.detected before voice). */
 export function stopClientCapture(): void {
@@ -189,6 +205,10 @@ export function applyWakeStatus(status: WakeStatusResponse | null | undefined): 
     notice: listening && !silent ? '' : noticeFrom(status),
     phrase: status?.phrase?.trim() || current.phrase
   })
+
+  if (listening) {
+    warmUpSttForWake()
+  }
 }
 
 /** Sync the atom from a `wake.start` response. A `{started:false, reason}`
@@ -207,6 +227,7 @@ export function applyWakeStartResult(result: WakeStartResponse | null | undefine
       phrase: result.phrase?.trim() || current.phrase
     })
     void maybeStartClientCapture(result)
+    warmUpSttForWake()
 
     return
   }

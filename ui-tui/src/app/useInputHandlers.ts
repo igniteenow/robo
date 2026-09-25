@@ -28,7 +28,7 @@ import {
 import { $isBlocked, $overlayState, patchOverlayState } from './overlayStore.js'
 import { turnController } from './turnController.js'
 import { patchTurnState } from './turnStore.js'
-import { getUiState } from './uiStore.js'
+import { getUiState, patchUiState } from './uiStore.js'
 
 const isCtrl = (key: { ctrl: boolean }, ch: string, target: string) => key.ctrl && ch.toLowerCase() === target
 const DASHBOARD_NEW_SESSION_MESSAGE = 'starting a fresh dashboard chat...'
@@ -342,6 +342,12 @@ export function useInputHandlers(ctx: InputHandlerContext): InputHandlerResult {
         }
 
         cActions.clearIn()
+
+        if (live.editingLast) {
+          // The exchange is already backed out of history; the text lives on
+          // in ↑ history. Only the ✎ EDIT framing ends here.
+          patchUiState({ editingLast: false })
+        }
 
         return
       }

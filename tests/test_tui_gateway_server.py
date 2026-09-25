@@ -1339,7 +1339,8 @@ def test_voice_record_start_handles_non_dict_voice_cfg(monkeypatch):
         ), f"voice.record raised for voice={bad!r}: {resp.get('error')}"
         assert resp["result"]["status"] == "recording"
         assert captured["silence_threshold"] == 200
-        assert captured["silence_duration"] == 3.0
+        assert captured["silence_duration"] == 1.5
+        assert captured["noise_floor_multiplier"] is None  # recorder default
         assert captured["auto_restart"] is False
 
 
@@ -1368,9 +1369,25 @@ def test_voice_record_start_handles_non_dict_voice_cfg(monkeypatch):
             captured["silence_threshold"] == 200
         ), f"bool silence_threshold leaked through for {bad_bool_cfg!r}"
         assert (
-            captured["silence_duration"] == 3.0
+            captured["silence_duration"] == 1.5
         ), f"bool silence_duration leaked through for {bad_bool_cfg!r}"
         assert captured["auto_restart"] is False
+
+    # voice.noise_floor_multiplier follows the same guard: numbers pass
+    # through (0 pins the fixed threshold), bools / strings mean "default".
+    for floor_cfg, expected in (
+        ({"noise_floor_multiplier": 3}, 3.0),
+        ({"noise_floor_multiplier": 0}, 0.0),
+        ({"noise_floor_multiplier": True}, None),
+        ({"noise_floor_multiplier": "loud"}, None),
+    ):
+        captured.clear()
+        monkeypatch.setattr(server, "_load_cfg", lambda c=floor_cfg: {"voice": c})
+        resp = server.dispatch(
+            {"id": "voice-record-floor", "method": "voice.record", "params": {"action": "start"}}
+        )
+        assert "result" in resp, f"voice.record raised for {floor_cfg!r}"
+        assert captured["noise_floor_multiplier"] == expected, floor_cfg
 
 
 def test_prompt_submit_typed_stop_phrase_ends_voice_chat(monkeypatch):

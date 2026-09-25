@@ -115,7 +115,9 @@ export interface ClarifyReq {
 
 export interface Msg {
   info?: SessionInfo
-  kind?: 'diff' | 'event' | 'intro' | 'panel' | 'slash' | 'trail'
+  // 'clarify': the user's answer to Robo's question mid-turn — shown as a
+  // user bubble, but part of the exchange it answers, not a prompt of its own.
+  kind?: 'clarify' | 'diff' | 'event' | 'intro' | 'panel' | 'slash' | 'trail'
   panelData?: PanelData
   role: Role
   text: string
@@ -186,6 +188,9 @@ export interface Usage {
   active_subagents?: number
   calls: number
   compressions?: number
+  /** True while context_used is the gateway's pre-first-turn estimate (system
+   *  prompt + tools + resumed history) rather than a provider-reported count. */
+  context_estimated?: boolean
   context_max?: number
   context_percent?: number
   context_used?: number

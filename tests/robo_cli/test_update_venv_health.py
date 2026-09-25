@@ -25,6 +25,11 @@ import pytest
 
 from robo_cli import main as cli_main
 
+# ``test_detect_venv_python_excludes_self_and_ancestors`` drives the real
+# ``_detect_venv_python_processes`` (with a fake psutil) — keep the win32
+# hermetic stubs from ``conftest.py`` off this module.
+pytestmark = pytest.mark.real_windows_update_helpers
+
 
 # ---------------------------------------------------------------------------
 # _venv_core_imports_healthy

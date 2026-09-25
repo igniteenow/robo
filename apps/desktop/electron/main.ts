@@ -215,6 +215,12 @@ import {
   MIN_HEIGHT as WINDOW_MIN_HEIGHT,
   MIN_WIDTH as WINDOW_MIN_WIDTH
 } from './window-state'
+import {
+  planWindowsAppIdentity,
+  shortcutMatches,
+  windowsAppUserModelId,
+  windowsStartMenuProgramsDir
+} from './windows-app-identity'
 import { hiddenWindowsChildOptions } from './windows-child-options'
 import {
   buildWindowsInteractiveCommand,
@@ -965,13 +971,77 @@ app.setName(APP_NAME)
 
 // Windows toast notifications silently no-op unless an AppUserModelID is set:
 // `new Notification().show()` returns without error and nothing appears. The
-// AUMID must match the installed Start Menu shortcut's AUMID, which
-// electron-builder derives this from the build `appId` (com.igniteenow.robo) —
-// keep this string in sync with package.json `build.appId`. macOS/Linux don't
-// need this, so gate it on Windows. (Fixes: desktop approval/turn notifications
-// never firing on Windows.)
+// taskbar also takes a window's icon from the Start Menu shortcut that
+// carries its id. For the packaged app the installer's shortcut carries the
+// build `appId` (com.igniteenow.robo). A from-source run has no such
+// shortcut — under the packaged id Windows showed electron.exe's atom — so it
+// runs under its own id and writes its own shortcut with Robo's icon once the
+// app is ready (see windows-app-identity.ts). macOS/Linux don't need any of
+// this, so gate it on Windows.
+//
+// `app.isPackaged`, NOT IS_PACKAGED: the production main bundle bakes
+// ROBO_DESKTOP_IS_PACKAGED=true so `electron .` loads dist/ like a packaged
+// app, and `robo desktop --source` runs that bundle. What Windows needs to
+// know is whether the executable is electron.exe (no installer shortcut) —
+// windows-app-identity.ts decides that from the executable as well.
 if (IS_WINDOWS) {
-  app.setAppUserModelId('com.igniteenow.robo')
+  app.setAppUserModelId(windowsAppUserModelId(app.isPackaged, process.execPath))
+}
+
+function readExistingRoboShortcutTarget() {
+  const programsDir = windowsStartMenuProgramsDir(process.env)
+
+  if (!programsDir) {
+    return null
+  }
+
+  try {
+    return shell.readShortcutLink(path.join(programsDir, 'Robo.lnk')).target || null
+  } catch {
+    return null
+  }
+}
+
+/** Write (or refresh) the from-source Start Menu shortcut, once the app is
+ *  ready (the shell's shortcut calls want a running app). Best-effort: a
+ *  failure only costs the taskbar icon, never the launch. */
+function ensureWindowsSourceShortcut() {
+  try {
+    const plan = planWindowsAppIdentity({
+      appPath: APP_ROOT,
+      execPath: process.execPath,
+      existingRoboShortcutTarget: readExistingRoboShortcutTarget(),
+      iconPath: getAppIconPath(),
+      packaged: app.isPackaged,
+      programsDir: windowsStartMenuProgramsDir(process.env)
+    }).shortcut
+
+    if (!plan) {
+      rememberLog('[icon] no Start Menu shortcut to write (packaged app, or no icon / Start menu)')
+
+      return
+    }
+
+    let existing = null
+
+    try {
+      existing = shell.readShortcutLink(plan.path)
+    } catch {
+      existing = null
+    }
+
+    if (shortcutMatches(existing, plan.options)) {
+      rememberLog(`[icon] Start Menu shortcut up to date: ${plan.path}`)
+
+      return
+    }
+
+    const written = shell.writeShortcutLink(plan.path, existing ? 'update' : 'create', plan.options)
+    const outcome = written ? 'wrote' : 'could not write'
+    rememberLog(`[icon] ${outcome} Start Menu shortcut ${plan.path} (icon ${plan.options.icon})`)
+  } catch (error) {
+    rememberLog(`[icon] Start Menu shortcut skipped: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 // Seed the native About panel with the live Robo version. This is refreshed
@@ -8946,8 +9016,32 @@ function closeQuickEntryWindow() {
   quickEntryWindow = null
 }
 
+/** What the desktop log says about the window icon: the file, and whether
+ *  Electron could decode it (a path that exists but decodes to nothing is
+ *  exactly the case that shows the Electron atom instead). */
+function describeWindowIcon(icon) {
+  if (!icon) {
+    return `none found (${APP_ICON_PATHS.join(', ')})`
+  }
+
+  try {
+    const image = nativeImage.createFromPath(icon)
+
+    if (image.isEmpty()) {
+      return `${icon} (could not be decoded)`
+    }
+
+    const { height, width } = image.getSize()
+
+    return `${icon} (${width}x${height})`
+  } catch (error) {
+    return `${icon} (decode failed: ${error instanceof Error ? error.message : String(error)})`
+  }
+}
+
 function createWindow() {
   const icon = getAppIconPath()
+  rememberLog(`[icon] window icon: ${describeWindowIcon(icon)}; executable: ${process.execPath}`)
   const savedWindowState = readWindowState()
   mainWindow = new BrowserWindow({
     ...computeWindowOptions(savedWindowState, screen.getAllDisplays()),
@@ -11504,6 +11598,10 @@ app.on('open-url', (event, url) => {
 })
 
 app.whenReady().then(() => {
+  if (IS_WINDOWS) {
+    ensureWindowsSourceShortcut()
+  }
+
   const systemCa = installWindowsSystemCaTrust(tls)
 
   if (systemCa.applied) {

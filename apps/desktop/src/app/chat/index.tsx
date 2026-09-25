@@ -34,8 +34,6 @@ import {
   $contextSuggestions,
   $freshDraftReady,
   $gatewayState,
-  $introPersonality,
-  $introSeed,
   $resumeExhaustedSessionId,
   $sessions,
   resolveComposerSessionKey,
@@ -328,8 +326,6 @@ export const ChatView = memo(function ChatView({
   const gatewayState = useStore($gatewayState)
   const gatewaySwapTarget = useStore($gatewaySwapTarget)
   const gatewayOpen = gatewayState === 'open'
-  const introPersonality = useStore($introPersonality)
-  const introSeed = useStore($introSeed)
   // PERF: ChatView must not subscribe to the view's $messages — the atom is
   // replaced on every streaming delta flush (~30×/s) and a subscription here
   // re-renders the entire chat shell (header, chat bar, thread wrapper) per
@@ -546,7 +542,9 @@ export const ChatView = memo(function ChatView({
             clampToComposer={showChatBar}
             cwd={currentCwd}
             gateway={gateway}
-            intro={showIntro ? { personality: introPersonality, seed: introSeed } : undefined}
+            // A fresh chat's logo travels with the centered composer (below);
+            // the thread only carries it when there is no composer to hold it.
+            intro={showIntro && !showChatBar}
             loading={threadLoading}
             onBranchInNewChat={onBranchInNewChat}
             onCancel={haltRun}
@@ -597,13 +595,15 @@ export const ChatView = memo(function ChatView({
             (identical placement), floating resolves against the viewport. Both
             states stay mounted here, so dock⇄float never remounts the editor. */}
         {showChatBar && (
-          <Suspense fallback={<ChatBarFallback />}>
+          <Suspense fallback={<ChatBarFallback centered={showIntro} />}>
             <ChatBar
               busy={busy}
+              centered={showIntro}
               cwd={currentCwd}
               disabled={!gatewayOpen}
               focusKey={activeSessionId}
               gateway={gateway}
+              intro={showIntro}
               maxRecordingSeconds={maxVoiceRecordingSeconds}
               onAddContextRef={onAddContextRef}
               onAddUrl={onAddUrl}

@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react'
 import { type ClipboardEvent, type FormEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef } from 'react'
 
 import { composerFill, composerFloatingStrip, composerSurfaceGlass } from '@/components/chat/composer-dock'
+import { Intro } from '@/components/chat/intro'
 import { Button } from '@/components/ui/button'
 import { Slot as ContribSlot } from '@/contrib/react/slot'
 import { useI18n } from '@/i18n'
@@ -26,6 +27,7 @@ import { AttachmentList } from './attachments'
 import {
   acceptsTriggerCompletion,
   COMPOSER_FADE_BACKGROUND,
+  composerDockPlacementClass,
   type QueueEditState,
   slashArgStage
 } from './composer-utils'
@@ -79,10 +81,12 @@ import { VoiceActivity, VoicePlaybackActivity } from './voice-activity'
 
 export function ChatBar({
   busy,
+  centered = false,
   cwd,
   disabled,
   focusKey,
   gateway,
+  intro,
   maxRecordingSeconds = 120,
   queueSessionKey,
   sessionId,
@@ -285,13 +289,20 @@ export function ChatBar({
     return onCancel()
   }, [activeQueueSessionKeyRef, onCancel])
 
-  const { compactPill, stacked } = useComposerMetrics({
+  const metrics = useComposerMetrics({
     composerDockRef,
     composerRef,
     composerSurfaceRef,
     editorRef,
     poppedOut
   })
+
+  // A centered (fresh-chat) composer is roomy: the text on its own row over
+  // the menu and the controls, like a note you are about to write, not a
+  // one-line field. Docked at the bottom it packs into one line as before.
+  const roomy = centered && !poppedOut
+  const compactPill = metrics.compactPill
+  const stacked = metrics.stacked || roomy
 
   const hasComposerPayload = hasText || attachments.length > 0
   const canSubmit = busy || hasComposerPayload
@@ -945,10 +956,11 @@ export function ChatBar({
         autoCapitalize="off"
         autoCorrect="off"
         className={cn(
-          'min-h-[1.625rem] min-h-(--composer-input-min-height) max-h-(--composer-input-max-height) cursor-text overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] bg-transparent pb-1 pr-1 pt-1 leading-normal text-foreground outline-none disabled:cursor-not-allowed',
+          'min-h-[1.625rem] min-h-(--composer-input-min-height) max-h-(--composer-input-max-height) cursor-text overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] bg-transparent pb-1 pr-1 pt-1 text-[15px] leading-normal text-foreground outline-none disabled:cursor-not-allowed',
           '**:data-ref-text:cursor-default',
           stacked && 'pl-3',
-          stacked ? 'w-full' : 'min-w-(--composer-input-inline-min-width) flex-1'
+          stacked ? 'w-full' : 'min-w-(--composer-input-inline-min-width) flex-1',
+          roomy && 'min-h-[3.5rem] text-[16px] leading-relaxed'
         )}
         contentEditable={!inputDisabled}
         data-placeholder={placeholder}
@@ -1040,6 +1052,13 @@ export function ChatBar({
           }}
         />
       )}
+      {/* A fresh chat with the composer floating: the logo still marks the
+          empty chat zone (the dock is off in its own corner). */}
+      {centered && poppedOut && intro && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <Intro />
+        </div>
+      )}
       <ComposerPrimitive.Unstable_TriggerPopoverRoot>
         {/* Dock column: owns the composer's POSITION and stacks, bottom-up,
             [micro actions] · [status stack] · [composer] · [underside].
@@ -1051,10 +1070,8 @@ export function ChatBar({
             rendered in there is inside the grab area by construction. Keeping
             them out here is what makes that impossible rather than excluded. */}
         <div
-          className={cn(
-            'z-30 flex flex-col',
-            poppedOut ? 'fixed max-w-[calc(100vw-1.5rem)]' : 'absolute bottom-0 left-1/2 max-w-full -translate-x-1/2'
-          )}
+          className={cn('z-30 flex flex-col', composerDockPlacementClass(poppedOut, centered))}
+          data-centered={roomy ? '' : undefined}
           data-popped-out={poppedOut ? '' : undefined}
           data-slot="composer-dock"
           data-thread-scrolled-up={scrolledUp ? '' : undefined}
@@ -1073,6 +1090,13 @@ export function ChatBar({
               : undefined
           }
         >
+          {/* A fresh chat: the logo sits right above the composer, in the
+              middle of the chat zone. */}
+          {roomy && intro && (
+            <div className="mb-2 px-[5px]">
+              <Intro />
+            </div>
+          )}
           {/* Aligned to the composer SURFACE, which sits inside the composer's
               5px transparent grab margin — so both strips carry the same inset
               and share one left edge with it. */}
@@ -1115,6 +1139,7 @@ export function ChatBar({
           <ComposerPrimitive.Root
             className={cn(
               'group/composer relative w-full overflow-visible rounded-2xl',
+              roomy && 'rounded-[1.625rem]',
               poppedOut && 'bg-transparent',
               dragging && 'cursor-grabbing select-none touch-none'
             )}
@@ -1286,11 +1311,12 @@ export function ChatBar({
   )
 }
 
-export function ChatBarFallback() {
+export function ChatBarFallback({ centered = false }: { centered?: boolean }) {
   return (
     <div
       className={cn(
-        'group/composer absolute bottom-0 left-1/2 z-30 w-[min(var(--composer-width),calc(100%-2rem))] max-w-full -translate-x-1/2 rounded-2xl pt-2 pb-[var(--composer-shell-pad-block-end)]',
+        'group/composer z-30 w-[min(var(--composer-width),calc(100%-2rem))] rounded-2xl pt-2 pb-[var(--composer-shell-pad-block-end)]',
+        composerDockPlacementClass(false, centered),
         'bg-linear-to-b from-transparent to-background/55'
       )}
       data-slot="composer-root"

@@ -428,7 +428,7 @@ import shutil
 import stat
 import subprocess
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 
 import functools as _functools
@@ -6512,21 +6512,57 @@ def _try_redownload_electron_dist(project_root: Path, env: dict) -> bool:
     return _redownload_electron_dist(project_root, env, mirror=_ELECTRON_FALLBACK_MIRROR)
 
 
-def _stop_desktop_processes_locking_build(desktop_dir: Path) -> list[int]:
-    """Terminate any running desktop app executing from this build's ``release``
-    dir so a rebuild can replace its (otherwise locked) executable.
+def _desktop_build_lock_roots(desktop_dir: Path, project_root: Path, *, source_mode: bool) -> list[Path]:
+    """The directories whose running executables a desktop build must replace.
+
+    A packaged build rewrites ``release/`` (``Robo.exe``). A source build
+    re-brands the Electron binary it runs from — ``node_modules/electron/dist``
+    (see ``apps/desktop/scripts/brand-dev-electron.mjs``) — which Windows
+    refuses while that binary is running. Only trees that exist are returned,
+    resolved, so the caller matches process executables against real paths.
+    """
+    roots: list[Path] = []
+    candidates = [_electron_dir(project_root) / "dist"] if source_mode else [desktop_dir / "release"]
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved.is_dir():
+            roots.append(resolved)
+    return roots
+
+
+def _exe_runs_from(exe: Optional[str], roots: Sequence[Path]) -> bool:
+    """True when ``exe`` (a process executable path) lives inside one of ``roots``."""
+    if not exe:
+        return False
+    try:
+        exe_path = Path(exe).resolve()
+    except (OSError, ValueError):
+        return False
+    return any(root in exe_path.parents for root in roots)
+
+
+def _stop_desktop_processes_locking_build(
+    desktop_dir: Path, project_root: Optional[Path] = None, *, source_mode: bool = False
+) -> list[int]:
+    """Terminate any running desktop app executing from this build's output
+    tree so the build can replace its (otherwise locked) executable.
 
     On Windows a running ``Robo.exe`` keeps an exclusive lock on
     ``release/win-unpacked/Robo.exe``. electron-builder's pack then can't
     delete the stale binary and dies with ``remove …\\Robo.exe: Access is
     denied`` / ``ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`` (before-pack hits the same
     EPERM cleaning the dir). The retry path repeats the failure because the lock
-    is still held. POSIX lets you unlink a running binary, so this is a no-op
-    off-Windows.
+    is still held. A source build has the same problem one directory over: it
+    stamps Robo's icon onto ``node_modules/electron/dist/electron.exe``, and a
+    running from-source Robo holds that file. POSIX lets you unlink or rewrite
+    a running binary, so this is a no-op off-Windows.
 
     Scope is deliberately narrow: only processes whose executable lives *inside*
-    this desktop's ``release`` tree are stopped — a packaged install elsewhere or
-    an unrelated "Robo" process is never touched. Best-effort: never raises.
+    this build's own tree are stopped — a packaged install elsewhere or an
+    unrelated "Robo" process is never touched. Best-effort: never raises.
     Returns the PIDs we asked to stop.
     """
     if sys.platform != "win32":
@@ -6535,11 +6571,8 @@ def _stop_desktop_processes_locking_build(desktop_dir: Path) -> list[int]:
         import psutil
     except Exception:
         return []
-    try:
-        release_dir = (desktop_dir / "release").resolve()
-    except OSError:
-        return []
-    if not release_dir.is_dir():
+    roots = _desktop_build_lock_roots(desktop_dir, project_root or PROJECT_ROOT, source_mode=source_mode)
+    if not roots:
         return []
 
     me = os.getpid()
@@ -6554,14 +6587,9 @@ def _stop_desktop_processes_locking_build(desktop_dir: Path) -> list[int]:
         except Exception:
             continue
         pid = info.get("pid")
-        exe = info.get("exe")
-        if not exe or pid is None or pid == me:
+        if pid is None or pid == me:
             continue
-        try:
-            exe_path = Path(exe).resolve()
-        except (OSError, ValueError):
-            continue
-        if release_dir in exe_path.parents:
+        if _exe_runs_from(info.get("exe"), roots):
             victims.append(proc)
 
     stopped: list[int] = []
@@ -7000,6 +7028,72 @@ def _register_linux_desktop_entry() -> None:
         print(f"⚠ Could not install the desktop launcher entry: {exc}")
 
 
+def _desktop_stdio_log_path() -> Path:
+    """Where a detached Desktop's stdout/stderr go (Electron's own logs are
+    separate): ``<ROBO_HOME>/logs/desktop-stdio.log``."""
+    log_dir = Path(get_robo_home()) / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return log_dir / "desktop-stdio.log"
+
+
+def _launch_desktop_detached(launch_command: list[str], *, cwd: Path, env: dict) -> int:
+    """Start the Desktop app so it survives this terminal, and return at once.
+
+    The child gets its own session (POSIX: ``start_new_session``; Windows:
+    CREATE_NEW_PROCESS_GROUP + CREATE_NO_WINDOW + CREATE_BREAKAWAY_FROM_JOB,
+    the same bundle the detached gateway uses — see
+    ``robo_cli._subprocess_compat``), no inherited stdio, and on Windows
+    ``ELECTRON_NO_ATTACH_CONSOLE`` so Electron never attaches to the console
+    that launched it (closing that console would otherwise send it
+    CTRL_CLOSE_EVENT). Its stray output lands in a sidecar log. Returns the
+    exit code for this command: 0 once the app is running, 1 if it could not
+    be started.
+    """
+    from robo_cli._subprocess_compat import (
+        windows_detach_flags,
+        windows_detach_flags_without_breakaway,
+    )
+
+    is_windows = sys.platform == "win32"
+    child_env = dict(env)
+    if is_windows:
+        child_env.setdefault("ELECTRON_NO_ATTACH_CONSOLE", "1")
+
+    log_path = _desktop_stdio_log_path()
+
+    def _spawn(extra: dict) -> subprocess.Popen:
+        with open(log_path, "ab", buffering=0) as log_fh:
+            return subprocess.Popen(
+                launch_command,
+                cwd=cwd,
+                env=child_env,
+                close_fds=True,
+                stdin=subprocess.DEVNULL,
+                stdout=log_fh,
+                stderr=log_fh,
+                **extra,
+            )
+
+    try:
+        if is_windows:
+            try:
+                proc = _spawn({"creationflags": windows_detach_flags()})
+            except OSError:
+                # CREATE_BREAKAWAY_FROM_JOB is refused by some job objects
+                # (certain Windows Terminal setups); the hidden-console spawn
+                # is enough on its own there.
+                proc = _spawn({"creationflags": windows_detach_flags_without_breakaway()})
+        else:
+            proc = _spawn({"start_new_session": True})
+    except OSError as e:
+        print(f"✗ Could not start Robo Desktop: {e}")
+        return 1
+
+    print(f"✓ Robo Desktop is running (PID {proc.pid}). It stays open after this terminal closes.")
+    print(f"  Output: {log_path}  ·  `robo desktop --foreground` keeps it attached to this terminal")
+    return 0
+
+
 def cmd_gui(args: argparse.Namespace):
     """Build and launch the native Electron desktop GUI."""
     desktop_dir = PROJECT_ROOT / "apps" / "desktop"
@@ -7113,15 +7207,15 @@ def cmd_gui(args: argparse.Namespace):
             if _force_adhoc_macos_signing(env, source_mode=source_mode):
                 print("  → No Developer ID configured; ad-hoc signing this local rebuild "
                       "(CSC_IDENTITY_AUTO_DISCOVERY=false)")
-            if not source_mode:
-                # A running desktop instance launched from release/win-unpacked
-                # holds Robo.exe locked on Windows, so the pack can't replace
-                # it ("Access is denied" / ERR_ELECTRON_BUILDER_CANNOT_EXECUTE).
-                # Stop it first so the rebuild — including the installer's
-                # headless --update rebuild — succeeds instead of failing cryptically.
-                stopped = _stop_desktop_processes_locking_build(desktop_dir)
-                if stopped:
-                    print(f"  ⚠ Stopped running desktop app to free the build output (pid {', '.join(map(str, stopped))})")
+            # A running desktop instance holds its executable locked on Windows:
+            # release/win-unpacked/Robo.exe for a pack ("Access is denied" /
+            # ERR_ELECTRON_BUILDER_CANNOT_EXECUTE), node_modules/electron/dist/
+            # electron.exe for a source build (the icon stamp can't rewrite it).
+            # Stop it first so the rebuild — including the installer's headless
+            # --update rebuild — succeeds instead of failing cryptically.
+            stopped = _stop_desktop_processes_locking_build(desktop_dir, PROJECT_ROOT, source_mode=source_mode)
+            if stopped:
+                print(f"  ⚠ Stopped running desktop app to free the build output (pid {', '.join(map(str, stopped))})")
             build_result = subprocess.run([npm, "run", build_script], cwd=desktop_dir, env=env, check=False)
             if (
                 build_result.returncode != 0
@@ -7226,10 +7320,20 @@ def cmd_gui(args: argparse.Namespace):
             print(f"✓ Desktop packaged app ready: {packaged_executable} (not launching; --build-only)")
         return
 
+    # The app outlives this terminal: by default it is spawned detached (its
+    # own session / process group, no inherited console or stdio) and this
+    # command returns at once, like any other desktop app launcher. --foreground
+    # keeps the old attached run — Electron's output in this terminal, the exit
+    # code mirrored — for debugging.
+    foreground = bool(getattr(args, "foreground", False))
+
     if source_mode:
+        launch_command = [npm, "exec", "--", "electron", "."]
         print("→ Launching Robo Desktop from source build...")
-        launch_result = subprocess.run([npm, "exec", "--", "electron", "."], cwd=desktop_dir, env=env, check=False)
-        sys.exit(launch_result.returncode)
+        if foreground:
+            launch_result = subprocess.run(launch_command, cwd=desktop_dir, env=env, check=False)
+            sys.exit(launch_result.returncode)
+        sys.exit(_launch_desktop_detached(launch_command, cwd=desktop_dir, env=env))
 
     if packaged_executable is None:
         print(f"✗ Desktop package build completed but no launchable app was found at: {desktop_dir / 'release'}")
@@ -7246,8 +7350,10 @@ def cmd_gui(args: argparse.Namespace):
 
     launch_command.extend(config_electron_flags)
     print(f"→ Launching packaged Robo Desktop: {' '.join(launch_command)}")
-    launch_result = subprocess.run(launch_command, cwd=desktop_dir, env=env, check=False)
-    sys.exit(launch_result.returncode)
+    if foreground:
+        launch_result = subprocess.run(launch_command, cwd=desktop_dir, env=env, check=False)
+        sys.exit(launch_result.returncode)
+    sys.exit(_launch_desktop_detached(launch_command, cwd=desktop_dir, env=env))
 
 
 # Dashboard process-hygiene helpers extracted to robo_cli/dashboard_procs.py

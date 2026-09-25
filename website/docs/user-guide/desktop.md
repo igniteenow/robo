@@ -30,7 +30,7 @@ If you already have Robo installed, simply run
 robo desktop
 ```
 
-That uses your current config, keys, sessions, and skills.
+That uses your current config, keys, sessions, and skills. The app starts detached from the terminal — close the terminal, the app stays; quit the app to stop it (and its backend).
 
 ## What's in the app
 
@@ -96,7 +96,7 @@ The **Artifacts** view collects what your sessions generate — **images, files,
 
 The app is built for working on several things at once:
 
-- **Tabs** — **Cmd/Ctrl+T** opens a new session tab; **Ctrl+Tab** / **Ctrl+Shift+Tab** cycle sessions, and **Ctrl+1…9** jump to a recent session by position. **Cmd/Ctrl+W** closes the focused tab and **Cmd/Ctrl+Shift+T** reopens the last closed one.
+- **Tabs** — **Cmd/Ctrl+T** opens a new session tab; **Ctrl+Tab** / **Ctrl+Shift+Tab** cycle sessions, and **Ctrl+1…9** (macOS) / **Alt+1…9** (Windows, Linux) jump to a recent session by position — on Windows and Linux **Ctrl+1…9** is the profile switcher, so the two can't share the chord. **Cmd/Ctrl+W** closes the focused tab and **Cmd/Ctrl+Shift+T** reopens the last closed one.
 - **Multiple windows** — **Cmd/Ctrl+Shift+N** opens a new window, and any session can be popped out via its context menu (**New window**) or from the command palette. A popped-out window renders that single chat without the global sidebar — handy for parking a long-running session on another monitor. Live agent output streams into every window showing the session.
 - **Panes** — **Cmd/Ctrl+B** toggles the left sidebar, **Cmd/Ctrl+J** the right one, and **Cmd/Ctrl+\\** swaps which side the sidebars sit on.
 
@@ -126,6 +126,20 @@ Quick Entry is a small always-available composer summoned by a **global hotkey f
 ### Voice
 
 Talk to Robo and hear it back, the same [voice mode](./features/voice-mode.md) available elsewhere. On macOS the OS will prompt once for microphone access.
+
+**Voice chat** (the mic menu's *Start voice chat*, or **Ctrl+B** on macOS / **Alt+B** on Windows and Linux, where Ctrl+B is the sidebar toggle) takes over the chat: while it is on you see only Robo's animated face in a ring that breathes with your microphone, what Robo is doing — *Listening…*, *Got it…*, *Thinking…*, *Speaking…* — and the controls (mute, send now, end). No transcript, no composer, nothing to read: just talk. Everything said still lands in the conversation, and the moment you end the voice chat (say "stop", press the same chord again or click *End voice chat*) the whole exchange is there to read, in the normal chat.
+
+It is built to feel like a conversation, whichever model and voice you use:
+
+- **Listening** starts the instant Robo finishes talking — the microphone stays open for the whole chat instead of being re-opened for every turn — and a spoken turn ends 0.65 s after you go quiet. *Quiet* is measured against the room: each turn learns the noise around you (a fan, a laptop, a boosted mic) and hears your words above it and the pause after them below it, so a noisy room neither keeps a turn listening forever nor passes for speech; a turn is capped at 30 s of talking either way. Local speech-to-text is preloaded when the chat starts (and when the "hey robo" ear is armed), decodes greedily, and remembers the language it detected so later turns skip the detection pass.
+- **Thinking** is short: a spoken turn runs with reasoning off (`voice.reasoning_effort: "none"`, the default — typed turns keep the model's own setting), and Robo answers a spoken question the way it would out loud: the answer first, a few plain sentences, no lists or code.
+- **Speaking** begins on the first sentence. Every voice — including the free Edge voice — is synthesized sentence by sentence while the model is still writing, so the first line plays within about a second of being written instead of after the whole reply. The caption says *Speaking…* only while sound is actually playing (it says *Thinking…* until then), and a voice that stops answering mid-reply ends the turn after 15 s instead of leaving the chat "speaking" for good.
+- **Silent otherwise.** The only sound in a voice chat is Robo talking: no completion chime, no interface clicks or thumps (the desktop's haptic cues are audio, and stay off for the whole chat), and the turn-long "thinking" blips are an opt-in (`voice.thinking_sound: ambient`).
+- **Numbers, not guesses.** Under the caption, each turn shows where its time went — `words 1.1 s · first word 1.9 s · voice 0.6 s · total 3.6 s · sentence by sentence`: how long your words took to come back (speech-to-text), how long the model took to its first word, how long the voice took to start, and how the audio arrived. `whole reply at once` means the backend serving this window is older than the app — restart it. The same line is logged to the developer console (`[voice] …`).
+
+### Appearance
+
+A fresh chat opens the way a conversation should: the Robo mark above a roomy composer in the middle of the chat zone — your first message sends it to the bottom, where it stays for the rest of the conversation. The composer is a panel you can see on any theme: a lifted fill, a hairline edge and a soft shadow, at rest and docked alike. Robo's animated 3D face appears only in the voice chat view. Light and dark appearance are one click away on the titlebar (the half-moon), and **Settings → Appearance** has System-follow and the theme presets.
 
 ### Settings & onboarding
 
@@ -190,10 +204,11 @@ Running `robo uninstall --gui` from a **source checkout** (a `robo desktop` dev 
 
 ## CLI reference: `robo desktop`
 
-To launch via the CLI, simply run `robo desktop`. By default it installs workspace Node dependencies, builds the current OS's unpacked Electron app, then launches that packaged artifact.
+To launch via the CLI, simply run `robo desktop`. By default it installs workspace Node dependencies, builds the current OS's unpacked Electron app, then launches that packaged artifact **detached**: the command returns as soon as the app is up, and the app — with the backend it runs — keeps going after you close the terminal, until you quit it like any other desktop application. Anything the app prints goes to `<ROBO_HOME>/logs/desktop-stdio.log`.
 
 | Flag                 | Description                                                                               |
 | -------------------- | ----------------------------------------------------------------------------------------- |
+| `--foreground`       | Keep the app attached to this terminal (its output here, exit code mirrored) — for debugging |
 | `--skip-build`       | Skip npm install/package and launch the existing unpacked app from `apps/desktop/release` |
 | `--force-build`      | Force a full rebuild even if the content stamp matches                                    |
 | `--build-only`       | Build the desktop app but do not launch it (used by `robo update`)                      |
@@ -252,6 +267,10 @@ chmod 600 ~/.robo/.env
 robo serve --host 0.0.0.0 --port 9119
 ```
 
+On an all-interfaces bind the startup banner lists the URLs other machines can actually use (`Reachable from other machines at: http://192.168.1.20:9119 …`) — those are what you paste into the app; `0.0.0.0` itself is not an address.
+
+Want the same host to serve a **browser** too (a laptop or phone with no desktop app)? Run `robo dashboard --no-open --host 0.0.0.0 --port 9119` instead of `robo serve`: it exposes the same API for the desktop app **and** the [web dashboard](./features/web-dashboard.md) at the same URL, behind the same login.
+
 Keep that `robo serve` process running for as long as you want the desktop app to be able to connect — if it stops, the app can no longer reach the backend. Run it under `systemd`, `tmux`, or your process manager of choice so it survives logout and reboots.
 
 Separately, make sure the **gateway is running** on the remote host if you rely on messaging channels — the `robo serve` backend is what the desktop app talks to, but your Telegram/Discord/Slack gateway sessions are a different process that you start and keep running on their own. See [Messaging](./messaging/index.md) for gateway setup.
@@ -272,7 +291,7 @@ The backend reads and writes your `.env` (API keys, secrets) and can run agent c
 2. **Sign in** — the app detects which provider the backend advertises and adapts the button. For a username/password backend it shows a **Sign in** button that opens a credential form (enter the credentials from step 1). For an OAuth backend it shows **Sign in with `<provider>`**, which runs the provider's browser sign-in. Either way the app ends up with an authenticated session against the backend.
 3. **Save and reconnect** — switches the desktop shell onto the remote backend. The session refreshes automatically; you stay signed in across restarts when `ROBO_DASHBOARD_BASIC_AUTH_SECRET` is set.
 
-You can also set the backend URL without the UI via the `ROBO_DESKTOP_REMOTE_URL` environment variable before launching the app (it overrides the in-app setting); you still sign in from the Gateway settings panel.
+There is also an environment override for **token-authenticated** backends only — a backend bound to loopback and reached through your own tunnel: set both `ROBO_DESKTOP_REMOTE_URL` and `ROBO_DESKTOP_REMOTE_TOKEN` before launching the app (one without the other is an error). A backend bound to a reachable address is auth-gated and rejects session tokens, so for the password / OIDC setup above use the Gateway settings panel.
 
 :::note Per-profile remote hosts
 The remote gateway host is configured per [profile](./profiles.md), so each profile can point at its own remote backend (or stay on its local one). Switching profiles switches which remote host the app connects to.
@@ -367,6 +386,12 @@ npm run pack         # unpacked app under release/ (no installer)
 ```
 
 macOS/Windows signing and notarization run automatically when the relevant credentials are present in the environment (`CSC_LINK` / `CSC_KEY_PASSWORD` / `APPLE_*` for macOS, `WIN_CSC_*` for Windows).
+
+### Windows: the taskbar and Start menu icon from source
+
+On Windows the taskbar button, the Alt-Tab tile and the Start menu's recent-apps row show the **executable's** icon. A packaged Robo.exe has Robo's icon stamped into it (rcedit, from electron-builder's `afterPack` hook); a from-source run (`robo desktop --source`, `npm run dev`) runs the stock `electron.exe`, whose icon is the Electron atom. The source build therefore stamps the same icon and identity onto `node_modules/electron/dist/electron.exe` (`scripts/brand-dev-electron.mjs`, part of `npm run build` and `npm run dev`; `ROBO_DESKTOP_SKIP_EXE_BRAND=1` skips it). `npm ci` extracts a fresh, unbranded binary — the next build re-brands it. A running Robo holds that file open, so `robo desktop --source` stops the running instance before it builds, like a packaged rebuild does.
+
+Windows also takes a taskbar button's icon from the Start Menu shortcut that carries the window's app id; the installer writes that shortcut for the packaged app. A from-source run (`robo desktop --source`, `npm run dev`) has no installer, so the app runs under its own id (`com.igniteenow.robo.source`) and writes its own shortcut — **Robo** in the Start menu, with the Robo mark, pointing at the same Electron + app folder that launched it — the first time it starts. Both the taskbar and the Start menu then show the Robo mark, and toasts work from source too. If a packaged Robo is installed as well, the from-source entry is named **Robo (source)** beside it — an older installed Robo keeps its own Start menu entry and icon until it is uninstalled (Settings → Apps → Robo). A from-source run is recognised by its executable (`electron.exe`), so it gets its own shortcut even though the production main bundle reports itself as packaged. The resolved icon path and the shortcut written are logged at startup (`[icon] window icon: …`, `[icon] wrote Start Menu shortcut …` in the desktop log).
 
 ### macOS permissions and local rebuilds (TCC)
 

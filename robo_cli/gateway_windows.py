@@ -1008,6 +1008,12 @@ def _prompt_install_choices(
     return start_now, start_on_login
 
 
+def _force_startup_folder(env: dict | None = None) -> bool:
+    """``ROBO_GATEWAY_FORCE_STARTUP`` truthy → install via the Startup folder, never schtasks."""
+    source = os.environ if env is None else env
+    return str(source.get("ROBO_GATEWAY_FORCE_STARTUP", "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _install_startup_fallback(script_path: Path, start_now: bool, detail: str) -> None:
     """Install the Startup-folder fallback and optionally start once."""
     print(f"↻ Scheduled Task install blocked ({detail.splitlines()[0]}) — using Startup folder fallback")
@@ -1067,6 +1073,14 @@ def install(
 
     task_name = get_task_name()
     script_path = _write_task_script()
+
+    # ROBO_GATEWAY_FORCE_STARTUP=1: skip Scheduled Task entirely and use the
+    # Startup-folder launcher — the documented escape hatch for boxes where
+    # group policy registers the task but never fires its ONLOGON trigger
+    # (robo gateway status shows "registered, not running").
+    if _force_startup_folder():
+        _install_startup_fallback(script_path, start_now, "ROBO_GATEWAY_FORCE_STARTUP=1 set")
+        return
 
     # On machines where the current user's scheduled-task ACL is locked down,
     # schtasks /Create or /Change can sit for the timeout before returning

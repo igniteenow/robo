@@ -18,6 +18,7 @@ import {
   togglePanesFlipped,
   toggleSidebarOpen
 } from '@/store/layout'
+import { useTheme } from '@/themes/context'
 
 import { appViewForPath, isOverlayView, SETTINGS_ROUTE } from '../routes'
 
@@ -102,6 +103,7 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
   const hapticsMuted = useStore($hapticsMuted)
   const fileBrowserOpen = useStore($fileBrowserOpen)
   const sidebarOpen = useStore($sidebarOpen)
+  const { resolvedMode, setMode } = useTheme()
 
   const toggleHaptics = () => {
     if (!hapticsMuted) {
@@ -196,6 +198,18 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
         triggerHaptic('open')
         navigate(`${SETTINGS_ROUTE}?tab=keybinds`)
       }
+    },
+    {
+      // Light ↔ dark in one click; "System" and the theme presets live in
+      // Settings → Appearance (and the command palette's "Change color mode").
+      icon: <Codicon name="color-mode" />,
+      id: 'appearance',
+      label: resolvedMode === 'dark' ? t.titlebar.switchToLight : t.titlebar.switchToDark,
+      onSelect: () => {
+        triggerHaptic('selection')
+        setMode(resolvedMode === 'dark' ? 'light' : 'dark')
+      },
+      title: t.titlebar.appearanceTitle
     },
     {
       actionId: 'nav.settings',

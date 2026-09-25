@@ -9,7 +9,7 @@ import { readActiveTerminal } from '@/app/right-sidebar/terminal/buffer'
 import { closeAgentTerminalByProc } from '@/app/right-sidebar/terminal/terminals'
 import { burstVibeHearts } from '@/components/chat/vibe-hearts'
 import { translateNow } from '@/i18n'
-import { type GatewayEventPayload, textPart } from '@/lib/chat-messages'
+import { chatMessageText, type GatewayEventPayload, textPart } from '@/lib/chat-messages'
 import { coerceGatewayText, coerceThinkingText, normalizePersonalityValue } from '@/lib/chat-runtime'
 import { playCompletionSound } from '@/lib/completion-sound'
 import { resolveGatewayEventSessionId } from '@/lib/gateway-events'
@@ -595,6 +595,49 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
           if (text) {
             finalizeInterimAssistantMessage(sessionId, text)
           }
+        }
+      } else if (event.type === 'message.user') {
+        // Authoritative echo of a user message the gateway accepted mid-turn
+        // (busy-input policy, session.steer / session.redirect) — from ANY
+        // attached client. Our own sends already painted an optimistic bubble
+        // (the submit / redirect paths), so paint only when no user bubble
+        // carries this text yet: a steer typed in the TUI or the web
+        // dashboard then lands here the moment the gateway takes it instead
+        // of after the next transcript reload. Sits above the live reply, like
+        // the redirect path's own bubble.
+        const text = coerceGatewayText(payload?.text).trim()
+
+        if (sessionId && payload?.mid_turn && text) {
+          // Text received before the echo belongs above it: flush the batched
+          // deltas first so the live bubble exists (and holds that text) by
+          // the time the insertion point is chosen.
+          flushQueuedDeltas(sessionId)
+
+          updateSessionState(sessionId, state => {
+            if (state.messages.some(message => message.role === 'user' && chatMessageText(message).trim() === text)) {
+              return state
+            }
+
+            const message = {
+              id: `user-echo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              role: 'user' as const,
+              parts: [textPart(text)]
+            }
+
+            // The live reply bubble is created lazily on the first delta, so
+            // before it exists the tail IS the right spot; once it streams,
+            // the steer goes above it (it was said while that reply ran).
+            const streamIndex = state.streamId
+              ? state.messages.findIndex(candidate => candidate.id === state.streamId)
+              : -1
+
+            const messages =
+              streamIndex >= 0
+                ? [...state.messages.slice(0, streamIndex), message, ...state.messages.slice(streamIndex)]
+                : [...state.messages, message]
+
+            return { ...state, messages }
+          })
         }
       } else if (event.type === 'thinking.delta') {
         // thinking.delta carries the kawaii spinner status (face + verb from

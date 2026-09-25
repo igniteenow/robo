@@ -1505,6 +1505,14 @@ display:
   background_process_notifications: all
 
 
+  # Quit the TUI after this many minutes with no keyboard/mouse input, no
+  # running turn, no background task and no open mic (voice mode / armed wake
+  # word). A system line warns five minutes before; any key cancels.
+  #   60: quit after an hour idle (default)
+  #   0:  never quit on idle
+  # Ignored by the dashboard chat tab.
+  tui_idle_exit_minutes: 60
+
   # Play terminal bell when agent finishes a response.
   # Useful for long-running tasks — your terminal will ding when the agent is done.
   # Works over SSH. Most terminals can be configured to flash the taskbar or play a sound.
@@ -1694,28 +1702,16 @@ updates:
 # =============================================================================
 # Web Dashboard
 # =============================================================================
-# OAuth gate configuration for `robo dashboard --host <non-loopback>`.
-# Reserved for a future Ignitee Now hosted-portal auth plugin. Until that plugin
-# ships, use the self-hosted OIDC block below or `plugins/dashboard_auth/basic`.
-# Each setting here can be overridden by an environment variable:
+# Auth gate for `robo dashboard --host <non-loopback>`: a public bind needs
+# an auth provider or it fails closed. Two ship in the box — the self-hosted
+# OIDC block below (your own identity provider) and `dashboard.basic_auth`
+# (username/password). Env wins over config when set to a non-empty value;
+# empty env values are treated as unset so a provisioned-but-not-populated
+# secret can't shadow a valid entry here.
 #
-#   dashboard.oauth.client_id   <-  ROBO_DASHBOARD_OAUTH_CLIENT_ID
-#   dashboard.oauth.portal_url  <-  ROBO_DASHBOARD_PORTAL_URL
 #   dashboard.public_url        <-  ROBO_DASHBOARD_PUBLIC_URL
 #
-# Env wins when set to a non-empty value. This is what Fly.io's platform-
-# secret injection uses to push per-deploy client_ids without needing to
-# bake a config.yaml into the image. Empty env values are treated as unset
-# so a provisioned-but-not-populated secret can't shadow a valid entry here.
-#
-# Local dev / on-prem deploys should typically set these via config.yaml
-# (the ~/.robo/.env file is reserved for API keys and secrets).
-#
 # dashboard:
-#   oauth:
-#     client_id: ""    # agent:{instance_id}; Portal provisions this at deploy
-#     portal_url: ""   # set to your Ignitee Now portal URL once one is deployed
-#
 #   # Force the absolute base URL the OAuth callback (and any other public
 #   # URL the dashboard hands to external systems) is built from. Set this
 #   # for deploys behind reverse proxies that don't reliably forward
@@ -1736,8 +1732,8 @@ updates:
 #
 # -----------------------------------------------------------------------------
 # Self-hosted OIDC dashboard auth (generic OpenID Connect — Authentik,
-# Keycloak, Zitadel, Authelia, Auth0, Okta, Google, …). Use this INSTEAD of the
-# igniteenow block above when gating the dashboard with your own identity provider.
+# Keycloak, Zitadel, Authelia, Auth0, Okta, Google, …) — gate the dashboard
+# with your own identity provider.
 # Each setting can be overridden by an environment variable:
 #
 #   dashboard.oauth.self_hosted.issuer         <-  ROBO_DASHBOARD_OIDC_ISSUER

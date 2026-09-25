@@ -453,7 +453,7 @@ function IntroHarness() {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <Thread intro={{ personality: 'default', seed: 1 }} />
+      <Thread intro />
     </AssistantRuntimeProvider>
   )
 }

@@ -44,48 +44,39 @@ gateway machine. If you run your own bots directly, use the native platform
 adapters ([Telegram](/user-guide/messaging/telegram),
 [Discord](/user-guide/messaging/discord), etc.) instead.
 
-## Enrollment
+## Credentials
 
 A self-hosted gateway authenticates to the connector with a per-gateway
-secret. `robo gateway enroll` redeems a **single-use enrollment token**
-(minted by the connector when your tenant's route is provisioned and delivered
-with your gateway config) for that secret:
+secret. There are two ways to get one:
 
-```bash
-robo gateway enroll \
-  --token <enrollment-token> \
-  --connector-url wss://connector.example.com/relay
-```
+- **Managed self-provisioning.** When `gateway.relay_url` (or
+  `GATEWAY_RELAY_URL`) is set, no secret is pinned, and the gateway can obtain
+  an identity token from your own IdP (`gateway.idp.token_url` /
+  `GATEWAY_RELAY_IDP_TOKEN_URL`, OAuth2 client-credentials), it provisions
+  itself against the connector's `/relay/provision` endpoint at boot. The
+  credentials live only in process memory and are refreshed on every start.
+- **Operator-issued credentials.** The connector operator issues the
+  per-gateway secret and delivery key for your tenant; put them in the active
+  profile's `.env`:
 
-What it does:
+  ```bash
+  GATEWAY_RELAY_URL=wss://connector.example.com/relay
+  GATEWAY_RELAY_ID=gw-my-box
+  GATEWAY_RELAY_SECRET=<per-gateway secret>
+  GATEWAY_RELAY_DELIVERY_KEY=<per-tenant delivery key>
+  # optional: a reachable URL the connector pokes to wake an idle gateway
+  GATEWAY_RELAY_WAKE_URL=https://my-box.example.com/wake
+  ```
 
-1. Resolves a workload access token via an OAuth2 client-credentials grant
-   against your own IdP (`gateway.idp.token_url`) — this proves which tenant
-   you own.
-2. POSTs the enrollment token and a gateway id to the connector's
-   `/relay/enroll` endpoint over TLS.
-3. The connector verifies the token (signature, single-use, tenant match),
-   mints a per-gateway secret plus a per-tenant delivery key, and returns them
-   once.
-4. Persists the credentials into `~/.robo/.env`:
-   `GATEWAY_RELAY_ID`, `GATEWAY_RELAY_SECRET`, `GATEWAY_RELAY_DELIVERY_KEY`
-   (plus `GATEWAY_RELAY_URL` / `GATEWAY_RELAY_WAKE_URL` when supplied).
+  Restart the gateway afterwards to pick up the new environment. A pinned
+  `GATEWAY_RELAY_SECRET` is always respected: self-provisioning skips when one
+  is present.
 
-Restart the gateway afterwards to pick up the new environment.
-
-Flags:
-
-| Flag | Description |
-|------|-------------|
-| `--token` | The single-use enrollment token. Also settable via `GATEWAY_RELAY_ENROLL_TOKEN`. |
-| `--connector-url` | Connector base or relay URL (`wss://…/relay` or `https://…`). Also settable via `GATEWAY_RELAY_URL` or `gateway.relay_url` in `config.yaml`. |
-| `--gateway-id` | Stable id for this gateway instance (used for kill-switch granularity). Defaults to `gw-<hostname>`. |
-| `--wake-url` | Optional reachable URL the connector pokes (payload-free GET) to wake this gateway when buffered work arrives while it is idle. Persisted as `GATEWAY_RELAY_WAKE_URL`. Without it the gateway still drains buffered messages whenever it next reconnects. |
-
-:::note Managed installs
-`robo gateway enroll` refuses to run in managed/hosted installs — there the
-hosting platform provisions the relay secret directly into the container
-environment.
+:::note
+There is no `robo gateway enroll` command in this build. Earlier drafts of
+these docs described one that redeemed a single-use enrollment token; that
+flow was never shipped, and the connector contract for it is not part of this
+repository. Use one of the two paths above.
 :::
 
 ## Configuration

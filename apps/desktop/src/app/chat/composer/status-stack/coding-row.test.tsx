@@ -27,7 +27,7 @@ describe('CodingStatusRow', () => {
     cleanup()
   })
 
-  it('opens the review pane from the branch and the diff counts, never the bar itself', () => {
+  it('opens the review pane from the branch, never the bar itself', () => {
     const onOpen = vi.fn()
 
     const { container } = render(<CodingStatusRow onOpen={onOpen} repoPath="/repo" />)
@@ -41,18 +41,24 @@ describe('CodingStatusRow', () => {
 
     fireEvent.click(screen.getByText('bb/hitbox'))
     expect(onOpen).toHaveBeenCalledTimes(1)
-
-    fireEvent.click(screen.getByText('12'))
-    expect(onOpen).toHaveBeenCalledTimes(2)
   })
 
-  it('wraps the click targets without adding a layout box', () => {
+  it('never shows the working-tree line counts next to the prompt', () => {
+    render(<CodingStatusRow onOpen={() => undefined} repoPath="/repo" />)
+
+    // The mocked status has 12 lines added / 3 removed; the row no longer
+    // prints them (a lockfile churn read as "+17678 −17678" beside the box).
+    expect(screen.queryByText('12')).toBeNull()
+    expect(screen.queryByText('3')).toBeNull()
+    expect(screen.queryByText(/\+12/)).toBeNull()
+  })
+
+  it('wraps the click target without adding a layout box', () => {
     const { container } = render(<CodingStatusRow onOpen={() => undefined} repoPath="/repo" />)
 
-    // `display: contents` is what keeps the branch label and the counts direct
-    // flex children of the row — the hit areas cost nothing visually.
+    // `display: contents` is what keeps the branch label a direct flex child
+    // of the row — the hit area costs nothing visually.
     expect(screen.getByText('bb/hitbox').parentElement?.classList.contains('contents')).toBe(true)
-    expect(screen.getByText('12').closest('button')?.classList.contains('contents')).toBe(true)
     // The glyph button fills the row's existing 3.5 leading slot exactly.
     expect(container.querySelector('button[class~="size-3.5"]')).not.toBeNull()
   })

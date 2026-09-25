@@ -62,7 +62,7 @@ Commands by area
   Get started      setup · model · tools · chat · status · doctor
   Sessions         sessions · checkpoints · backup · dump · logs · prompt-size
   Gateway          gateway · whatsapp · whatsapp-cloud · slack · send · webhook · pairing
-  Models & auth    model · moa · fallback · login · logout · auth · proxy · migrate
+  Models & auth    model · moa · fallback · logout · auth · proxy · migrate
   Automation       cron · kanban · project · hooks · approvals · security
   Extensions       skills · bundles · plugins · mcp · tools · computer-use · lsp
   Memory           memory · memory-graph · learning · curator · insights · monitoring

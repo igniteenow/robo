@@ -200,7 +200,38 @@ export const zh: Translations = {
     openStarmap: '打开记忆图谱',
     openKeybinds: '键盘快捷键',
     layoutEditor: '布局编辑器',
-    layoutEditorTitle: '布局编辑器 — ⌘ 点击重置布局'
+    layoutEditorTitle: '布局编辑器 — ⌘ 点击重置布局',
+    switchToLight: '切换为浅色外观',
+    switchToDark: '切换为深色外观',
+    appearanceTitle: '浅色 / 深色 — 更多选项见 设置 → 外观'
+  },
+
+  voiceScreen: {
+    title: '语音对话',
+    subtitle: '直接说话即可 — 结束语音对话后，完整的对话内容会显示在这里。',
+    status: {
+      idle: '请稍等…',
+      listening: '正在聆听…',
+      transcribing: '收到…',
+      thinking: '思考中…',
+      speaking: '正在说话…'
+    },
+    muted: '麦克风已静音',
+    mute: '静音麦克风',
+    unmute: '取消静音',
+    sendNow: '立即发送',
+    end: '结束语音对话',
+    hint: key => (key ? `${key} 也可结束语音对话` : '点击“结束语音对话”即可停止'),
+    hintWithPhrase: (phrase, key) => (key ? `说“${phrase}”即可结束语音对话 · ${key}` : `说“${phrase}”即可结束语音对话`),
+    timing: {
+      words: '识别',
+      firstWord: '首字',
+      voice: '发声',
+      total: '合计',
+      sentence: '逐句播放',
+      streamed: '流式播放',
+      whole: '整段一次播放'
+    }
   },
 
   keybinds: {
@@ -3032,6 +3063,8 @@ export const zh: Translations = {
     setProfileFailed: '设置配置档案失败',
     sttDisabled: '设置中已禁用语音转文字。',
     stopFailed: '停止失败',
+    redirectDelivered: '已发送到正在进行的回合',
+    redirectQueued: '已排队到下一回合',
     regenerateFailed: '重新生成失败',
     editFailed: '编辑失败',
     resumeFailed: '恢复失败',

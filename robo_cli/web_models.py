@@ -390,6 +390,8 @@ class AutomationBlueprintInstantiate(BaseModel):
 class MCPServerCreate(BaseModel):
     name: str
     url: Optional[str] = None
+    # transport: "http" (Streamable HTTP, default) | "sse" — remote servers only
+    transport: Optional[str] = None
     command: Optional[str] = None
     args: List[str] = []
     # env: KEY=VALUE map for stdio servers (API keys, etc.)

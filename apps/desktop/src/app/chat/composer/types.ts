@@ -33,8 +33,13 @@ export interface ChatBarState {
 
 export interface ChatBarProps {
   busy: boolean
+  /** A fresh, empty chat: the composer sits in the middle of the chat zone,
+   *  roomy, with the intro above it (see composerDockPlacementClass). */
+  centered?: boolean
   disabled: boolean
   focusKey?: string | null
+  /** Show the Robo mark above a centered composer (a fresh chat). */
+  intro?: boolean
   maxRecordingSeconds?: number
   state: ChatBarState
   gateway?: RoboGateway | null

@@ -6,6 +6,7 @@ Handler injected to avoid importing ``main``.
 
 from __future__ import annotations
 
+import argparse
 from typing import Callable
 
 
@@ -31,6 +32,15 @@ def build_memory_parser(subparsers, *, cmd_memory: Callable) -> None:
         nargs="?",
         default=None,
         help="Provider to configure directly (e.g. honcho), skipping the picker",
+    )
+    # Provider-specific flags (`robo memory setup mem0 --mode oss --oss-llm-key …`,
+    # documented per provider) are read by the provider's own setup hook from
+    # sys.argv. Without this catch-all argparse rejected them as
+    # "unrecognized arguments" before the provider ever saw them.
+    _setup_parser.add_argument(
+        "provider_args",
+        nargs=argparse.REMAINDER,
+        help=argparse.SUPPRESS,
     )
     memory_sub.add_parser("status", help="Show current memory provider config")
     memory_sub.add_parser("off", help="Disable external provider (built-in only)")

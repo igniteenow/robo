@@ -1609,6 +1609,18 @@ export function getActionStatus(name: string, lines = 200): Promise<ActionStatus
   })
 }
 
+/** Preload the backend's local STT model so the first spoken turn of a voice
+ *  chat is transcribed as fast as every later one. Fire-and-forget: the
+ *  backend returns at once and loads on a worker thread. */
+export function warmUpTranscription(): Promise<{ ok: boolean; scheduled?: boolean }> {
+  return window.roboDesktop.api<{ ok: boolean; scheduled?: boolean }>({
+    path: '/api/audio/warm-up',
+    method: 'POST',
+    ...profileScoped(),
+    body: {}
+  })
+}
+
 export function transcribeAudio(dataUrl: string, mimeType?: string): Promise<AudioTranscriptionResponse> {
   return window.roboDesktop.api<AudioTranscriptionResponse>({
     path: '/api/audio/transcribe',

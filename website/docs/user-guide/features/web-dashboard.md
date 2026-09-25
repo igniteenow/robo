@@ -858,18 +858,25 @@ Custom providers can implement `supports_token`/`verify_token` the same way to e
 ### Verifying the gate is on
 
 ```bash
-# Quick env-var path.
-ROBO_DASHBOARD_OAUTH_CLIENT_ID=agent:test \
+# Quick env-var path (self-hosted OIDC provider).
+ROBO_DASHBOARD_OIDC_ISSUER=https://idp.example.com \
+ROBO_DASHBOARD_OIDC_CLIENT_ID=robo-dashboard \
   robo dashboard --host 0.0.0.0
 
 # Or the equivalent via config.yaml (recommended for local dev / on-prem):
 #
 #   dashboard:
 #     oauth:
-#       client_id: agent:test
+#       self_hosted:
+#         issuer: https://idp.example.com
+#         client_id: robo-dashboard
 #
 # then just:
 robo dashboard --host 0.0.0.0
+
+# No IdP? The username/password provider gates the same way:
+ROBO_DASHBOARD_BASIC_AUTH_USERNAME=ahmad ROBO_DASHBOARD_BASIC_AUTH_PASSWORD=… \
+  robo dashboard --host 0.0.0.0
 
 # Hit /api/status to see the gate state:
 curl -s http://127.0.0.1:9119/api/status | jq '.auth_required, .auth_providers'
@@ -924,11 +931,12 @@ The session refreshes automatically and survives restarts when `ROBO_DASHBOARD_B
 
 ### Environment-variable override
 
-Instead of the in-app setting, you can point the desktop at a backend with an env var before launching it. When `ROBO_DESKTOP_REMOTE_URL` is set, it overrides the saved in-app URL (the Gateway settings panel shows an "env override" badge and disables editing); you still **Sign in** with your username and password from the panel.
+For **token-authenticated** backends only — a backend bound to loopback that you reach through your own tunnel — you can point the desktop at it with env vars before launching it. `ROBO_DESKTOP_REMOTE_URL` overrides the saved in-app URL (the Gateway settings panel shows an "env override" badge and disables editing) and `ROBO_DESKTOP_REMOTE_TOKEN` supplies the session token; setting one without the other is an error. A backend bound to a reachable address is auth-gated and rejects session tokens, so for the username/password (or OIDC) setup above use the Gateway settings panel and **Sign in** instead.
 
 | Env var | Value |
 |---------|-------|
-| `ROBO_DESKTOP_REMOTE_URL` | `http://<backend-host>:9119` |
+| `ROBO_DESKTOP_REMOTE_URL` | `http://127.0.0.1:9119` (through your tunnel) |
+| `ROBO_DESKTOP_REMOTE_TOKEN` | the backend's `ROBO_DASHBOARD_SESSION_TOKEN` |
 
 ### Troubleshooting
 

@@ -615,3 +615,51 @@ class TestGithubExemptionAbuse:
         assert _scan_cron_prompt(
             "generate a keypair and explain id_rsa vs id_ed25519"
         ) == ""
+
+
+# ---------------------------------------------------------------------------
+# Registry wiring: every schema parameter the model can send reaches cronjob()
+# ---------------------------------------------------------------------------
+
+
+def test_registry_handler_forwards_attach_to_session(monkeypatch):
+    """``attach_to_session`` is in the tool schema and documented as a per-job
+    override of ``cron.mirror_delivery``; the registry lambda used to drop it,
+    so the model's setting was silently ignored."""
+    import tools.cronjob_tools as mod
+    from tools.registry import registry
+
+    seen = {}
+
+    def fake_cronjob(**kwargs):
+        seen.update(kwargs)
+        return "{}"
+
+    monkeypatch.setattr(mod, "cronjob", fake_cronjob)
+    entry = registry.get_entry("cronjob")
+    assert entry is not None
+
+    entry.handler({"action": "create", "prompt": "p", "schedule": "1h", "attach_to_session": True}, task_id="t1")
+
+    assert seen["attach_to_session"] is True
+    assert seen["task_id"] == "t1"
+    assert seen["action"] == "create"
+
+
+def test_registry_handler_schema_params_all_reach_cronjob():
+    """Guard against the next dropped parameter: every schema property that
+    ``cronjob()`` accepts is forwarded by the registry handler."""
+    import inspect
+
+    import tools.cronjob_tools as mod
+    from tools.registry import registry
+
+    entry = registry.get_entry("cronjob")
+    accepted = set(inspect.signature(mod.cronjob).parameters)
+    schema_params = set(mod.CRONJOB_SCHEMA["parameters"]["properties"])
+    forwarded_source = inspect.getsource(entry.handler)
+    # Inference pins are deliberately NOT model-settable (see the lambda).
+    expected = (schema_params & accepted) - {"model", "provider", "base_url"}
+
+    missing = sorted(p for p in expected if f"{p}=args.get(" not in forwarded_source)
+    assert not missing, f"schema params dropped by the cronjob registry handler: {missing}"

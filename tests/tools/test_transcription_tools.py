@@ -1184,7 +1184,14 @@ class TestRunCommandSttIdleTimeout:
 
     def test_stderr_progress_extends_beyond_timeout(self, tmp_path):
         """A slow-but-alive command that keeps emitting output survives an
-        idle timeout shorter than its total runtime."""
+        idle timeout shorter than its total runtime.
+
+        The idle clock starts at Popen, so the first tick must land inside
+        the idle window: a 0.1 s window was shorter than a Windows venv
+        interpreter takes to start, which timed the test out before the
+        script printed anything. One second covers process start on every
+        platform while four 0.4 s ticks (1.6 s total) still outlive it.
+        """
         from tools.transcription_tools import _run_command_stt
 
         script = tmp_path / "progress_then_exit.py"
@@ -1193,7 +1200,7 @@ class TestRunCommandSttIdleTimeout:
                 "import sys, time",
                 "for idx in range(4):",
                 "    print(f'tick {idx}', file=sys.stderr, flush=True)",
-                "    time.sleep(0.04)",
+                "    time.sleep(0.4)",
                 "print('done', flush=True)",
             ]),
             encoding="utf-8",
@@ -1201,7 +1208,7 @@ class TestRunCommandSttIdleTimeout:
 
         result = _run_command_stt(
             self._shell_command(sys.executable, "-u", str(script)),
-            timeout=0.1,
+            timeout=1.0,
         )
 
         assert result.returncode == 0

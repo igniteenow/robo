@@ -274,7 +274,6 @@ class TestContinuousLoopSimulation:
         monkeypatch.setattr(voice, "_continuous_on_silent_limit", None)
         monkeypatch.setattr(voice, "_continuous_auto_restart", True, raising=False)
         monkeypatch.setattr(voice, "_voice_busy_probe", None, raising=False)
-        monkeypatch.setattr(voice, "_play_beep", lambda *_, **__: None)
 
         class FakeRecorder:
             _silence_threshold = 200
@@ -347,11 +346,52 @@ class TestContinuousLoopSimulation:
 
         voice.stop_continuous()
 
+    def test_vad_settings_reach_the_recorder(self, fake_recorder):
+        """Defaults: 1.5 s of silence ends a turn; the recorder keeps its own
+        noise-floor multiplier unless the caller passes a number (0 pins the
+        fixed threshold; bools/None are ignored)."""
+        import robo_cli.voice as voice
 
+        voice.start_continuous(on_transcript=lambda _t: None)
+        assert fake_recorder._silence_threshold == 200
+        assert fake_recorder._silence_duration == 1.5
+        assert not hasattr(fake_recorder, "_floor_multiplier")
+        voice.stop_continuous()
 
+        voice.start_continuous(on_transcript=lambda _t: None, noise_floor_multiplier=3)
+        assert fake_recorder._floor_multiplier == 3.0
+        voice.stop_continuous()
 
+        voice.start_continuous(on_transcript=lambda _t: None, noise_floor_multiplier=0)
+        assert fake_recorder._floor_multiplier == 0.0
+        voice.stop_continuous()
 
+        voice.start_continuous(on_transcript=lambda _t: None, noise_floor_multiplier=True)
+        assert fake_recorder._floor_multiplier == 0.0  # untouched by the bool
+        voice.stop_continuous()
 
+    def test_loop_never_plays_a_record_beep(self, fake_recorder, monkeypatch):
+        """No record start/stop beep — not on start, not on the silence stop,
+        not on restart, not on stop_continuous — whatever config.yaml says.
+        A voice chat is silent apart from Robo's own replies (and the
+        optional transcribing blips)."""
+        import robo_cli.voice as voice
+        import tools.voice_mode as vm
+
+        monkeypatch.setattr("robo_cli.config.load_config", lambda: {"voice": {"beep_enabled": True}})
+        monkeypatch.setattr(voice, "transcribe_recording", lambda _p: {"success": True, "transcript": "hi"})
+        monkeypatch.setattr(voice, "is_whisper_hallucination", lambda _t: False)
+        beeps = []
+        monkeypatch.setattr(vm, "play_beep", lambda *a, **k: beeps.append((a, k)))
+
+        voice.start_continuous(on_transcript=lambda _t: None)
+        fake_recorder.last_callback()  # silence stop -> transcribe -> restart
+        assert fake_recorder.start_calls == 2
+        voice.stop_continuous()
+
+        assert beeps == []
+        assert not hasattr(voice, "_play_beep")
+        assert not hasattr(voice, "_beeps_enabled")
 
     def test_silent_limit_halts_loop_after_three_strikes(self, fake_recorder, monkeypatch):
         import robo_cli.voice as voice
@@ -423,26 +463,6 @@ class TestContinuousLoopSimulation:
 
 
 
-class TestBeepsEnabledTruthyStrings:
-    """voice.beep_enabled quoted in YAML ("false"/"off") must disable beeps —
-    bool("false") is True, so the gate must use utils.is_truthy_value (#49883)."""
-
-    def _enabled_with(self, monkeypatch, value):
-        import robo_cli.voice as voice
-
-        monkeypatch.setattr(
-            "robo_cli.config.load_config",
-            lambda: {"voice": {"beep_enabled": value}},
-        )
-        return voice._beeps_enabled()
-
-    def test_quoted_false_string_disables(self, monkeypatch):
-        assert self._enabled_with(monkeypatch, "false") is False
-
-
-    def test_real_booleans_pass_through(self, monkeypatch):
-        assert self._enabled_with(monkeypatch, True) is True
-        assert self._enabled_with(monkeypatch, False) is False
 
 
 @pytest.mark.real_audio_playback

@@ -246,38 +246,21 @@ def _debug(msg: str) -> None:
         pass
 
 
-def _beeps_enabled() -> bool:
-    """CLI parity: voice.beep_enabled in config.yaml (default True)."""
-    try:
-        from robo_cli.config import load_config
-        from utils import is_truthy_value
+# No record start/stop beeps. A voice chat is silent apart from Robo's own
+# replies (and the optional transcribing blips, voice.thinking_sound): the
+# UI's voice.status events carry "listening" / "transcribing" / "idle" for
+# any visual cue a surface wants to show.
 
-        voice_cfg = load_config().get("voice", {})
-        if isinstance(voice_cfg, dict):
-            # is_truthy_value handles quoted YAML strings like "false"
-            # which bool() would misread as True (#49883).
-            return is_truthy_value(voice_cfg.get("beep_enabled", True), default=True)
+def _vad_state(rec: Any) -> str:
+    """``floor=… threshold=…`` for ROBO_VOICE_DEBUG breadcrumbs."""
+    try:
+        return (
+            f"floor={float(getattr(rec, 'noise_floor', 0.0)):.0f} "
+            f"threshold={float(getattr(rec, 'effective_silence_threshold', 0.0)):.0f}"
+        )
     except Exception:
-        pass
-    return True
+        return "floor=? threshold=?"
 
-
-def _play_beep(frequency: int, count: int = 1) -> None:
-    """Audible cue matching cli.py's record/stop beeps.
-
-    880 Hz single-beep on start (cli.py:_voice_start_recording line 7532),
-    660 Hz double-beep on stop (cli.py:_voice_stop_and_transcribe line 7585).
-    Best-effort — sounddevice failures are silently swallowed so the
-    voice loop never breaks because a speaker was unavailable.
-    """
-    if not _beeps_enabled():
-        return
-    try:
-        from tools.voice_mode import play_beep
-
-        play_beep(frequency=frequency, count=count)
-    except Exception as e:
-        _debug(f"beep {frequency}Hz failed: {e}")
 
 # ── Push-to-talk state ───────────────────────────────────────────────
 _recorder = None
@@ -423,10 +406,11 @@ def start_continuous(
     on_status: Optional[Callable[[str], None]] = None,
     on_silent_limit: Optional[Callable[[], None]] = None,
     silence_threshold: int = 200,
-    silence_duration: float = 3.0,
+    silence_duration: float = 1.5,
     auto_restart: bool = True,
     max_recording_seconds: float = 0.0,
     on_stop_phrase: Optional[Callable[[str], None]] = None,
+    noise_floor_multiplier: Optional[float] = None,
 ) -> bool:
     """Start a VAD-driven continuous recording loop.
 
@@ -454,6 +438,10 @@ def start_continuous(
     The loop halts first, so the consumer only needs to reflect "voice off" —
     exactly like the user pressing the manual stop control. When omitted,
     ``on_silent_limit`` fires instead so legacy callers still turn voice off.
+
+    ``noise_floor_multiplier`` (``voice.noise_floor_multiplier``) scales the
+    recorder's measured room noise into its speech/silence threshold; ``None``
+    keeps the recorder's default, ``0`` pins the fixed ``silence_threshold``.
     """
     global _continuous_active, _continuous_recorder, _continuous_auto_restart
     global _continuous_on_transcript, _continuous_on_status, _continuous_on_silent_limit
@@ -481,6 +469,11 @@ def start_continuous(
 
         _continuous_recorder._silence_threshold = silence_threshold
         _continuous_recorder._silence_duration = silence_duration
+        if (
+            isinstance(noise_floor_multiplier, (int, float))
+            and not isinstance(noise_floor_multiplier, bool)
+        ):
+            _continuous_recorder._floor_multiplier = float(noise_floor_multiplier)
         # Same numeric-with-bool-excluded guard as the CLI wiring in
         # cli.py:_voice_start_recording — <= 0 (or garbage) disables the cap.
         _continuous_recorder._max_recording_seconds = (
@@ -493,13 +486,9 @@ def start_continuous(
         rec = _continuous_recorder
 
     _debug(
-        f"start_continuous: begin (threshold={silence_threshold}, duration={silence_duration}s)"
+        f"start_continuous: begin (threshold={silence_threshold}, duration={silence_duration}s, "
+        f"{_vad_state(rec)})"
     )
-
-    # CLI parity: single 880 Hz beep *before* opening the stream — placing
-    # the beep after stream.start() on macOS triggers a CoreAudio conflict
-    # (cli.py:7528 comment).
-    _play_beep(frequency=880, count=1)
 
     try:
         rec.start(on_silence_stop=_continuous_on_silence)
@@ -640,7 +629,6 @@ def stop_continuous(force_transcribe: bool = False) -> None:
                             except Exception:
                                 pass
 
-                    _play_beep(frequency=660, count=2)
                     with _continuous_lock:
                         _continuous_stopping = False
                     if on_status:
@@ -661,10 +649,6 @@ def stop_continuous(force_transcribe: bool = False) -> None:
 
     with _continuous_lock:
         _continuous_stopping = False
-
-    # Audible "recording stopped" cue (CLI parity: same 660 Hz × 2 the
-    # silence-auto-stop path plays).
-    _play_beep(frequency=660, count=2)
 
     if on_status:
         try:
@@ -716,12 +700,8 @@ def _continuous_on_silence() -> None:
     # for SILENCE_RMS_THRESHOLD (200) or the VAD + peak checks disagree.
     peak_rms = getattr(rec, "_peak_rms", -1)
     _debug(
-        f"_continuous_on_silence: rec.stop -> {wav_path!r} (peak_rms={peak_rms})"
+        f"_continuous_on_silence: rec.stop -> {wav_path!r} (peak_rms={peak_rms}, {_vad_state(rec)})"
     )
-
-    # CLI parity: double 660 Hz beep after the stream stops (safe from the
-    # CoreAudio conflict that blocks pre-start beeps).
-    _play_beep(frequency=660, count=2)
 
     transcript: Optional[str] = None
 
@@ -845,8 +825,7 @@ def _continuous_on_silence() -> None:
 
     if _continuous_auto_restart:
         # Restart for the next turn.
-        _debug(f"_continuous_on_silence: restarting loop (no_speech={no_speech})")
-        _play_beep(frequency=880, count=1)
+        _debug(f"_continuous_on_silence: restarting loop (no_speech={no_speech}, {_vad_state(rec)})")
         try:
             rec.start(on_silence_stop=_continuous_on_silence)
         except Exception as e:

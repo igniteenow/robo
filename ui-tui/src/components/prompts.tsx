@@ -128,6 +128,19 @@ export function ApprovalPrompt({ cols = 80, onChoice, req, t }: ApprovalPromptPr
   )
 }
 
+/** A printable, unmodified, non-digit key: the start of a typed answer.
+ * Digits are the quick picks (or, out of range, nothing); modifier chords
+ * (Ctrl+C cancel, Cmd+V paste) and key escapes never count. */
+export function isTypedAnswerStart(ch: string, key: { ctrl: boolean; meta: boolean; super?: boolean }): boolean {
+  if (key.ctrl || key.meta || key.super || ch.length !== 1) {
+    return false
+  }
+
+  const code = ch.charCodeAt(0)
+
+  return code >= 0x20 && code !== 0x7f && !(ch >= '0' && ch <= '9')
+}
+
 export function ClarifyPrompt({ cols = 80, onAnswer, onCancel, req, t }: ClarifyPromptProps) {
   const [sel, setSel] = useState(0)
   const [custom, setCustom] = useState('')
@@ -168,6 +181,17 @@ export function ClarifyPrompt({ cols = 80, onAnswer, onCancel, req, t }: Clarify
 
     if (n >= 1 && n <= choices.length) {
       onAnswer(choices[n - 1]!)
+
+      return
+    }
+
+    // The composer is hidden while this prompt owns the keyboard, so a user
+    // who just starts typing ("stop", "the first one but in Rust") means the
+    // free-text answer: open it with the character they typed instead of
+    // dropping their keystrokes and then letting Enter pick option 1.
+    if (isTypedAnswerStart(ch, key)) {
+      setCustom(ch)
+      setTyping(true)
     }
   })
 

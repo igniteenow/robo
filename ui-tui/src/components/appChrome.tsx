@@ -491,11 +491,16 @@ export function StatusRule({
   const segs = statusBarSegments(cols)
 
   // On narrow terminals the context read-out collapses to a bare token count
-  // (`12k tok`) and the visual fill bar is dropped entirely.
+  // (`12k tok`) and the visual fill bar is dropped entirely. Before the first
+  // reply the gateway sends an estimate of the request the first turn will
+  // make (flagged context_estimated) so the gauge is there at "ready"; a
+  // leading ~ marks it approximate until a real count replaces it.
+  const approx = usage.context_estimated ? '~' : ''
+
   const ctxLabel = usage.context_max
     ? segs.compactCtx
-      ? `${fmtK(usage.context_used ?? 0)} tok`
-      : `${fmtK(usage.context_used ?? 0)}/${fmtK(usage.context_max)}`
+      ? `${approx}${fmtK(usage.context_used ?? 0)} tok`
+      : `${approx}${fmtK(usage.context_used ?? 0)}/${fmtK(usage.context_max)}`
     : usage.total > 0
       ? `${fmtK(usage.total)} tok`
       : ''

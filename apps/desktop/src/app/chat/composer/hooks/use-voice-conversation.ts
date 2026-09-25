@@ -11,8 +11,10 @@ import {
   stopVoicePlayback
 } from '@/lib/voice-playback'
 import { isVoiceStopCommand } from '@/lib/voice-stop-word'
+import { warmUpTranscription } from '@/robo'
 import { notify, notifyError } from '@/store/notifications'
 import { $voicePlayback } from '@/store/voice-playback'
+import { markVoiceTurn } from '@/store/voice-timing'
 
 import { useMicRecorder } from './use-mic-recorder'
 
@@ -44,6 +46,16 @@ interface VoiceConversationOptions {
 /** How long a barge-triggered interrupt may take to settle before we submit
  *  the captured utterance anyway. */
 const INTERRUPT_SETTLE_TIMEOUT_MS = 5_000
+
+/** Silence after speech that ends a spoken turn (ms). The pause between two
+ *  sentences of one thought is ~400–500 ms; the pause that means "your turn"
+ *  is longer. 650 ms hands over promptly without cutting a breath. */
+export const VOICE_TURN_SILENCE_MS = 650
+
+/** A spoken turn ends this long after speech began even if the room never
+ *  goes quiet — a bounded recording reaches the transcriber, not a minute of
+ *  noise. */
+export const VOICE_TURN_MAX_SPEECH_MS = 30_000
 
 export function useVoiceConversation({
   busy,
@@ -143,6 +155,7 @@ export function useVoiceConversation({
 
       turnClosingRef.current = true
       clearTurnTimeout()
+      markVoiceTurn('heard')
       setStatus('transcribing')
 
       try {
@@ -160,6 +173,7 @@ export function useVoiceConversation({
 
         try {
           const transcript = (await onTranscribeAudio(result.audio)).trim()
+          markVoiceTurn('transcribed')
 
           if (!transcript) {
             if (enabledRef.current) {
@@ -186,6 +200,7 @@ export function useVoiceConversation({
           awaitingSpokenResponseRef.current = true
           dropSpeechSession()
           await onSubmit(transcript)
+          markVoiceTurn('submitted')
           setStatus('thinking')
         } catch (error) {
           notifyError(error, voiceCopy.transcriptionFailed)
@@ -233,11 +248,19 @@ export function useVoiceConversation({
     }
 
     try {
-      // VAD tuning mirrors `tools.voice_mode` defaults so the browser loop matches the CLI.
+      // VAD tuning: the turn ends VOICE_TURN_SILENCE_MS after the user goes
+      // quiet — quiet relative to the room, which the recorder's endpointer
+      // learns per turn (lib/speech-endpointer); silenceLevel is only the
+      // floor of that trigger. Long enough for a breath mid-sentence, short
+      // enough that the hand-off feels immediate.
       await handle.start({
         silenceLevel: 0.075,
-        silenceMs: 1_250,
+        silenceMs: VOICE_TURN_SILENCE_MS,
         idleSilenceMs: 12_000,
+        maxSpeechMs: VOICE_TURN_MAX_SPEECH_MS,
+        // The mic stays open between turns: listening resumes the instant
+        // Robo finishes talking, with no device re-open in the way.
+        retainDevice: true,
         onError: error => {
           notifyError(error, voiceCopy.microphoneFailed)
           pendingStartRef.current = false
@@ -245,6 +268,7 @@ export function useVoiceConversation({
         },
         onSilence: () => void handleTurn()
       })
+      markVoiceTurn('listening')
       setStatus('listening')
       // Clear any prior turn-timeout before arming a fresh one. Each listen
       // cycle reassigns turnTimeoutRef; without clearing first, a stale 60s
@@ -295,6 +319,7 @@ export function useVoiceConversation({
         pendingStartRef.current = true
       }
 
+      markVoiceTurn('done')
       setStatus('idle')
     },
     [consumePendingResponse]
@@ -321,10 +346,12 @@ export function useVoiceConversation({
         return
       }
 
+      markVoiceTurn('heard')
       setStatus('transcribing')
 
       try {
         const transcript = (await onTranscribeAudio(audio)).trim()
+        markVoiceTurn('transcribed')
 
         if (!transcript) {
           resumeListening()
@@ -355,6 +382,7 @@ export function useVoiceConversation({
         dropSpeechSession()
         consumePendingResponse()
         await onSubmit(transcript)
+        markVoiceTurn('submitted')
         setStatus('thinking')
       } catch (error) {
         notifyError(error, voiceCopy.transcriptionFailed)
@@ -491,6 +519,7 @@ export function useVoiceConversation({
 
       responseIdRef.current = responseId
       spokenSourceLengthRef.current = 0
+      markVoiceTurn('firstText')
       setStatus('speaking')
 
       // VAD barge-in: the user talking over the reply cuts playback, drops
@@ -657,10 +686,27 @@ export function useVoiceConversation({
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [enabled, stopTurn])
 
-  // Ambient "thinking" sound: while the agent works (status 'thinking') no
-  // audio flows, which reads as dead air mid-conversation. Calm bubble blips
-  // fill the gap; they stop the INSTANT speech starts, the mic re-arms, or the
-  // conversation ends. Gated by voice.thinking_sound + the shared sound mute.
+  // The first spoken turn used to pay the local STT model load as a silent
+  // pause between "I stopped talking" and "Robo has my words". Warm the model
+  // the moment the conversation starts, off the request path; a backend
+  // without the endpoint (or a remote provider) just says no.
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
+    try {
+      void warmUpTranscription().catch(() => undefined)
+    } catch {
+      // No desktop bridge (a bare renderer / tests): nothing to warm.
+    }
+  }, [enabled])
+
+  // Turn-long "thinking" blips while the agent works (status 'thinking'):
+  // OFF unless voice.thinking_sound is the explicit "ambient" opt-in (see
+  // store/voice-prefs). A voice chat is otherwise silent while Robo works —
+  // nothing plays but Robo talking. When on, the blips stop the INSTANT
+  // speech starts, the mic re-arms, or the conversation ends.
   useEffect(() => {
     if (enabled && !muted && status === 'thinking') {
       startThinkingSound()

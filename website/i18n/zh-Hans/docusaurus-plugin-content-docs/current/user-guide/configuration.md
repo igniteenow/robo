@@ -1367,9 +1367,8 @@ voice:
   record_key: "ctrl+b"         # CLI 内的按键通话键
   max_recording_seconds: 120    # 长录音的硬停止
   auto_tts: false               # /voice on 时自动启用口语回复
-  beep_enabled: true            # 在 CLI 语音模式中播放录音开始/停止提示音
   silence_threshold: 200        # 语音检测的 RMS 阈值
-  silence_duration: 3.0         # 自动停止前的静默秒数
+  silence_duration: 1.5         # 自动停止前的静默秒数
 ```
 
 在 CLI 中使用 `/voice on` 启用麦克风模式，使用 `record_key` 开始/停止录音，使用 `/voice tts` 切换口语回复。端到端设置和平台特定行为请参阅[语音模式](/user-guide/features/voice-mode)。

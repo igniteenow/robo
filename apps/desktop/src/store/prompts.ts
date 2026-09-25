@@ -147,6 +147,15 @@ export const $activeSessionAwaitingInput = computed(
   (clarify, approval, sudo, secret) => Boolean(clarify || approval || sudo || secret)
 )
 
+// True while ANY session is parked on a permission prompt (approval / sudo /
+// secret) — as opposed to a clarify question. The status face uses it to say
+// "needs your approval" rather than "has a question" when a turn is blocked.
+export const $anyApprovalPending = computed(
+  [approval.$all, sudo.$all, secret.$all],
+  (approvals, sudos, secrets) =>
+    Object.keys(approvals).length > 0 || Object.keys(sudos).length > 0 || Object.keys(secrets).length > 0
+)
+
 /** Per-session `awaitingInput` — the tile composer's counterpart of
  *  `$activeSessionAwaitingInput` (same sources, fixed session instead of the
  *  active one). */

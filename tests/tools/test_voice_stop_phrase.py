@@ -96,7 +96,6 @@ class TestContinuousLoopStopPhrase:
                           lambda: silent_limit_fired.append(True)), \
              patch.object(v, "_continuous_no_speech_count", 0), \
              patch.object(v, "transcribe_recording", return_value=fake_result), \
-             patch.object(v, "_play_beep", lambda **kw: None), \
              patch.object(v.os.path, "isfile", return_value=False):
             v._continuous_on_silence()
             still_active = v._continuous_active
@@ -147,7 +146,6 @@ class TestContinuousLoopStopPhraseSignal:
              patch.object(v, "_continuous_on_stop_phrase", on_stop_phrase), \
              patch.object(v, "_continuous_no_speech_count", 0), \
              patch.object(v, "transcribe_recording", return_value=fake_result), \
-             patch.object(v, "_play_beep", lambda **kw: None), \
              patch.object(v.os.path, "isfile", return_value=False):
             v._continuous_on_silence()
             still_active = v._continuous_active
