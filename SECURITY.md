@@ -330,6 +330,6 @@ that:
 - **Coordinated disclosure window:** 90 days from report, or until a
   fix is released, whichever comes first.
 - **Channel:** the GHSA thread or email correspondence with
-  security@igniteenow.com.
+  support@igniteenow.com.
 - **Credit:** reporters are credited in release notes unless
   anonymity is requested.
