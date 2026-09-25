@@ -1,12 +1,17 @@
 <div align="center">
 
-<img src="assets/brand/robo-lockup-dark.svg" alt="Robo — by Ignitee Now" width="440">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/robo-lockup-dark.svg">
+  <img src="assets/brand/robo-lockup-light.svg" alt="Robo by Ignitee Now" width="420">
+</picture>
 
-**A free, open-source AI agent that runs on your own computer.**
+# Stop chatting with AI. Hand it the work.
 
-Talk to it or type to it. Robo reads your files, browses the web, writes and
-runs code, and carries a task from start to finish, in your terminal, in a
-desktop app, or in your browser.
+Robo runs the commands, reads the files, drives the browser, and checks the result.<br>
+Talk to it or type to it, on your computer or your server.
+
+![Windows · macOS · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0E1437?style=for-the-badge)
+![Terminal · Desktop · Web · API](https://img.shields.io/badge/Terminal%20%C2%B7%20Desktop%20%C2%B7%20Web%20%C2%B7%20API-3F3E98?style=for-the-badge)
 
 [Install](#install) · [Run it](#run-it) · [What it does](#what-robo-does) · [Make it yours](#make-it-yours)
 
@@ -14,27 +19,46 @@ desktop app, or in your browser.
 
 ---
 
-## What Robo is
+## Hand it anything
 
-Robo is a personal AI agent for anyone: developers, writers, students,
-researchers, IT and security teams, small businesses. You connect the AI model
-you prefer (OpenAI, Anthropic, DeepSeek, Kimi, OpenRouter, or a local model
-through Ollama), and Robo adds the tools, memory, voice, and safety checks.
+```text
+"Go through this 2 GB server log and tell me what broke last night."
+"Compare these two CSV exports and list every customer missing from the new one."
+"Turn these meeting notes into a to-do list with owners and dates."
+"Clean up my Downloads folder and sort everything by type."
+"Every morning at 8, send me the top tech news on Telegram."
+"Open this .exe and tell me which servers it talks to."
+```
 
-Your data stays on your machine, under `~/.robo`.
+Robo plans the job, does it with real tools, checks its work, and asks before
+anything risky. It works with the model you choose: OpenAI, Anthropic, Gemini,
+DeepSeek, Kimi, OpenRouter and more, or a local model through Ollama or any
+OpenAI-compatible server. Everything it learns stays in `~/.robo`
+(`%LOCALAPPDATA%\robo` on Windows) on the machine it runs on.
 
 ## What Robo does
 
-- **Talks and listens.** Hands-free wake word ("Hey Roh Boh"), voice input, and
-  spoken replies. Transcription runs locally by default.
-- **Reads files of any size.** PDFs, Word docs, spreadsheets, codebases, and huge
-  logs. Robo indexes them locally and answers with exact quotes.
+- **Works from your documents.** Attach logs, notes, code, CSV, JSON, HTML, or
+  PowerPoint files of any size, even multi-gigabyte logs. Robo indexes them on
+  your machine, works offline, and answers with the exact passages.
+- **Talks and listens.** A wake word, hands-free voice chat that adjusts to the
+  noise in your room, and spoken replies that start with the first sentence.
+  Transcription runs locally by default.
 - **Gets real work done.** Coding, research, writing, data work, file cleanup,
   system admin, and security analysis. It runs terminal commands, edits files,
-  uses a real browser, and executes code, asking you first before anything risky.
-- **Remembers.** Memory across sessions, searchable history, and reusable skills.
-- **Automates.** Scheduled jobs, parallel sub-agents, and messaging bots
-  (Telegram, Discord, Slack, and more).
+  uses a real browser, and executes code.
+- **Looks inside software safely.** Static analysis of programs and binaries with
+  Ghidra, radare2, or rizin when installed, and a built-in parser when not. The
+  file is never run.
+- **Gets sharper with use.** Turns what works into reusable skills and improves
+  them, keeps long-term memory, searches past conversations, and learns how you
+  like things done.
+- **Goes where you are.** Lives on your computer, a home server, or a cloud
+  machine. Heavy or risky jobs can run in Docker, over SSH, or in a cloud
+  sandbox (Modal, Daytona), so your own machine stays clean. Message it from
+  Telegram, WhatsApp, Discord, Slack, and more.
+- **Runs on a schedule.** Recurring jobs and parallel sub-agents that work while
+  you don't.
 
 ## Install
 
@@ -59,8 +83,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 robo model
 ```
 
-The installer sets up Python, Node, and the voice stack. It never overwrites
-your existing config, memory, or skills. Run `robo doctor` at any time to see
+The installer sets up Python and Node, and never overwrites your existing
+config, memory, or skills. Voice and other optional features install themselves
+the first time you use them. Run `robo doctor` at any time to see
 what's missing.
 For scripted installs, call `scripts/install.sh` or `scripts/install.ps1`
 directly.
@@ -81,11 +106,11 @@ robo chat -q "Summarize README.md"   # one question, one answer, no UI
 ### 2. Desktop app
 
 ```bash
-robo desktop      # builds (first run only) and opens the desktop app
+robo desktop      # builds the app and opens it
 ```
 
-It works on Windows, macOS, and Linux. After the first build it opens straight
-away.
+It works on Windows, macOS, and Linux. The first run builds the app; after that
+it opens straight away and rebuilds only when Robo is updated.
 
 ### 3. Browser (localhost)
 
@@ -97,12 +122,13 @@ This gives you chat, settings, API keys, sessions, logs, skills, and MCP servers
 in any browser. Useful flags: `--port 8080`, `--no-open`, `--stop`, `--status`.
 
 **Open it from another device (phone, laptop, server):** set a login in
-`~/.robo/.env`, then bind to your network:
+`~/.robo/.env` (`%LOCALAPPDATA%\robo\.env` on Windows), then bind to your
+network:
 
 ```bash
 ROBO_DASHBOARD_BASIC_AUTH_USERNAME=admin
 ROBO_DASHBOARD_BASIC_AUTH_PASSWORD=choose-a-strong-password
-ROBO_DASHBOARD_BASIC_AUTH_SECRET=<output of: openssl rand -base64 32>
+ROBO_DASHBOARD_BASIC_AUTH_SECRET=<32+ random characters, e.g. from: openssl rand -base64 32>
 ```
 
 ```bash
@@ -116,11 +142,10 @@ runs on another machine.
 ### 4. HTTP API (OpenAI-compatible)
 
 Use Robo from your own apps, scripts, or chat frontends such as Open WebUI.
-Add this to `~/.robo/.env`:
+Add a key of at least 16 characters to `~/.robo/.env`:
 
 ```bash
-API_SERVER_ENABLED=true
-API_SERVER_KEY=change-me
+API_SERVER_KEY=<your-secret-key-16-plus-chars>
 ```
 
 ```bash
@@ -129,12 +154,12 @@ robo gateway      # serves http://localhost:8642/v1
 
 ```bash
 curl http://localhost:8642/v1/chat/completions \
-  -H "Authorization: Bearer change-me" \
+  -H "Authorization: Bearer <your-secret-key-16-plus-chars>" \
   -H "Content-Type: application/json" \
   -d '{"model": "robo-engineer", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
-### 5. Docker
+### 5. Docker (Linux and macOS)
 
 ```bash
 ROBO_UID=$(id -u) ROBO_GID=$(id -g) docker compose up -d
@@ -160,13 +185,13 @@ is already running.
 
 ## Make it yours
 
-Everything is plain files in `~/.robo/`, which you can edit, back up, or copy
-to another computer:
+Everything is plain files in `~/.robo/` (`%LOCALAPPDATA%\robo\` on Windows),
+which you can edit, back up, or copy to another computer:
 
 - **`SOUL.md`**: Robo's personality and rules (tone, how careful it is, house
   style).
-- **`USER.md`**: facts about you, so you don't repeat yourself.
-- **`MEMORY.md`**: what Robo has learned. It updates on its own, and you can
+- **`memories/USER.md`**: facts about you, so you don't repeat yourself.
+- **`memories/MEMORY.md`**: what Robo has learned. It updates on its own, and you can
   also say "remember that…".
 - **`skills/`**: reusable procedures. Say "save this as a skill", or run
   `robo skills create <name>`.
