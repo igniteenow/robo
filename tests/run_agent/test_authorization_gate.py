@@ -39,6 +39,24 @@ def _clean_human_wait_state():
 
 SESSION = "test-session-79719"
 
+# threading.TIMEOUT_MAX on Windows: the longest lock or event wait it accepts.
+_WINDOWS_TIMEOUT_MAX = 4294967.0
+
+
+class _WindowsLock:
+    """A lock that rejects waits longer than Windows allows, as CPython does there."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+
+    def acquire(self, blocking=True, timeout=-1):
+        if timeout > _WINDOWS_TIMEOUT_MAX:
+            raise OverflowError("timeout value is too large")
+        return self._lock.acquire(blocking, timeout)
+
+    def release(self):
+        self._lock.release()
+
 
 def _make_gate(**kwargs) -> _ConcurrentToolAuthorizationGate:
     # Pin the session key so contextvar/env noise from other tests can't
@@ -265,6 +283,22 @@ class TestAuthorizationGate:
         assert time.monotonic() - start < 2.0
         release.set()
         holder.join(timeout=5)
+
+    def test_interactive_session_gate_works_with_windows_lock_limit(self, monkeypatch):
+        """Desktop and TUI sessions wait for approvals without a time limit.
+        On Windows a lock wait longer than ~49.7 days raises OverflowError
+        ("timeout value is too large"), which failed every tool in a
+        concurrent batch before it started."""
+        monkeypatch.setattr(threading, "TIMEOUT_MAX", _WINDOWS_TIMEOUT_MAX)
+        approval_mod.register_gateway_notify(SESSION, lambda data: None, wait_forever=True)
+        token = approval_mod.set_current_session_key(SESSION)
+        try:
+            gate = _make_gate()
+            gate._serialization_lock = _WindowsLock()
+            assert gate.run(lambda: "ran") == "ran"
+        finally:
+            approval_mod.reset_current_session_key(token)
+            approval_mod.unregister_gateway_notify(SESSION)
 
     def test_wedged_callback_contributes_nothing_to_exclusion(self):
         """THE #79719 regression: gate residency is not deadline exclusion."""

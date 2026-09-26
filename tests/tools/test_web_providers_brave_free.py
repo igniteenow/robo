@@ -8,7 +8,7 @@ Covers:
 - _is_backend_available("brave-free") integration
 - _get_backend() recognizes "brave-free" as a valid configured backend
 - check_web_api_key() includes brave-free in availability check
-- web_extract returns a search-only error when brave-free is active
+- web_extract falls back to the built-in page reader when brave-free is active
 """
 from __future__ import annotations
 
@@ -143,11 +143,11 @@ class TestBraveFreeBackendWiring:
 
 
 # ---------------------------------------------------------------------------
-# brave-free is search-only: web_extract returns a clear error
+# brave-free is search-only: web_extract reads pages with the built-in reader
 # ---------------------------------------------------------------------------
 
 
-class TestBraveFreeSearchOnlyErrors:
+class TestBraveFreeExtractFallsBackToBuiltInReader:
     _register_providers = staticmethod(register_all_web_providers)
 
     @pytest.fixture(autouse=True)
@@ -157,7 +157,7 @@ class TestBraveFreeSearchOnlyErrors:
         from agent.web_search_registry import _reset_for_tests
         _reset_for_tests()
 
-    def test_web_extract_returns_search_only_error(self, monkeypatch):
+    def test_web_extract_reads_the_page_itself(self, monkeypatch):
         import asyncio
         from tools import web_tools
 
@@ -166,13 +166,19 @@ class TestBraveFreeSearchOnlyErrors:
         async def _allow_ssrf(_url: str) -> bool:
             return True
 
+        read = []
+
+        async def fake_read_pages(urls):
+            read.extend(urls)
+            return [{"url": u, "title": "", "content": "page text", "raw_content": "page text"} for u in urls]
+
         monkeypatch.setattr(web_tools, "async_is_safe_url", _allow_ssrf)
+        monkeypatch.setattr("tools.web_reader.read_pages", fake_read_pages)
         monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False, raising=False)
 
         result_str = asyncio.get_event_loop().run_until_complete(
             web_tools.web_extract_tool(["https://example.com"])
         )
         result = json.loads(result_str)
-        assert result["success"] is False
-        assert "search-only" in result["error"].lower()
-        assert "brave" in result["error"].lower()
+        assert read == ["https://example.com"]
+        assert result["results"][0]["content"] == "page text"

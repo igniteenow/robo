@@ -1,37 +1,74 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BargeMonitorCallbacks } from '@/lib/voice-barge-in'
+import { type CapturedUtterance, openVoiceCapture, type VoiceCaptureOptions } from '@/lib/voice-capture'
+import { notify, notifyError } from '@/store/notifications'
 
-import type { MicRecording } from './use-mic-recorder'
 import { useVoiceConversation } from './use-voice-conversation'
 
-// The full-duplex contract: the barge monitor is live across the WHOLE agent
-// turn — generation (thinking) and playback (speaking) — so speaking over the
-// model interrupts it mid-generation instead of the mic being deaf until TTS
-// starts (the Windows report: interruption "never works" because the deaf
-// window covered generation, and playback bleed made the old monitor's
-// trigger unreachable).
+// The hands-free voice chat. One microphone stream stays open for the whole
+// conversation (lib/voice-capture, mocked here: the tests play the user's
+// side by firing its callbacks). What is asserted is the turn-taking:
+// listening never stops, the reply's speech is ready before its first word,
+// talking over Robo pauses it at once, and only real words interrupt.
 
-const monitorCalls: BargeMonitorCallbacks[] = []
-const stopMonitor = vi.fn()
-
-vi.mock('@/lib/voice-barge-in', () => ({
-  monitorSpeechDuringPlayback: (callbacks: BargeMonitorCallbacks) => {
-    monitorCalls.push(callbacks)
-
-    return stopMonitor
-  }
+const ear = vi.hoisted(() => ({
+  handle: { close: vi.fn(), flush: vi.fn(), reset: vi.fn() },
+  options: null as null | VoiceCaptureOptions
 }))
 
-const markVoicePlaybackInterrupted = vi.fn()
-const stopVoicePlayback = vi.fn()
+vi.mock('@/lib/voice-capture', () => ({
+  openVoiceCapture: vi.fn(async (options: VoiceCaptureOptions) => {
+    ear.options = options
+
+    return ear.handle
+  }),
+  utteranceToWav: () => new Blob(['wav'], { type: 'audio/wav' })
+}))
+
+const speech = vi.hoisted(() => {
+  const state = {
+    available: true,
+    sessions: [] as {
+      append: ReturnType<typeof vi.fn>
+      done: Promise<'done' | 'fallback'>
+      end: (outcome: 'done' | 'fallback') => void
+      finish: ReturnType<typeof vi.fn>
+    }[]
+  }
+
+  return {
+    state,
+    isVoicePlaybackAudible: vi.fn(() => false),
+    markVoicePlaybackInterrupted: vi.fn(),
+    pauseVoicePlayback: vi.fn(),
+    playSpeechText: vi.fn(async () => true),
+    resumeVoicePlayback: vi.fn(),
+    startSpeechStream: vi.fn(async () => {
+      if (!state.available) {
+        return null
+      }
+
+      let end: (outcome: 'done' | 'fallback') => void = () => undefined
+      const done = new Promise<'done' | 'fallback'>(resolve => (end = resolve))
+      const session = { append: vi.fn(), done, end, finish: vi.fn() }
+
+      state.sessions.push(session)
+
+      return session
+    }),
+    stopVoicePlayback: vi.fn()
+  }
+})
 
 vi.mock('@/lib/voice-playback', () => ({
-  markVoicePlaybackInterrupted: () => markVoicePlaybackInterrupted(),
-  playSpeechText: vi.fn(async () => true),
-  startSpeechStream: vi.fn(async () => null),
-  stopVoicePlayback: () => stopVoicePlayback()
+  isVoicePlaybackAudible: speech.isVoicePlaybackAudible,
+  markVoicePlaybackInterrupted: speech.markVoicePlaybackInterrupted,
+  pauseVoicePlayback: speech.pauseVoicePlayback,
+  playSpeechText: speech.playSpeechText,
+  resumeVoicePlayback: speech.resumeVoicePlayback,
+  startSpeechStream: speech.startSpeechStream,
+  stopVoicePlayback: speech.stopVoicePlayback
 }))
 
 vi.mock('@/lib/thinking-sound', () => ({
@@ -39,14 +76,8 @@ vi.mock('@/lib/thinking-sound', () => ({
   stopThinkingSound: vi.fn()
 }))
 
-const micHandle = {
-  cancel: vi.fn(),
-  start: vi.fn(async () => undefined),
-  stop: vi.fn<() => Promise<MicRecording | null>>(async () => null)
-}
-
-vi.mock('./use-mic-recorder', () => ({
-  useMicRecorder: () => ({ handle: micHandle, level: 0, recording: false })
+vi.mock('@/robo', () => ({
+  warmUpTranscription: vi.fn(async () => undefined)
 }))
 
 vi.mock('@/i18n', () => ({
@@ -56,9 +87,17 @@ vi.mock('@/i18n', () => ({
         voice: {
           configureSpeechToText: 'configure STT',
           couldNotStartSession: 'could not start',
+          microphoneAccessDenied: 'denied',
+          microphoneConstraintsUnsupported: 'constraints',
           microphoneFailed: 'mic failed',
+          microphoneInUse: 'in use',
+          microphonePermissionDenied: 'permission',
+          microphoneStartFailed: 'start failed',
+          microphoneUnsupported: 'unsupported',
+          noMicrophone: 'no mic',
           playbackFailed: 'playback failed',
           transcriptionFailed: 'transcription failed',
+          tryRecordingAgain: 'try again',
           unavailable: 'unavailable'
         }
       }
@@ -71,196 +110,454 @@ vi.mock('@/store/notifications', () => ({
   notifyError: vi.fn()
 }))
 
-interface HookProps {
-  busy: boolean
+interface Reply {
+  id: string
+  pending: boolean
+  text: string
 }
 
-function renderConversation(overrides: { onInterrupt?: () => void; transcript?: string } = {}) {
-  const onInterrupt = overrides.onInterrupt ?? vi.fn()
+interface ConversationSetup {
+  refuseSubmit?: boolean
+}
 
-  // Mirrors the real app: submitting a turn makes the agent busy.
+function utterance(overrides: Partial<CapturedUtterance> = {}): CapturedUtterance {
+  return {
+    endedBy: 'silence',
+    sampleRate: 16_000,
+    samples: new Float32Array(16_000),
+    speechMs: 800,
+    startedDuringPlayback: false,
+    ...overrides
+  }
+}
+
+function renderConversation(setup: ConversationSetup = {}) {
+  let response: null | Reply = null
+  const transcripts: string[] = []
+  // Transcriptions resolve in order, each when its test says so (or at once).
+  const held: ((text: string) => void)[] = []
+  let holdTranscripts = false
+
   const onBusyChange: { current: (busy: boolean) => void } = { current: () => undefined }
 
-  const onSubmit = vi.fn(async () => {
+  const onSubmit = vi.fn(async (_text: string) => {
+    if (setup.refuseSubmit) {
+      return false
+    }
+
     onBusyChange.current(true)
+
+    return true
   })
 
+  const onTranscribeAudio = vi.fn(async () => {
+    const text = transcripts.shift() ?? ''
+
+    if (!holdTranscripts) {
+      return text
+    }
+
+    return new Promise<string>(resolve => held.push(() => resolve(text)))
+  })
+
+  const onInterrupt = vi.fn()
   const onStopWord = vi.fn()
+  const onFatalError = vi.fn()
 
-  // First transcription is the turn that starts the conversation; subsequent
-  // ones are barge captures (the overridable transcript).
-  let transcriptions = 0
-
-  const onTranscribeAudio = vi.fn(async () =>
-    transcriptions++ === 0 ? 'kick off the task' : (overrides.transcript ?? 'and another thing')
-  )
+  // Mirrors the composer: consuming marks everything so far as spoken.
+  const consumePendingResponse = vi.fn(() => {
+    response = null
+  })
 
   const hook = renderHook(
-    ({ busy }: HookProps) =>
+    ({ busy, enabled }: { busy: boolean; enabled: boolean }) =>
       useVoiceConversation({
         busy,
-        consumePendingResponse: vi.fn(),
-        enabled: true,
+        consumePendingResponse,
+        enabled,
+        onFatalError,
         onInterrupt,
         onStopWord,
         onSubmit,
         onTranscribeAudio,
-        pendingResponse: () => null
+        pendingResponse: () => response
       }),
-    { initialProps: { busy: false } }
+    { initialProps: { busy: false, enabled: false } }
   )
 
-  onBusyChange.current = busy => hook.rerender({ busy })
+  let busy = false
+  let enabled = false
 
-  return { hook, onInterrupt, onStopWord, onSubmit, onTranscribeAudio }
+  onBusyChange.current = next => {
+    busy = next
+    hook.rerender({ busy, enabled })
+  }
+
+  return {
+    consumePendingResponse,
+    hook,
+    onFatalError,
+    onInterrupt,
+    onStopWord,
+    onSubmit,
+    onTranscribeAudio,
+    /** Resolve the oldest held transcription. */
+    releaseTranscript: () => held.shift()?.(''),
+    holdTranscripts: () => (holdTranscripts = true),
+    setBusy: (next: boolean) => onBusyChange.current(next),
+    setReply: (next: null | Reply) => (response = next),
+    /** Queue what the transcriber will hear next. */
+    hears: (...texts: string[]) => transcripts.push(...texts),
+    async enable() {
+      enabled = true
+      hook.rerender({ busy, enabled })
+      await waitFor(() => expect(hook.result.current.status).toBe('listening'))
+    },
+    disable() {
+      enabled = false
+      hook.rerender({ busy, enabled })
+    }
+  }
 }
 
-/** Drive the hook into the generation phase (turn submitted, model working). */
-async function enterThinking(hook: ReturnType<typeof renderConversation>['hook']) {
-  await act(async () => {
-    await hook.result.current.start()
-  })
-  await waitFor(() => expect(hook.result.current.status).toBe('listening'))
-
-  micHandle.stop.mockResolvedValueOnce({
-    audio: new Blob(['q'], { type: 'audio/webm' }),
-    durationMs: 900,
-    heardSpeech: true
-  })
-
-  await act(async () => {
-    hook.result.current.stopTurn()
-  })
-  await waitFor(() => expect(hook.result.current.status).toBe('thinking'))
+/** The user starts talking (the capture engine confirmed speech). */
+function startTalking(startedDuringPlayback = false) {
+  act(() => ear.options?.onSpeechStart?.({ startedDuringPlayback }))
 }
 
-describe('useVoiceConversation full-duplex barge-in', () => {
-  beforeEach(() => {
-    monitorCalls.length = 0
-    vi.clearAllMocks()
-    micHandle.start.mockResolvedValue(undefined)
-    micHandle.stop.mockResolvedValue(null)
+/** The user stops talking: the utterance is complete. */
+async function stopTalking(overrides: Partial<CapturedUtterance> = {}) {
+  await act(async () => ear.options?.onUtterance(utterance(overrides)))
+}
+
+async function say(overrides: Partial<CapturedUtterance> = {}) {
+  startTalking(overrides.startedDuringPlayback)
+  await stopTalking(overrides)
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  ear.options = null
+  speech.state.available = true
+  speech.state.sessions = []
+})
+
+afterEach(cleanup)
+
+describe('useVoiceConversation — listening', () => {
+  it('opens the microphone once and keeps it open across turns', async () => {
+    const chat = renderConversation()
+
+    await chat.enable()
+    chat.hears('hello', 'and another thing')
+    await say()
+    await waitFor(() => expect(chat.onSubmit).toHaveBeenCalledWith('hello'))
+
+    // The reply is spoken and done.
+    chat.setReply({ id: 'reply-1', pending: false, text: 'Hi.' })
+    chat.setBusy(false)
+    await waitFor(() => expect(speech.state.sessions[0].finish).toHaveBeenCalled())
+    await act(async () => speech.state.sessions[0].end('done'))
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('listening'))
+
+    chat.setReply(null)
+    await say()
+    await waitFor(() => expect(chat.onSubmit).toHaveBeenCalledWith('and another thing'))
+
+    expect(openVoiceCapture).toHaveBeenCalledTimes(1)
+    expect(ear.handle.close).not.toHaveBeenCalled()
   })
 
-  afterEach(cleanup)
+  it('sends a spoken turn and opens the reply speech before the reply exists', async () => {
+    const chat = renderConversation()
 
-  it('arms the barge monitor during generation (before any reply audio exists)', async () => {
-    const { hook } = renderConversation()
+    await chat.enable()
+    chat.hears('what time is it')
+    await say()
 
-    await act(async () => {
-      await hook.result.current.start()
-    })
-    await enterThinking(hook)
-
-    await waitFor(() => expect(hook.result.current.status).toBe('thinking'))
-    // busy=true + thinking → the full-duplex monitor must be live.
-    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('thinking'))
+    expect(chat.onSubmit).toHaveBeenCalledWith('what time is it')
+    // The session is already open; no reply text exists yet.
+    await waitFor(() => expect(speech.startSpeechStream).toHaveBeenCalledTimes(1))
+    expect(speech.state.sessions[0].append).not.toHaveBeenCalled()
   })
 
-  it('interrupts the in-flight turn when speech trips mid-generation', async () => {
-    const { hook, onInterrupt } = renderConversation()
+  it('streams the reply into that session as it is written, then listens again', async () => {
+    const chat = renderConversation()
 
-    await act(async () => {
-      await hook.result.current.start()
-    })
-    await enterThinking(hook)
-    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+    await chat.enable()
+    chat.hears('tell me a joke')
+    await say()
+    await waitFor(() => expect(speech.state.sessions).toHaveLength(1))
 
-    act(() => {
-      monitorCalls.at(-1)?.onSpeech()
-    })
+    const session = speech.state.sessions[0]
 
-    expect(onInterrupt).toHaveBeenCalledTimes(1)
-    expect(markVoicePlaybackInterrupted).toHaveBeenCalled()
-    expect(stopVoicePlayback).toHaveBeenCalled()
+    chat.setReply({ id: 'reply-1', pending: true, text: 'Why did the robot ' })
+    await waitFor(() => expect(session.append).toHaveBeenCalledWith('Why did the robot '))
+    expect(chat.hook.result.current.status).toBe('speaking')
+
+    chat.setReply({ id: 'reply-1', pending: false, text: 'Why did the robot cross the road?' })
+    chat.setBusy(false)
+    await waitFor(() => expect(session.append).toHaveBeenLastCalledWith('cross the road?'))
+    await waitFor(() => expect(session.finish).toHaveBeenCalledTimes(1))
+
+    await act(async () => session.end('done'))
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('listening'))
   })
 
-  it('submits the captured interruption once the interrupt settles (busy clears)', async () => {
-    const { hook, onSubmit } = renderConversation({ transcript: 'no, do it differently' })
+  it('a turn that ends with nothing to say goes straight back to listening', async () => {
+    const chat = renderConversation()
 
-    await act(async () => {
-      await hook.result.current.start()
-    })
-    await enterThinking(hook)
-    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+    await chat.enable()
+    chat.hears('run the backup')
+    await say()
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('thinking'))
 
-    const monitor = monitorCalls.at(-1)
-
-    act(() => {
-      monitor?.onSpeech()
-    })
-
-    // Interrupt lands → the turn ends → busy flips false.
-    hook.rerender({ busy: false })
-
-    await act(async () => {
-      monitor?.onUtterance?.(new Blob(['x'], { type: 'audio/webm' }))
-    })
-
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('no, do it differently'))
+    chat.setBusy(false)
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('listening'))
+    expect(speech.stopVoicePlayback).toHaveBeenCalled()
   })
 
-  it('does not interrupt when speech trips during playback (turn already done)', async () => {
-    const { hook, onInterrupt } = renderConversation()
+  it('without a streaming backend, speaks the whole reply once it is complete', async () => {
+    speech.state.available = false
 
-    await act(async () => {
-      await hook.result.current.start()
-    })
-    await enterThinking(hook)
-    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+    const chat = renderConversation()
 
-    // Turn finished; playback phase.
-    hook.rerender({ busy: false })
+    await chat.enable()
+    chat.hears('hi')
+    await say()
+    chat.setReply({ id: 'reply-1', pending: true, text: 'Hello there' })
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('speaking'))
+    expect(speech.playSpeechText).not.toHaveBeenCalled()
 
-    act(() => {
-      monitorCalls.at(-1)?.onSpeech()
-    })
-
-    expect(onInterrupt).not.toHaveBeenCalled()
-    expect(stopVoicePlayback).toHaveBeenCalled()
+    chat.setReply({ id: 'reply-1', pending: false, text: 'Hello there.' })
+    chat.setBusy(false)
+    await waitFor(() =>
+      expect(speech.playSpeechText).toHaveBeenCalledWith('Hello there.', { source: 'voice-conversation' })
+    )
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('listening'))
   })
 
-  it('a spoken stop command in the barge capture ends the conversation instead of submitting', async () => {
-    const { hook, onStopWord, onSubmit } = renderConversation({ transcript: 'stop' })
+  it('carries on when the user keeps talking after a pause: both parts go as one turn', async () => {
+    const chat = renderConversation()
 
-    await act(async () => {
-      await hook.result.current.start()
-    })
-    await enterThinking(hook)
-    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+    await chat.enable()
+    chat.holdTranscripts()
+    chat.hears('book a table', 'for two at eight')
 
-    const monitor = monitorCalls.at(-1)
+    await say()
+    expect(chat.hook.result.current.status).toBe('transcribing')
 
-    act(() => {
-      monitor?.onSpeech()
-    })
-    hook.rerender({ busy: false })
+    // They carry on before the first part came back from the transcriber.
+    startTalking()
+    expect(chat.hook.result.current.status).toBe('listening')
+    await act(async () => chat.releaseTranscript())
 
-    await act(async () => {
-      monitor?.onUtterance?.(new Blob(['s'], { type: 'audio/webm' }))
-    })
+    await stopTalking()
+    await act(async () => chat.releaseTranscript())
 
-    await waitFor(() => expect(onStopWord).toHaveBeenCalledTimes(1))
-    // Only the kickoff turn was submitted — the "stop" capture never was.
-    expect(onSubmit).toHaveBeenCalledTimes(1)
-    expect(onSubmit).not.toHaveBeenCalledWith('stop')
+    await waitFor(() => expect(chat.onSubmit).toHaveBeenCalledTimes(1))
+    expect(chat.onSubmit).toHaveBeenCalledWith('book a table for two at eight')
   })
 
-  it('re-arms a single monitor per turn (idempotent ensure)', async () => {
-    const { hook } = renderConversation()
+  it('"Send now" hands over what was said without waiting for the pause', async () => {
+    const chat = renderConversation()
 
-    await act(async () => {
-      await hook.result.current.start()
+    await chat.enable()
+    act(() => chat.hook.result.current.stopTurn())
+
+    expect(ear.handle.flush).toHaveBeenCalledTimes(1)
+  })
+
+  it('a spoken stop command ends the conversation instead of being sent', async () => {
+    const chat = renderConversation()
+
+    await chat.enable()
+    chat.hears('stop')
+    await say()
+
+    await waitFor(() => expect(chat.onStopWord).toHaveBeenCalledTimes(1))
+    expect(chat.onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('silence or a hesitation is not a turn', async () => {
+    const chat = renderConversation()
+
+    await chat.enable()
+    chat.hears('')
+    await say()
+
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('listening'))
+    expect(chat.onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('a turn the chat refuses is not left "thinking": the user is told and listening resumes', async () => {
+    const chat = renderConversation({ refuseSubmit: true })
+
+    await chat.enable()
+    chat.hears('hello')
+    await say()
+
+    await waitFor(() => expect(vi.mocked(notify)).toHaveBeenCalledWith({ kind: 'warning', message: 'try again' }))
+    expect(chat.hook.result.current.status).toBe('listening')
+  })
+})
+
+describe('useVoiceConversation — talking over Robo', () => {
+  async function speaking(chat: ReturnType<typeof renderConversation>) {
+    await chat.enable()
+    chat.hears('tell me about Lahore')
+    await say()
+    await waitFor(() => expect(speech.state.sessions).toHaveLength(1))
+
+    chat.setReply({
+      id: 'reply-1',
+      pending: true,
+      text: 'The weather in Lahore is sunny and warm today, with a light breeze in the evening.'
     })
-    await enterThinking(hook)
-    await waitFor(() => expect(monitorCalls.length).toBeGreaterThan(0))
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('speaking'))
+  }
 
-    const armed = monitorCalls.length
+  it('pauses the reply the moment the user starts talking', async () => {
+    const chat = renderConversation()
 
-    // Effect re-runs (busy toggles, status changes) must not open more mics.
-    hook.rerender({ busy: true })
-    hook.rerender({ busy: true })
+    await speaking(chat)
+    startTalking(true)
 
-    expect(monitorCalls.length).toBe(armed)
+    expect(speech.pauseVoicePlayback).toHaveBeenCalledTimes(1)
+    expect(chat.hook.result.current.status).toBe('listening')
+    expect(chat.onInterrupt).not.toHaveBeenCalled()
+    expect(speech.stopVoicePlayback).not.toHaveBeenCalled()
+  })
+
+  it('a cough or an "um" resumes the reply where it paused', async () => {
+    const chat = renderConversation()
+
+    await speaking(chat)
+    chat.hears('Um.')
+    await say({ startedDuringPlayback: true })
+
+    await waitFor(() => expect(speech.resumeVoicePlayback).toHaveBeenCalledTimes(1))
+    expect(chat.hook.result.current.status).toBe('speaking')
+    expect(chat.onInterrupt).not.toHaveBeenCalled()
+    expect(chat.onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it("Robo's own voice heard back through the speakers resumes the reply too", async () => {
+    const chat = renderConversation()
+
+    await speaking(chat)
+    chat.hears('sunny and warm today with a light breeze')
+    await say({ startedDuringPlayback: true })
+
+    await waitFor(() => expect(speech.resumeVoicePlayback).toHaveBeenCalledTimes(1))
+    expect(speech.stopVoicePlayback).not.toHaveBeenCalled()
+    expect(chat.onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('real words stop the reply and the turn in flight, and become the next turn', async () => {
+    const chat = renderConversation()
+
+    await speaking(chat)
+    chat.hears('no, what about Karachi')
+    await say({ startedDuringPlayback: true })
+
+    await waitFor(() => expect(chat.onInterrupt).toHaveBeenCalledTimes(1))
+    expect(speech.markVoicePlaybackInterrupted).toHaveBeenCalled()
+    expect(speech.stopVoicePlayback).toHaveBeenCalled()
+
+    // The interrupt lands → the turn ends → the words go.
+    chat.setBusy(false)
+    await waitFor(() => expect(chat.onSubmit).toHaveBeenLastCalledWith('no, what about Karachi'))
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('thinking'))
+  })
+
+  it('can interrupt while the model is still thinking, before any reply exists', async () => {
+    const chat = renderConversation()
+
+    await chat.enable()
+    chat.hears('start the build', 'actually, wait')
+    await say()
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('thinking'))
+
+    await say()
+
+    await waitFor(() => expect(chat.onInterrupt).toHaveBeenCalledTimes(1))
+    chat.setBusy(false)
+    await waitFor(() => expect(chat.onSubmit).toHaveBeenLastCalledWith('actually, wait'))
+  })
+
+  it('a stop command over the reply ends everything', async () => {
+    const chat = renderConversation()
+
+    await speaking(chat)
+    chat.hears('stop')
+    await say({ startedDuringPlayback: true })
+
+    await waitFor(() => expect(chat.onStopWord).toHaveBeenCalledTimes(1))
+    expect(speech.stopVoicePlayback).toHaveBeenCalled()
+    expect(chat.onInterrupt).toHaveBeenCalledTimes(1)
+    expect(chat.onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('a failed check counts as noise: the reply resumes', async () => {
+    const chat = renderConversation()
+
+    await speaking(chat)
+    chat.onTranscribeAudio.mockRejectedValueOnce(new Error('offline'))
+    await say({ startedDuringPlayback: true })
+
+    await waitFor(() => expect(speech.resumeVoicePlayback).toHaveBeenCalledTimes(1))
+    expect(chat.onInterrupt).not.toHaveBeenCalled()
+    expect(vi.mocked(notifyError)).not.toHaveBeenCalled()
+  })
+
+  it('a Stop pressed while Robo talks ends the reply and the chat keeps listening', async () => {
+    const chat = renderConversation()
+
+    await speaking(chat)
+    await act(async () => speech.state.sessions[0].end('done'))
+
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('listening'))
+    expect(chat.consumePendingResponse).toHaveBeenCalled()
+  })
+})
+
+describe('useVoiceConversation — mute and end', () => {
+  it('mute lets the microphone go; unmute opens it again', async () => {
+    const chat = renderConversation()
+
+    await chat.enable()
+    act(() => chat.hook.result.current.toggleMute())
+
+    expect(ear.handle.close).toHaveBeenCalledTimes(1)
+    expect(chat.hook.result.current.muted).toBe(true)
+    expect(chat.hook.result.current.status).toBe('idle')
+
+    act(() => chat.hook.result.current.toggleMute())
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('listening'))
+    expect(openVoiceCapture).toHaveBeenCalledTimes(2)
+  })
+
+  it('ending the conversation closes the microphone and silences Robo', async () => {
+    const chat = renderConversation()
+
+    await chat.enable()
+    chat.disable()
+
+    await waitFor(() => expect(chat.hook.result.current.status).toBe('idle'))
+    expect(ear.handle.close).toHaveBeenCalled()
+    expect(speech.stopVoicePlayback).toHaveBeenCalled()
+  })
+
+  it('a microphone that cannot open ends the chat with a reason', async () => {
+    vi.mocked(openVoiceCapture).mockRejectedValueOnce(new DOMException('busy', 'NotReadableError'))
+
+    const chat = renderConversation()
+
+    chat.hook.rerender({ busy: false, enabled: true })
+
+    await waitFor(() => expect(chat.onFatalError).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(notifyError)).toHaveBeenCalledWith(expect.objectContaining({ message: 'in use' }), 'could not start')
   })
 })

@@ -441,3 +441,36 @@ class TestInstallSpecs:
         result = ld.install_specs(["honcho-ai==2.2.0"])
         assert result.ok is False
         assert "disk on fire" in result.stderr
+
+
+class TestCanLazyInstall:
+    """Availability probes use can_lazy_install() to advertise a backend that
+    installs itself on first use; it must mirror ensure()'s own gates."""
+
+    def test_unknown_feature_is_never_installable(self):
+        import tools.lazy_deps as ld
+
+        assert ld.can_lazy_install("no.such.feature") is False
+
+    def test_installable_when_lazy_installs_are_allowed(self, monkeypatch):
+        import tools.lazy_deps as ld
+
+        monkeypatch.delenv("ROBO_DISABLE_LAZY_INSTALLS", raising=False)
+        monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
+        monkeypatch.setattr("robo_cli.config.get_managed_system", lambda: "")
+        assert ld.can_lazy_install("search.ddgs") is True
+
+    def test_not_installable_when_lazy_installs_are_off(self, monkeypatch):
+        import tools.lazy_deps as ld
+
+        monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: False)
+        monkeypatch.setattr("robo_cli.config.get_managed_system", lambda: "")
+        assert ld.can_lazy_install("search.ddgs") is False
+
+    def test_not_installable_on_a_package_manager_build(self, monkeypatch):
+        import tools.lazy_deps as ld
+
+        monkeypatch.delenv(ld._LAZY_TARGET_ENV, raising=False)
+        monkeypatch.setattr(ld, "_allow_lazy_installs", lambda: True)
+        monkeypatch.setattr("robo_cli.config.get_managed_system", lambda: "NixOS")
+        assert ld.can_lazy_install("search.ddgs") is False

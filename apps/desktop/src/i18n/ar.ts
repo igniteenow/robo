@@ -1667,6 +1667,7 @@ export const ar = defineLocale({
     placeholderStarting: 'جار بدء Robo...',
     placeholderReconnecting: 'جار إعادة الاتصال...',
     placeholderFollowUp: 'اكتب متابعة...',
+    freshChatHeading: 'على ماذا سنعمل؟',
     newSessionPlaceholders: ['اسأل Robo عن شيء...', 'اطلب من Robo تنفيذ مهمة...', 'ابدأ محادثة جديدة...'],
     followUpPlaceholders: ['اكتب متابعة...', 'أضف توجيها...', 'اسأل سؤالا آخر...'],
     startVoice: 'بدء الصوت',

@@ -126,6 +126,9 @@ _LEGACY_PREFERENCE = (
     "exa",
     "searxng",
     "brave-free",
+    # The free no-key tier (plugins/web/keyless): after every keyed backend,
+    # before DuckDuckGo scraping, which engines rate-limit under bursts.
+    "keyless",
     "ddgs",
 )
 

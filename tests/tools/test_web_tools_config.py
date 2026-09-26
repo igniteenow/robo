@@ -576,3 +576,32 @@ class TestSiblingProvidersEnvResolution:
             from agent.web_search_provider import get_provider_env
 
             assert get_provider_env("WSP_TEST_UNSET_KEY") == ""
+
+
+class TestKeylessDuckDuckGoDefault:
+    """No search key and the free tier switched off: web search still works
+    through DuckDuckGo, which installs itself on the first search
+    (tools/lazy_deps 'search.ddgs')."""
+
+    def test_no_keys_resolves_to_ddgs_when_it_can_install_itself(self):
+        from tools.web_tools import _get_backend, check_web_api_key
+        with patch("tools.web_tools._load_web_config", return_value={"keyless_fallback": False}), \
+             patch("tools.web_tools._ddgs_package_importable", return_value=False), \
+             patch("tools.lazy_deps.can_lazy_install", return_value=True):
+            assert _get_backend() == "ddgs"
+            assert check_web_api_key() is True
+
+    def test_a_configured_key_still_wins_over_the_keyless_default(self):
+        from tools.web_tools import _get_backend
+        with patch("tools.web_tools._load_web_config", return_value={}), \
+             patch("tools.web_tools._ddgs_package_importable", return_value=False), \
+             patch("tools.lazy_deps.can_lazy_install", return_value=True), \
+             patch.dict(os.environ, {"TAVILY_API_KEY": "tv-test"}):
+            assert _get_backend() == "tavily"
+
+    def test_no_keyless_default_when_lazy_installs_are_off(self):
+        # tests/conftest.py seals lazy installs (ROBO_DISABLE_LAZY_INSTALLS=1),
+        # exactly like security.allow_lazy_installs: false would.
+        from tools.web_tools import _ddgs_available
+        with patch("tools.web_tools._ddgs_package_importable", return_value=False):
+            assert _ddgs_available() is False

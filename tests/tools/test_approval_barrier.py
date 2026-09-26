@@ -56,6 +56,21 @@ def test_wait_forever_policy_outlives_the_config_timeout():
         approval.unregister_gateway_notify(key)
 
 
+def test_wait_ceiling_fits_the_platform_lock_limit(monkeypatch):
+    # The ceiling is also a lock timeout (the tool executor's authorization
+    # gate), and a lock wait past threading.TIMEOUT_MAX raises OverflowError.
+    # Windows allows about 49.7 days.
+    monkeypatch.setattr(threading, "TIMEOUT_MAX", 4294967.0)
+    key = "tui:ceiling"
+    approval.register_gateway_notify(key, lambda d: None, wait_forever=True)
+    try:
+        assert approval.human_wait_ceiling(key) <= threading.TIMEOUT_MAX
+    finally:
+        approval.unregister_gateway_notify(key)
+    monkeypatch.setattr(approval, "_get_approval_timeout", lambda: 10**9)
+    assert approval.human_wait_ceiling("telegram:ceiling") <= threading.TIMEOUT_MAX
+
+
 def test_messaging_policy_still_times_out():
     key = "telegram:bounded"
     approval.register_gateway_notify(key, lambda d: None)

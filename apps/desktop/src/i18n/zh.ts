@@ -208,7 +208,7 @@ export const zh: Translations = {
 
   voiceScreen: {
     title: '语音对话',
-    subtitle: '直接说话即可 — 结束语音对话后，完整的对话内容会显示在这里。',
+    subtitle: '直接说话即可，Robo 说话时也可以随时打断。结束语音对话后，完整的对话内容会显示在这里。',
     status: {
       idle: '请稍等…',
       listening: '正在聆听…',
@@ -2167,6 +2167,7 @@ export const zh: Translations = {
     placeholderStarting: '正在启动 Robo…',
     placeholderReconnecting: '正在重新连接 Robo…',
     placeholderFollowUp: '发送后续消息',
+    freshChatHeading: '我们今天做点什么？',
     newSessionPlaceholders: [
       '我们要构建什么？',
       '给 Robo 一个任务',

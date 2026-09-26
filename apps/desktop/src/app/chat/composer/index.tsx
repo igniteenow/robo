@@ -297,9 +297,11 @@ export function ChatBar({
     poppedOut
   })
 
-  // A centered (fresh-chat) composer is roomy: the text on its own row over
-  // the menu and the controls, like a note you are about to write, not a
-  // one-line field. Docked at the bottom it packs into one line as before.
+  // A centered (fresh-chat) composer is roomy: a big box with the text on its
+  // own rows over the menu and the controls, like a note you are about to
+  // write, not a one-line field (its larger controls come from the
+  // `[data-centered]` dock tokens in styles.css). Docked at the bottom it packs
+  // into one line as before.
   const roomy = centered && !poppedOut
   const compactPill = metrics.compactPill
   const stacked = metrics.stacked || roomy
@@ -960,7 +962,7 @@ export function ChatBar({
           '**:data-ref-text:cursor-default',
           stacked && 'pl-3',
           stacked ? 'w-full' : 'min-w-(--composer-input-inline-min-width) flex-1',
-          roomy && 'min-h-[3.5rem] text-[16px] leading-relaxed'
+          roomy && 'min-h-[4.5rem] text-[16px] leading-relaxed'
         )}
         contentEditable={!inputDisabled}
         data-placeholder={placeholder}
@@ -1214,18 +1216,6 @@ export function ChatBar({
                     composerSurfaceGlass
                   )}
                 />
-                <CodingStatusRow
-                  onBranchOff={handleBranchOff}
-                  onConvertBranch={handleConvertBranch}
-                  onListBranches={handleListBranches}
-                  // A tile's rail reviews ITS worktree: pin the pane's scope to
-                  // this surface's cwd. Main keeps the classic follow-the-
-                  // active-session scope (null).
-                  onOpen={() => toggleReview(scope.target === 'main' ? null : (cwd ?? null))}
-                  onOpenWorktree={openInWorktree}
-                  onSwitchBranch={handleSwitchBranch}
-                  repoPath={cwd}
-                />
                 <div
                   className={cn(
                     'relative z-1 flex min-h-0 w-full flex-col gap-(--composer-row-gap) overflow-hidden rounded-[inherit] px-(--composer-surface-pad-x) py-(--composer-surface-pad-y) transition-opacity duration-200 ease-out',
@@ -1289,11 +1279,25 @@ export function ChatBar({
               </div>
             </div>
           </ComposerPrimitive.Root>
-          {/* Underside: chrome-free strip BELOW the composer. Outside the root
-              for the same reason as the micro actions — it must not fall inside
-              the pop-out drag region. Same px as the strip above, so the two
-              bracket the composer on one vertical line. */}
-          <div className={cn(composerFloatingStrip, 'px-[5px] pt-1.5 empty:hidden')}>
+          {/* Underside tray: chrome-free strip BELOW the composer — the
+              working context (branch / worktree, on the left) and contributed
+              chips. Outside the root for the same reason as the micro actions:
+              it must not fall inside the pop-out drag region. Same px as the
+              strip above, so the two bracket the composer on one vertical
+              line. */}
+          <div className={cn(composerFloatingStrip, 'px-[5px] pt-1.5 empty:hidden')} data-slot="composer-tray">
+            <CodingStatusRow
+              onBranchOff={handleBranchOff}
+              onConvertBranch={handleConvertBranch}
+              onListBranches={handleListBranches}
+              // A tile's rail reviews ITS worktree: pin the pane's scope to
+              // this surface's cwd. Main keeps the classic follow-the-
+              // active-session scope (null).
+              onOpen={() => toggleReview(scope.target === 'main' ? null : (cwd ?? null))}
+              onOpenWorktree={openInWorktree}
+              onSwitchBranch={handleSwitchBranch}
+              repoPath={cwd}
+            />
             <ContribSlot area={COMPOSER_AREAS.underside} />
           </div>
         </div>

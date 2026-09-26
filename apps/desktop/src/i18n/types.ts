@@ -1676,6 +1676,8 @@ export interface Translations {
     placeholderStarting: string
     placeholderReconnecting: string
     placeholderFollowUp: string
+    /** The fresh-chat heading above the composer. */
+    freshChatHeading: string
     newSessionPlaceholders: readonly string[]
     followUpPlaceholders: readonly string[]
     startVoice: string

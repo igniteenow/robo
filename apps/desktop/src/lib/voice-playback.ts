@@ -29,10 +29,56 @@ export const SPEECH_STREAM_STALL_MS = 15_000
 // A socket that never opens (a backend that stopped answering) falls back to
 // the POST path instead of waiting forever.
 export const SPEECH_STREAM_OPEN_TIMEOUT_MS = 8_000
+// How often a drained-but-paused reply checks whether it may end.
+const DRAIN_WHILE_PAUSED_MS = 100
 
 let currentAudio: HTMLAudioElement | null = null
 let currentStop: (() => void) | null = null
 let sequence = 0
+
+// Barge-in pause. The moment the voice chat hears the user talking over Robo
+// it PAUSES the reply — the sound stops at once, and nothing is lost: if it
+// was a false alarm (a cough, Robo's own voice leaking back) the reply
+// resumes from the same syllable; if it was the user, the reply is stopped
+// for good. A pause requested before any audio exists holds the reply's
+// first sound until resume or stop.
+let paused = false
+
+interface PauseControl {
+  pause: () => void
+  resume: () => void
+}
+
+let currentPause: null | PauseControl = null
+
+/** Pause the reply that is playing (or about to). */
+export function pauseVoicePlayback() {
+  if (paused) {
+    return
+  }
+
+  paused = true
+  currentPause?.pause()
+}
+
+/** Resume a paused reply where it stopped. */
+export function resumeVoicePlayback() {
+  if (!paused) {
+    return
+  }
+
+  paused = false
+  currentPause?.resume()
+}
+
+export function isVoicePlaybackPaused(): boolean {
+  return paused
+}
+
+/** Is Robo's voice coming out of the speakers right now? */
+export function isVoicePlaybackAudible(): boolean {
+  return !paused && $voicePlayback.get().status === 'speaking'
+}
 
 // A shared, lazily-created AudioContext used only to nudge the browser's
 // autoplay state out of "suspended". A wake-word-started voice turn has no
@@ -87,6 +133,9 @@ export function stopVoicePlayback() {
   sequence += 1
   currentStop?.()
   currentStop = null
+  // A pause belongs to one reply; the next one starts playing.
+  paused = false
+  currentPause = null
 
   if (currentAudio) {
     currentAudio.pause()
@@ -190,6 +239,14 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
 
   let settle: (value: 'done' | 'fallback') => void = () => undefined
   let watchdog: null | number = null
+  let drainTimer: null | number = null
+
+  // Pausing suspends the reply's own audio clock: everything scheduled
+  // freezes in place and plays on from there on resume.
+  const pauseControl: PauseControl = {
+    pause: () => void context?.suspend().catch(() => undefined),
+    resume: () => void context?.resume().catch(() => undefined)
+  }
 
   const clearWatchdog = () => {
     if (watchdog !== null) {
@@ -207,6 +264,15 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
       settled = true
       currentStop = null
       clearWatchdog()
+
+      if (drainTimer !== null) {
+        window.clearTimeout(drainTimer)
+        drainTimer = null
+      }
+
+      if (currentPause === pauseControl) {
+        currentPause = null
+      }
 
       try {
         ws.close()
@@ -233,14 +299,34 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
   // stopVoicePlayback() → immediate barge-in: kill the socket (the server
   // aborts synthesis on disconnect) and the audio context (cuts sound now).
   currentStop = () => settle('done')
+  currentPause = pauseControl
 
   const finishWhenDrained = () => {
     // Encoded sentences may still be decoding: wait for the chain, then for
-    // the last scheduled buffer to play out.
-    void decodeChain.then(() => {
+    // the last scheduled buffer to play out — however long a pause holds it.
+    const waitForDrain = () => {
+      if (settled) {
+        return
+      }
+
+      if (drainTimer !== null) {
+        window.clearTimeout(drainTimer)
+      }
+
       const remainingMs = context ? Math.max(0, nextStartAt - context.currentTime) * 1_000 : 0
-      window.setTimeout(() => settle('done'), remainingMs + 100)
-    })
+
+      drainTimer = window.setTimeout(() => {
+        drainTimer = null
+
+        if (paused && currentPause === pauseControl) {
+          drainTimer = window.setTimeout(waitForDrain, DRAIN_WHILE_PAUSED_MS)
+        } else {
+          settle('done')
+        }
+      }, remainingMs + 100)
+    }
+
+    void decodeChain.then(waitForDrain)
   }
 
   // Waiting on the server with a deadline: until it opens, and — once the
@@ -379,12 +465,16 @@ function openSpeechStream(wsUrl: string, options: VoicePlaybackOptions): SpeechS
       streamRate = frame.sample_rate || 24_000
       context = new AudioContext()
 
-      // Autoplay policy can hand back a suspended context when playback wasn't
-      // started by a user gesture (e.g. a wake-word-started voice turn). Resume
-      // it so the first reply is audible instead of silently buffering. Electron
-      // chat windows also set autoplayPolicy: no-user-gesture-required, but the
-      // dashboard-embedded surface relies on this resume.
-      if (context.state === 'suspended') {
+      if (paused && currentPause === pauseControl) {
+        // The user is talking: hold the reply's first sound.
+        void context.suspend().catch(() => undefined)
+      } else if (context.state === 'suspended') {
+        // Autoplay policy can hand back a suspended context when playback
+        // wasn't started by a user gesture (e.g. a wake-word-started voice
+        // turn). Resume it so the first reply is audible instead of silently
+        // buffering. Electron chat windows also set autoplayPolicy:
+        // no-user-gesture-required, but the dashboard-embedded surface relies
+        // on this resume.
         void context.resume().catch(() => undefined)
       }
 
@@ -481,21 +571,33 @@ async function playSpeechDataUrl(
   await new Promise<void>((resolve, reject) => {
     let stall: number | null = null
 
-    const cleanup = () => {
+    const clearStall = () => {
       if (stall !== null) {
         window.clearTimeout(stall)
         stall = null
       }
+    }
 
+    const cleanup = () => {
+      clearStall()
       audio.removeEventListener('ended', onEnded)
       audio.removeEventListener('error', onError)
       audio.removeEventListener('timeupdate', armStall)
       currentStop = null
+
+      if (currentPause === pauseControl) {
+        currentPause = null
+      }
     }
 
     const armStall = () => {
       if (stall !== null) {
         window.clearTimeout(stall)
+        stall = null
+      }
+
+      if (paused) {
+        return // a paused reply is not a stalled one
       }
 
       stall = window.setTimeout(() => {
@@ -519,23 +621,40 @@ async function playSpeechDataUrl(
       resolve()
     }
 
-    audio.addEventListener('ended', onEnded, { once: true })
-    audio.addEventListener('error', onError, { once: true })
-    audio.addEventListener('timeupdate', armStall)
-    armStall()
     // A wake-word-started turn has no user gesture, so the autoplay policy can
     // reject the first play() with NotAllowedError. Electron chat windows set
     // autoplayPolicy: no-user-gesture-required to prevent this, but retry once
     // after resuming a shared AudioContext as a fallback for other surfaces
     // (dashboard-embedded) so the first reply isn't silently dropped.
-    void audio.play().catch(async () => {
-      try {
-        await unlockAutoplay()
-        await audio.play()
-      } catch {
-        onError()
-      }
-    })
+    const play = () => {
+      armStall()
+      void audio.play().catch(async () => {
+        try {
+          await unlockAutoplay()
+          await audio.play()
+        } catch {
+          onError()
+        }
+      })
+    }
+
+    // Paused, the reply holds still: no stall deadline until it resumes.
+    const pauseControl: PauseControl = {
+      pause: () => {
+        clearStall()
+        audio.pause()
+      },
+      resume: play
+    }
+
+    currentPause = pauseControl
+    audio.addEventListener('ended', onEnded, { once: true })
+    audio.addEventListener('error', onError, { once: true })
+    audio.addEventListener('timeupdate', armStall)
+
+    if (!paused) {
+      play()
+    }
   })
 
   if (!isCurrent()) {

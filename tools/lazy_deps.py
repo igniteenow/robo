@@ -118,6 +118,15 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     "search.exa": ("exa-py==2.10.2",),
     "search.firecrawl": ("firecrawl-py==4.17.0",),
     "search.parallel": ("parallel-web==0.4.2",),
+    # DuckDuckGo — the keyless default. With no search API key configured,
+    # web_search resolves to ddgs and installs it on the first search, so a
+    # fresh install can search the web out of the box. Its two runtime deps
+    # are pinned too (versions verified together); click is already core.
+    "search.ddgs": (
+        "ddgs==9.16.0",
+        "primp==2.0.0",
+        "lxml==6.1.2",
+    ),
 
     # ─── Monitoring ─────────────────────────────────────────────────────────
     # OTLP gateway monitoring export. Lazily installed on first use of
@@ -1011,6 +1020,30 @@ def is_available(feature: str) -> bool:
     if feature not in LAZY_DEPS:
         return False
     return not feature_missing(feature)
+
+
+def can_lazy_install(feature: str) -> bool:
+    """Would :func:`ensure` attempt to install ``feature`` on this host?
+
+    For availability probes that advertise a backend which installs itself
+    on first use (the keyless DuckDuckGo search default). No network and no
+    pip: only the same gates :func:`ensure` applies before installing —
+    allowlisted, supported on this platform, not a package-manager build
+    without a durable target, and lazy installs allowed by config/env.
+    """
+    if feature not in LAZY_DEPS:
+        return False
+    if _unsupported_feature_reason(feature):
+        return False
+    if _lazy_install_target() is None:
+        try:
+            from robo_cli.config import get_managed_system
+
+            if get_managed_system():
+                return False
+        except Exception:
+            pass  # config unreadable — same fail-open as ensure()
+    return _allow_lazy_installs()
 
 
 def feature_install_command(feature: str) -> Optional[str]:

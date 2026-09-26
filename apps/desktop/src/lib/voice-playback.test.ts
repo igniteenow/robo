@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { $voicePlayback } from '@/store/voice-playback'
 
 import {
+  isVoicePlaybackAudible,
+  isVoicePlaybackPaused,
+  pauseVoicePlayback,
+  resumeVoicePlayback,
   SPEECH_STREAM_OPEN_TIMEOUT_MS,
   SPEECH_STREAM_STALL_MS,
   startSpeechStream,
@@ -71,6 +75,7 @@ class FakeContext {
   decoded: ArrayBuffer[] = []
   starts: number[] = []
   created: number[] = []
+  clock: string[] = []
 
   constructor() {
     FakeContext.instances.push(this)
@@ -98,6 +103,16 @@ class FakeContext {
         context.starts.push(at)
       }
     }
+  }
+
+  async suspend() {
+    this.state = 'suspended'
+    this.clock.push('suspend')
+  }
+
+  async resume() {
+    this.state = 'running'
+    this.clock.push('resume')
   }
 
   async close() {}
@@ -272,5 +287,81 @@ describe('startSpeechStream', () => {
     vi.advanceTimersByTime(SPEECH_STREAM_OPEN_TIMEOUT_MS + 10)
     await flush()
     expect(outcome).toBe('fallback')
+  })
+})
+
+// Barge-in pause: the user talking over the reply stops the sound at once;
+// a false alarm resumes it from the same place, nothing lost.
+describe('pauseVoicePlayback', () => {
+  it('suspends the reply in place and resumes it where it stopped', async () => {
+    const { session, ws } = await openSession()
+
+    ws.json({ type: 'start', format: 'encoded' })
+    ws.bytes(10)
+    await flush()
+
+    const context = FakeContext.instances[0]
+
+    expect(isVoicePlaybackAudible()).toBe(true)
+
+    pauseVoicePlayback()
+    expect(isVoicePlaybackPaused()).toBe(true)
+    expect(isVoicePlaybackAudible()).toBe(false)
+    expect(context.clock).toEqual(['suspend'])
+
+    resumeVoicePlayback()
+    expect(isVoicePlaybackPaused()).toBe(false)
+    expect(context.clock).toEqual(['suspend', 'resume'])
+    // Paused, not stopped: the session is still open.
+    expect(ws.closed).toBe(false)
+
+    let outcome: null | string = null
+
+    void session.done.then(value => (outcome = value))
+    expect(outcome).toBeNull()
+  })
+
+  it('a pause before any audio holds the first sound', async () => {
+    const { ws } = await openSession()
+
+    pauseVoicePlayback()
+    ws.json({ type: 'start', format: 'encoded' })
+
+    expect(FakeContext.instances[0].clock).toEqual(['suspend'])
+  })
+
+  it('a paused reply does not end while it is held', async () => {
+    const { session, ws } = await openSession()
+    let outcome: null | string = null
+
+    void session.done.then(value => (outcome = value))
+    ws.json({ type: 'start', format: 'encoded' })
+    session.append('One sentence.')
+    session.finish()
+    ws.bytes(10)
+    await flush()
+    pauseVoicePlayback()
+    ws.json({ type: 'end' })
+    await flush()
+
+    vi.advanceTimersByTime(SPEECH_STREAM_STALL_MS * 2)
+    await flush()
+    expect(outcome).toBeNull()
+
+    resumeVoicePlayback()
+    vi.advanceTimersByTime(2_000)
+    await flush()
+    expect(outcome).toBe('done')
+  })
+
+  it('stopping clears the pause, so the next reply plays', async () => {
+    pauseVoicePlayback()
+    stopVoicePlayback()
+    expect(isVoicePlaybackPaused()).toBe(false)
+
+    const { ws } = await openSession()
+
+    ws.json({ type: 'start', format: 'encoded' })
+    expect(FakeContext.instances[0].clock).toEqual([])
   })
 })

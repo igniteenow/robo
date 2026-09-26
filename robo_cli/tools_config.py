@@ -1806,19 +1806,17 @@ def _run_post_setup(post_setup_key: str):
             __import__("ddgs")
             _print_success("    ddgs is already installed")
         except ImportError:
+            # The same pinned install the first web search would do
+            # (tools/lazy_deps "search.ddgs") — never an unpinned latest.
             _print_info("    Installing ddgs (DuckDuckGo search package)...")
             try:
-                result = _pip_install(["-U", "ddgs", "--quiet"], timeout=300)
-                if result.returncode == 0:
-                    _print_success("    ddgs installed")
-                else:
-                    _print_warning("    ddgs install failed:")
-                    _print_info(f"      {(result.stderr or '').strip()[:300]}")
-                    _print_info("    Run manually: uv pip install -U ddgs")
-                    return
-            except subprocess.TimeoutExpired:
-                _print_warning("    ddgs install timed out (>5min)")
-                _print_info("    Run manually: uv pip install -U ddgs")
+                from tools.lazy_deps import FeatureUnavailable, ensure
+
+                ensure("search.ddgs", prompt=False)
+                _print_success("    ddgs installed")
+            except FeatureUnavailable as exc:
+                _print_warning("    ddgs install failed:")
+                _print_info(f"      {exc.reason[:300]}")
                 return
         _print_info("    No API key required. DuckDuckGo enforces server-side rate limits.")
         _print_info("    Pair with an extract provider if you also need web_extract.")

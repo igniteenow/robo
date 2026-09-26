@@ -44,6 +44,34 @@ class TestSentenceChunker:
         ]
 
 
+    def test_first_clause_starts_speech_before_the_sentence_ends(self):
+        c = ts.SentenceChunker(first_clause_min_len=24)
+        assert c.feed("The weather in Lahore is 34 degrees, with clear") == [
+            "The weather in Lahore is 34 degrees, "
+        ]
+        # Only the reply's first piece is a clause; the rest goes by sentence.
+        assert c.feed(" skies, and a light breeze. Then") == ["with clear skies, and a light breeze. "]
+        assert c.flush() == ["Then"]
+
+
+    def test_a_short_opener_rides_along_with_its_sentence(self):
+        c = ts.SentenceChunker(first_clause_min_len=24)
+        assert c.feed("Sure, I can help with") == []
+        assert c.feed(" that right away. Next") == ["Sure, I can help with that right away. "]
+
+
+    def test_first_sentence_wins_when_it_ends_first(self):
+        c = ts.SentenceChunker(first_clause_min_len=24)
+        assert c.feed("It is sunny in Lahore today. Later, it will rain") == [
+            "It is sunny in Lahore today. "
+        ]
+
+
+    def test_clause_cuts_are_opt_in(self):
+        c = ts.SentenceChunker()
+        assert c.feed("The weather in Lahore is 34 degrees, with clear") == []
+
+
 # ── Interruption latch ───────────────────────────────────────────────────
 
 

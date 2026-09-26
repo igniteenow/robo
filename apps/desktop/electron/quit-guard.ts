@@ -11,6 +11,13 @@ export interface ActiveWork {
   titles: string[]
   /** Running turns, including untitled ones — always >= titles.length. */
   count: number
+  /**
+   * A hands-free voice chat is live. Not work that quitting would lose (it
+   * never prompts), but the chat must keep hearing the user while its window
+   * is minimized or covered — see `wantsUnthrottledWindows`. Present only
+   * when true.
+   */
+  voice?: true
 }
 
 export const NO_ACTIVE_WORK: ActiveWork = { count: 0, titles: [] }
@@ -31,17 +38,20 @@ export function normalizeActiveWork(payload: unknown): ActiveWork {
     : []
 
   const count = typeof raw.count === 'number' && Number.isFinite(raw.count) ? Math.max(0, Math.floor(raw.count)) : 0
+  const voice = (payload as { voice?: unknown }).voice === true
 
-  return { count: Math.max(count, titles.length), titles }
+  return { count: Math.max(count, titles.length), titles, ...(voice && { voice: true as const }) }
 }
 
 /** Merge every window's report into one. Windows can show the same session. */
 export function mergeActiveWork(reports: Iterable<ActiveWork>): ActiveWork {
   const titles: string[] = []
   let count = 0
+  let voice = false
 
   for (const report of reports) {
     count = Math.max(count, report.count)
+    voice ||= report.voice === true
 
     for (const title of report.titles) {
       if (!titles.includes(title)) {
@@ -50,7 +60,17 @@ export function mergeActiveWork(reports: Iterable<ActiveWork>): ActiveWork {
     }
   }
 
-  return { count: Math.max(count, titles.length), titles }
+  return { count: Math.max(count, titles.length), titles, ...(voice && { voice: true as const }) }
+}
+
+/**
+ * Should chat windows run unthrottled right now? While a turn is in flight
+ * (the live answer must keep painting while hidden) and while a voice chat is
+ * live: its microphone loop must keep running when the window is minimized or
+ * covered, or the end of the user's sentence is never noticed.
+ */
+export function wantsUnthrottledWindows(work: ActiveWork): boolean {
+  return work.count > 0 || work.voice === true
 }
 
 export interface QuitPrompt {
