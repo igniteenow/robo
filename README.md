@@ -65,7 +65,7 @@ OpenAI-compatible server. Everything it learns stays in `~/.robo`
 **Linux · macOS · WSL**
 
 ```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
 bash install-robo.sh
 robo model        # pick a model and add its API key
@@ -76,7 +76,7 @@ On Debian/Ubuntu, voice input also needs `sudo apt install libportaudio2`.
 **Windows (PowerShell)**
 
 ```powershell
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
 Set-ExecutionPolicy -Scope Process Bypass
 .\install-robo.ps1
