@@ -1055,6 +1055,9 @@ export const zh: Translations = {
       haveApiKey: '改用 API 密钥？',
       intro: '使用订阅登录，无需复制 API 密钥。Robo 会在应用中为你完成浏览器登录。',
       connected: '已连接',
+      expired: '已过期',
+      expiredHint: (command: string) =>
+        `已保存的登录已过期。Robo 会尽量自动续期；如果对话失败，请在终端运行 ${command} 并重新登录。`,
       collapse: '收起',
       connectAnother: '连接其他提供方',
       otherProviders: '其他提供方',
@@ -2500,6 +2503,7 @@ export const zh: Translations = {
     chooseLater: '稍后再选择提供方',
     recommended: '推荐',
     connected: '已连接',
+    expired: '已过期',
     featuredPitch: '一个订阅，300+ 前沿模型 — 运行 Robo 的推荐方式',
     fireworksPitch: '直接模型 API — Fireworks 托管的前沿模型',
     openRouterPitch: '一个密钥，数百个模型 — 稳妥的默认选择',

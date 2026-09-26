@@ -144,7 +144,7 @@ A fresh chat opens like a blank page with a question on it: the Robo mark, *What
 
 ### Settings & onboarding
 
-Manage providers, models, tools, and credentials from a real UI instead of editing YAML. First-run onboarding gets you to your first message in seconds. The settings panes cover providers/keys, model selection, toolset configuration, MCP servers, the gateway, and session management.
+Manage providers, models, tools, and credentials from a real UI instead of editing YAML. First-run onboarding gets you to your first message in seconds. The settings panes cover providers/keys, model selection, toolset configuration, the gateway, and session management. MCP servers live on the **Capabilities** page (**MCP** tab; Settings has an **MCP** entry that opens it): add any server by command or URL, paste an `mcp.json` snippet, or pick one from the catalog, then sign in, test it, and switch its tools on or off.
 
 - **Providers settings pane** — a dedicated place to manage inference providers, with an Accounts / API-keys UX for signing in and storing credentials per provider.
 - **Every provider and model in the menus** — the GUI surfaces the full provider list and every model that `robo model` knows about, so you pick from the same catalog the CLI sees rather than a curated subset.

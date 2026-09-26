@@ -1499,8 +1499,9 @@ def _resolve_explicit_runtime(
             api_key = resolve_anthropic_token()
             if not api_key:
                 raise AuthError(
-                    "No Anthropic credentials found. Set ANTHROPIC_TOKEN or ANTHROPIC_API_KEY, "
-                    "run 'claude setup-token', or authenticate with 'claude /login'."
+                    "No usable Anthropic credentials (a saved Claude login may have expired). "
+                    "Run 'claude' in a terminal and sign in again, set ANTHROPIC_API_KEY, or put "
+                    "a token from 'claude setup-token' in ANTHROPIC_TOKEN."
                 )
         return {
             "provider": "anthropic",
@@ -1979,8 +1980,9 @@ def resolve_runtime_provider(
             token = resolve_anthropic_token()
             if not token:
                 raise AuthError(
-                    "No Anthropic credentials found. Set ANTHROPIC_TOKEN or ANTHROPIC_API_KEY, "
-                    "run 'claude setup-token', or authenticate with 'claude /login'."
+                    "No usable Anthropic credentials (a saved Claude login may have expired). "
+                    "Run 'claude' in a terminal and sign in again, set ANTHROPIC_API_KEY, or put "
+                    "a token from 'claude setup-token' in ANTHROPIC_TOKEN."
                 )
         return {
             "provider": "anthropic",

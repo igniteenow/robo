@@ -57,7 +57,7 @@ import {
 import { uploadComposerAttachment } from '@/app/session/hooks/use-prompt-actions'
 import { roboDirectiveFormatter } from '@/components/assistant-ui/directive-text'
 import {
-  StickyHumanMessageContainer,
+  HumanMessageContainer,
   StopGlyph,
   USER_ACTION_ICON_BUTTON_CLASS,
   USER_ACTION_ICON_SIZE,
@@ -737,7 +737,7 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
 
   return (
     <ComposerPrimitive.Root className="contents" data-slot="aui_edit-composer-root">
-      <StickyHumanMessageContainer>
+      <HumanMessageContainer>
         <div
           className="composer-human-message-container human-execution-message-top relative flex w-full items-start rounded-md bg-(--ui-chat-surface-background)"
           onBlur={handleEditBlur}
@@ -846,7 +846,7 @@ export const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sess
             </button>
           </div>
         </div>
-      </StickyHumanMessageContainer>
+      </HumanMessageContainer>
     </ComposerPrimitive.Root>
   )
 }

@@ -42,6 +42,9 @@ export interface ElevenLabsVoicesResponse {
 
 export interface OAuthProviderStatus {
   error?: string
+  /** Saved credentials are present but their access token has lapsed: they
+   *  only work if the refresh succeeds. */
+  expired?: boolean
   expires_at?: null | string
   has_refresh_token?: boolean
   last_refresh?: null | string

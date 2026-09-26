@@ -1279,13 +1279,21 @@ export function ChatBar({
               </div>
             </div>
           </ComposerPrimitive.Root>
-          {/* Underside tray: chrome-free strip BELOW the composer — the
-              working context (branch / worktree, on the left) and contributed
-              chips. Outside the root for the same reason as the micro actions:
-              it must not fall inside the pop-out drag region. Same px as the
-              strip above, so the two bracket the composer on one vertical
-              line. */}
-          <div className={cn(composerFloatingStrip, 'px-[5px] pt-1.5 empty:hidden')} data-slot="composer-tray">
+          {/* Underside tray: strip BELOW the composer — the working context
+              (branch / worktree, on the left) and contributed chips. Outside
+              the root for the same reason as the micro actions: it must not
+              fall inside the pop-out drag region. Same px as the strip above,
+              so the two bracket the composer on one vertical line. Docked, it
+              takes the chat's own background: the thread scrolls under the
+              dock, and without it scrolled-up text printed over the chips. */}
+          <div
+            className={cn(
+              composerFloatingStrip,
+              'px-[5px] pt-1.5 empty:hidden',
+              !poppedOut && 'bg-(--ui-chat-surface-background)'
+            )}
+            data-slot="composer-tray"
+          >
             <CodingStatusRow
               onBranchOff={handleBranchOff}
               onConvertBranch={handleConvertBranch}

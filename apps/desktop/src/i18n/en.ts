@@ -853,6 +853,9 @@ export const en: Translations = {
       intro:
         'Sign in with a subscription — no API key to copy. Robo runs the browser sign-in for you, right here in the app.',
       connected: 'Connected',
+      expired: 'Expired',
+      expiredHint: (command: string) =>
+        `Your saved sign-in has expired. Robo renews it when it can; if chats fail, run ${command} in a terminal and sign in again.`,
       collapse: 'Collapse',
       connectAnother: 'Connect another provider',
       otherProviders: 'Other providers',
@@ -2312,6 +2315,7 @@ export const en: Translations = {
     chooseLater: "I'll choose a provider later",
     recommended: 'Recommended',
     connected: 'Connected',
+    expired: 'Expired',
     featuredPitch: 'One subscription, 300+ frontier models — the recommended way to run Robo',
     fireworksPitch: 'Direct model API — Fireworks-hosted frontier models',
     openRouterPitch: 'One key, hundreds of models — a solid default',

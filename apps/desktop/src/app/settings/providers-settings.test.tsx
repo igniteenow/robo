@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { atom } from 'nanostores'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -125,6 +125,31 @@ describe('ProvidersSettings', () => {
     expect(await screen.findByText('Qwen Code')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Remove Qwen Code' })).toBeNull()
     expect(screen.getByText(/managed by its own CLI/)).toBeTruthy()
+  })
+
+  it('shows an expired sign-in as Expired, not Connected, and says what to run', async () => {
+    listOAuthProviders.mockResolvedValue({
+      providers: [
+        provider('claude-code', true, {
+          cli_command: 'claude',
+          disconnectable: false,
+          flow: 'external',
+          name: 'Claude',
+          status: { expired: true, logged_in: true }
+        })
+      ]
+    })
+
+    await renderProvidersSettings()
+
+    // Exact title: the "managed by its own CLI" hint repeats the provider name.
+    const title = 'Anthropic OAuth: Required Extra Usage Credits to Use Subscription'
+    const row = (await screen.findByText(title)).closest('button')
+
+    expect(row).toBeTruthy()
+    expect(within(row!).getByText('Expired')).toBeTruthy()
+    expect(within(row!).queryByText('Connected')).toBeNull()
+    expect(within(row!).getByText(/run claude in a terminal/)).toBeTruthy()
   })
 
   it('renders a Keys card for a backend-tagged provider with no PROVIDER_GROUPS prefix', async () => {

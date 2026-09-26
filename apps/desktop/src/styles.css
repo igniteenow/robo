@@ -440,7 +440,6 @@
        markdown block and between consecutive prose parts. Single knob; tweak
        freely. */
     --paragraph-gap: 0.7rem;
-    --sticky-human-top: 0.23rem;
     --file-tree-row-height: 1.375rem;
 
     --composer-width: 52rem;
@@ -1291,10 +1290,6 @@ code {
   text-align: left;
 }
 
-[data-slot='aui_user-message-root'] {
-  top: var(--sticky-human-top);
-}
-
 [data-slot='aui_user-message-root'],
 [data-slot='aui_edit-composer-root'] {
   --human-msg-line-height: 1.3;
@@ -1309,23 +1304,23 @@ code {
   line-height: var(--human-msg-line-height);
 }
 
-/* Sticky human bubbles clamp to ~2 lines with a soft bottom fade so a long
-   prompt doesn't dominate the viewport. The clamp lifts only in the edit
+/* Human bubbles clamp to a few lines with a soft bottom fade so a long
+   prompt doesn't dominate the conversation. The clamp lifts only in the edit
    composer; expanding on read-only :focus-within ran on mousedown (before the
    swap) and fought stick-to-bottom when parked at the bottom. */
-.sticky-human-clamp {
+.human-message-clamp {
   cursor: pointer;
   max-height: calc(4 * var(--human-msg-line-height) * var(--conversation-text-font-size) + 0.15rem);
   overflow: hidden;
 }
 
-.sticky-human-clamp[data-clamped='true'] {
+.human-message-clamp[data-clamped='true'] {
   -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
   mask-image: linear-gradient(to bottom, #000 55%, transparent);
 }
 
 /* Stick-to-bottom owns scrollTop while following. Once escaped, native anchoring
-   is safe and keeps sticky human edits from shoving the viewport; data-editing
+   is safe and keeps inline human edits from shoving the viewport; data-editing
    enables that path before React swaps in the inline editor. */
 [data-slot='aui_thread-viewport'] {
   overflow-anchor: none;
