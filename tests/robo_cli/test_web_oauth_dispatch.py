@@ -647,3 +647,41 @@ def test_status_falls_through_to_generic_dispatcher_for_catalog_only_provider():
 
 
 
+
+
+def _claude_code_row(monkeypatch, creds):
+    from agent import anthropic_adapter
+
+    monkeypatch.setattr(anthropic_adapter, "read_claude_code_credentials", lambda: creds)
+    resp = client.get("/api/providers/oauth", headers=HEADERS)
+    assert resp.status_code == 200, resp.text
+    return {p["id"]: p for p in resp.json()["providers"]}["claude-code"]
+
+
+def test_claude_code_row_flags_an_expired_login(monkeypatch):
+    """A saved Claude login whose access token has lapsed must not read as a
+    plain "Connected": chats fail on it unless the refresh succeeds."""
+    row = _claude_code_row(
+        monkeypatch, {"accessToken": "sk-ant-oat01-old", "refreshToken": "rt", "expiresAt": 1_000}
+    )
+    assert row["status"]["logged_in"] is True
+    assert row["status"]["expired"] is True
+
+
+def test_claude_code_row_is_not_expired_while_the_token_is_valid(monkeypatch):
+    far_future_ms = int((time.time() + 86_400) * 1000)
+    row = _claude_code_row(
+        monkeypatch, {"accessToken": "sk-ant-oat01-new", "refreshToken": "rt", "expiresAt": far_future_ms}
+    )
+    assert row["status"]["logged_in"] is True
+    assert row["status"]["expired"] is False
+
+
+def test_claude_code_sign_in_command_saves_a_login_robo_can_read():
+    """`claude setup-token` only prints a token (Anthropic: "It does not save
+    the token anywhere"), so "I've signed in" could never find it. Running
+    `claude` signs in and saves the login Robo reads and renews."""
+    resp = client.get("/api/providers/oauth", headers=HEADERS)
+    row = {p["id"]: p for p in resp.json()["providers"]}["claude-code"]
+    assert "setup-token" not in row["cli_command"]
+    assert row["cli_command"].split()[0] == "claude"

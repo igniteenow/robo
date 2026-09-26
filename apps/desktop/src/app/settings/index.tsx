@@ -13,6 +13,7 @@ import {
   Info,
   Keyboard,
   KeyRound,
+  Layers3,
   Package,
   RefreshCw,
   Settings2,
@@ -227,6 +228,15 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         onSelect: () => setActiveView('keys')
       },
       {
+        // MCP servers live on the Capabilities page (see the redirect above);
+        // this entry takes you there, so Settings isn't a dead end for them.
+        active: false,
+        icon: Layers3,
+        id: 'mcp',
+        label: t.settings.nav.mcp,
+        onSelect: () => navigate(`${SKILLS_ROUTE}?tab=mcp`)
+      },
+      {
         active: activeView === 'plugins',
         icon: Package,
         id: 'plugins',
@@ -249,7 +259,7 @@ export function SettingsView({ onClose, onConfigSaved, onMainModelChanged }: Set
         onSelect: () => setActiveView('about')
       }
     ],
-    [activeView, keysView, providerView, t, setActiveView, openProviderView, openKeysView]
+    [activeView, keysView, navigate, providerView, t, setActiveView, openProviderView, openKeysView]
   )
 
   const navFooter = (

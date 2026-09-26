@@ -1,6 +1,6 @@
 import { RowButton } from '@/components/ui/row-button'
 import { useI18n } from '@/i18n'
-import { Check, ChevronRight, Terminal } from '@/lib/icons'
+import { AlertTriangle, Check, ChevronRight, Terminal } from '@/lib/icons'
 import type { OAuthProvider } from '@/types/robo'
 
 const PROVIDER_DISPLAY: Record<string, { order: number; title: string }> = {
@@ -46,7 +46,7 @@ export function FeaturedProviderRow({
             {providerTitle(provider)}
           </span>
           {loggedIn ? (
-            <ConnectedTag />
+            <ConnectedTag expired={provider.status?.expired} />
           ) : (
             <span className="inline-flex items-center gap-1.5 bg-primary px-2 py-0.5 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-primary-foreground">
               <span aria-hidden="true" className="dither inline-block size-2 shrink-0" />
@@ -61,8 +61,19 @@ export function FeaturedProviderRow({
   )
 }
 
-function ConnectedTag() {
+// Saved credentials whose access token has lapsed read as Expired, not
+// Connected: they only work if the refresh succeeds.
+function ConnectedTag({ expired = false }: { expired?: boolean }) {
   const { t } = useI18n()
+
+  if (expired) {
+    return (
+      <span className="inline-flex items-center gap-1 bg-(--ui-yellow)/10 px-2 py-0.5 text-xs font-medium text-(--ui-yellow)">
+        <AlertTriangle className="size-3" />
+        {t.onboarding.expired}
+      </span>
+    )
+  }
 
   return (
     <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
@@ -118,7 +129,7 @@ export function ProviderRow({
           <span className="text-[length:var(--conversation-text-font-size)] font-semibold">
             {providerTitle(provider)}
           </span>
-          {loggedIn ? <ConnectedTag /> : null}
+          {loggedIn ? <ConnectedTag expired={provider.status?.expired} /> : null}
         </div>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">{t.onboarding.flowSubtitles[provider.flow]}</p>
       </div>

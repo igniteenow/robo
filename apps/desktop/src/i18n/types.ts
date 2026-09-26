@@ -733,6 +733,8 @@ export interface Translations {
       haveApiKey: string
       intro: string
       connected: string
+      expired: string
+      expiredHint: (command: string) => string
       collapse: string
       connectAnother: string
       otherProviders: string
@@ -1941,6 +1943,7 @@ export interface Translations {
     chooseLater: string
     recommended: string
     connected: string
+    expired: string
     featuredPitch: string
     fireworksPitch: string
     openRouterPitch: string

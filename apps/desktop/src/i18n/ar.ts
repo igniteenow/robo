@@ -814,6 +814,9 @@ export const ar = defineLocale({
       haveApiKey: 'لديك مفتاح API بدلاً من ذلك؟',
       intro: 'سجل الدخول باشتراكك دون نسخ مفتاح API. يشغّل Robo تسجيل الدخول من المتصفح لك داخل التطبيق.',
       connected: 'متصل',
+      expired: 'منتهي الصلاحية',
+      expiredHint: (command: string) =>
+        `انتهت صلاحية تسجيل الدخول المحفوظ. يجدّده Robo تلقائيًا متى أمكن؛ وإذا فشلت المحادثات، شغّل ${command} في الطرفية وسجّل الدخول من جديد.`,
       collapse: 'طي',
       connectAnother: 'ربط مزود آخر',
       otherProviders: 'مزودون آخرون',
@@ -1937,6 +1940,7 @@ export const ar = defineLocale({
     chooseLater: 'سأختار مزوّدا لاحقا',
     recommended: 'موصى به',
     connected: 'متصل',
+    expired: 'منتهي الصلاحية',
     featuredPitch: 'اشتراك واحد، أكثر من 300 نموذج متقدم — الطريقة الموصى بها لتشغيل Robo',
     fireworksPitch: 'نماذج مفتوحة سريعة مع استضافة Fireworks.',
     openRouterPitch: 'مفتاح واحد لمئات النماذج — خيار افتراضي جيد',

@@ -864,6 +864,9 @@ export const zhHant = defineLocale({
       haveApiKey: '改用 API 金鑰？',
       intro: '使用訂閱登入，無需複製 API 金鑰。Robo 會在應用程式中為您完成瀏覽器登入。',
       connected: '已連線',
+      expired: '已過期',
+      expiredHint: (command: string) =>
+        `已儲存的登入已過期。Robo 會盡量自動續期；如果對話失敗，請在終端機執行 ${command} 並重新登入。`,
       collapse: '收合',
       connectAnother: '連結其他提供方',
       otherProviders: '其他提供方',
@@ -2080,6 +2083,7 @@ export const zhHant = defineLocale({
     chooseLater: '稍後再選擇提供方',
     recommended: '建議',
     connected: '已連線',
+    expired: '已過期',
     featuredPitch: '一個訂閱，300+ 前沿模型 — 執行 Robo 的建議方式',
     fireworksPitch: '直接模型 API — Fireworks 託管的前沿模型',
     openRouterPitch: '一個金鑰，數百個模型 — 穩定的預設選擇',

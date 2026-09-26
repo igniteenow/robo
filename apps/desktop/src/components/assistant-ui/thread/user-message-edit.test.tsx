@@ -4,8 +4,8 @@ import { ExportedMessageRepository } from '@assistant-ui/react'
 // resolution, incl. `edit: onEdit !== undefined`) and the stock runtime.
 //
 // Note: this covers the React/runtime wiring only. The Electron-level failure
-// mode (titlebar -webkit-app-region:drag swallowing clicks on *stuck* sticky
-// bubbles) is not reproducible in jsdom — see USER_BUBBLE_BASE_CLASS's no-drag
+// mode (titlebar -webkit-app-region:drag swallowing clicks on bubbles scrolled
+// under it) is not reproducible in jsdom — see USER_BUBBLE_BASE_CLASS's no-drag
 // carve-out in thread.tsx.
 import { AssistantRuntimeProvider, type ThreadMessage, useExternalStoreRuntime } from '@assistant-ui/react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -182,5 +182,32 @@ describe('click-to-edit user message', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-slot="aui_edit-composer-root"]')).toBeTruthy()
     })
+  })
+})
+
+describe('user message position', () => {
+  it('scrolls with the conversation instead of pinning to the top, also while editing', async () => {
+    const { container } = render(<StockHarness onEdit={async () => {}} />)
+
+    const bubble = await screen.findByRole('button', { name: 'Edit message' })
+    const root = bubble.closest('[data-slot="aui_user-message-root"]')
+
+    expect(root).toBeTruthy()
+    expect(root?.classList.contains('sticky')).toBe(false)
+
+    fireEvent.click(bubble)
+
+    const editRoot = await waitFor(() => {
+      const found = container.querySelector('[data-slot="aui_edit-composer-root"]')
+
+      expect(found).toBeTruthy()
+
+      return found
+    })
+
+    const editBubble = editRoot?.querySelector('[data-slot="aui_user-message-root"]')
+
+    expect(editBubble).toBeTruthy()
+    expect(editBubble?.classList.contains('sticky')).toBe(false)
   })
 })

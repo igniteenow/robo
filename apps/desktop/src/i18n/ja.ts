@@ -893,6 +893,9 @@ export const ja = defineLocale({
       intro:
         'サブスクリプションでサインインします。API キーのコピーは不要です。Robo がアプリ内でブラウザーサインインを代行します。',
       connected: '接続済み',
+      expired: '期限切れ',
+      expiredHint: (command: string) =>
+        `保存されたサインインの有効期限が切れています。Robo は可能なときに自動で更新します。チャットが失敗する場合は、ターミナルで ${command} を実行して再度サインインしてください。`,
       collapse: '折りたたむ',
       connectAnother: '別のプロバイダーを接続',
       otherProviders: 'その他のプロバイダー',
@@ -2147,6 +2150,7 @@ export const ja = defineLocale({
     chooseLater: '後でプロバイダーを選択します',
     recommended: '推奨',
     connected: '接続済み',
+    expired: '期限切れ',
     featuredPitch: '1 つのサブスクリプションで 300 以上の最先端モデル — Robo を実行するための推奨方法',
     fireworksPitch: '直接モデル API — Fireworks がホストする最先端モデル',
     openRouterPitch: '1 つのキーで数百のモデル — 堅実なデフォルト',

@@ -9653,13 +9653,16 @@ def _claude_code_only_status() -> Dict[str, Any]:
     when they also have a separate Robo-managed PKCE login.
     """
     try:
-        from agent.anthropic_adapter import read_claude_code_credentials
+        from agent.anthropic_adapter import is_claude_code_token_valid, read_claude_code_credentials
         creds = read_claude_code_credentials()
     except Exception:
         creds = None
     if creds and creds.get("accessToken"):
         return {
             "logged_in": True,
+            # A lapsed access token only works if the refresh succeeds, so the
+            # row says so instead of a plain "Connected".
+            "expired": not is_claude_code_token_valid(creds),
             "source": "claude_code_cli",
             "source_label": "~/.claude/.credentials.json",
             "token_preview": _truncate_token(creds.get("accessToken")),
@@ -9763,7 +9766,9 @@ _OAUTH_PROVIDER_CATALOG: tuple[Dict[str, Any], ...] = (
         "id": "claude-code",
         "name": "Anthropic OAuth: Required Extra Usage Credits to Use Subscription",
         "flow": "external",
-        "cli_command": "claude setup-token",
+        # `claude` signs in and saves the login Robo reads (and renews).
+        # `claude setup-token` only prints a token and saves nothing.
+        "cli_command": "claude",
         "docs_url": "https://docs.claude.com/en/docs/claude-code",
         "status_fn": _claude_code_only_status,
     },

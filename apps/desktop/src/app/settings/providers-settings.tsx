@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { RowButton } from '@/components/ui/row-button'
 import { SearchField } from '@/components/ui/search-field'
 import { useI18n } from '@/i18n'
-import { Check, ChevronDown, ChevronRight, KeyRound, Loader2, Terminal, Trash2 } from '@/lib/icons'
+import { AlertTriangle, Check, ChevronDown, ChevronRight, KeyRound, Loader2, Terminal, Trash2 } from '@/lib/icons'
 import { normalize } from '@/lib/text'
 import { cn } from '@/lib/utils'
 import { disconnectOAuthProvider, listOAuthProviders } from '@/robo'
@@ -241,18 +241,31 @@ function ConnectedProviderRow({
   const terminalDisconnect = !canDisconnect && Boolean(provider.disconnect_command) && canRunInTerminal()
   // Only fall back to a static "remove it elsewhere" hint when we offer no button.
   const showHint = !canDisconnect && !terminalDisconnect
+  // Saved but lapsed: it only works if the refresh succeeds, so don't call it
+  // Connected — say so, and what to run.
+  const expired = Boolean(provider.status?.expired)
 
   return (
     <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-[6px] transition-colors hover:bg-(--ui-control-hover-background)">
       <RowButton className="min-w-0 px-3 py-2.5 text-left" onClick={() => onSelect(provider)}>
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[length:var(--conversation-text-font-size)] font-semibold">{title}</span>
-          <span className="inline-flex shrink-0 items-center gap-1 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-            <Check className="size-3" />
-            {copy.connected}
-          </span>
+          {expired ? (
+            <span className="inline-flex shrink-0 items-center gap-1 bg-(--ui-yellow)/10 px-2 py-0.5 text-xs font-medium text-(--ui-yellow)">
+              <AlertTriangle className="size-3" />
+              {copy.expired}
+            </span>
+          ) : (
+            <span className="inline-flex shrink-0 items-center gap-1 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              <Check className="size-3" />
+              {copy.connected}
+            </span>
+          )}
         </div>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">{t.onboarding.flowSubtitles[provider.flow]}</p>
+        {expired && (
+          <p className="mt-0.5 text-[0.68rem] leading-5 text-muted-foreground">{copy.expiredHint(provider.cli_command)}</p>
+        )}
         {showHint && (
           <p className="mt-0.5 truncate text-[0.68rem] leading-5 text-muted-foreground/70">
             {provider.flow === 'external' ? copy.removeExternalGeneric(title) : copy.removeKeyManaged(title)}
