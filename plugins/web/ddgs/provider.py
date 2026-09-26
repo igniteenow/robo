@@ -24,8 +24,10 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
-from typing import Any, Dict, Optional
+from collections import OrderedDict
+from typing import Any, Dict, Optional, Tuple
 
 from agent.web_search_provider import WebSearchProvider
 
@@ -44,9 +46,133 @@ _POLL_INTERVAL_SECS = 0.1
 # After terminate(), wait this long before escalating to kill().
 _TERMINATE_GRACE_SECS = 1.0
 
+# The agent runs up to 8 tool calls at once, and a model researching several
+# products fires a web_search for each. The search engines behind ddgs
+# rate-limit bursts from one address, so searches run one at a time — each
+# still capped at _SEARCH_TIMEOUT_SECS once it starts — and a queued search
+# pauses briefly after the one before.
+_MAX_CONCURRENT_SEARCHES = 1
+_QUEUED_SEARCH_GAP_SECS = 1.0
+# Longest a search waits for its turn before giving up (a queue of 8 slow
+# searches can take this long; the tool-batch guard allows 420s).
+_SLOT_WAIT_SECS = 180
+_search_slots = threading.BoundedSemaphore(_MAX_CONCURRENT_SEARCHES)
+_last_search_finished = 0.0
+
+# A search that fails fast (every engine refused or came back empty — how
+# rate limiting shows up) is tried once more after this pause. Timeouts are
+# not retried: they already used the whole budget.
+_RETRY_PAUSE_SECS = 1.5
+
+# Identical searches inside this window reuse the earlier results instead of
+# spending another request against the rate limit.
+_CACHE_TTL_SECS = 600
+_CACHE_MAX_ENTRIES = 128
+
+# One first-use install at a time: parallel searches on a fresh install must
+# not start several pip runs into the same environment.
+_install_lock = threading.Lock()
+
+
+def _ddgs_importable() -> bool:
+    try:
+        import ddgs  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _ensure_ddgs_installed() -> Optional[str]:
+    """Make ``ddgs`` importable, installing the pinned build on first use.
+
+    Returns ``None`` when ready, or a user-facing error. The install runs
+    without an interactive prompt: ``security.allow_lazy_installs`` (default
+    on) is the gate, and a prompt would block the agent loop.
+    """
+    if _ddgs_importable():
+        return None
+    with _install_lock:
+        return _install_ddgs_locked()
+
+
+def _install_ddgs_locked() -> Optional[str]:
+    if _ddgs_importable():
+        return None  # another search installed it while this one waited
+    try:
+        from tools.lazy_deps import FeatureUnavailable, ensure
+
+        logger.info("Installing DuckDuckGo search (ddgs) on first use")
+        ensure("search.ddgs", prompt=False)
+    except FeatureUnavailable as exc:
+        return (
+            "DuckDuckGo search is not installed and could not be installed "
+            f"automatically ({exc.reason}). Run `robo tools` to install it or "
+            "to pick another search provider."
+        )
+    except Exception as exc:  # noqa: BLE001 — never let setup crash a search
+        logger.warning("ddgs lazy install failed: %s", exc)
+        return f"DuckDuckGo search could not be installed: {exc}"
+
+    import importlib
+
+    importlib.invalidate_caches()
+    if not _ddgs_importable():
+        return "DuckDuckGo search was installed but cannot be loaded yet — restart Robo and try again."
+    return None
+
 
 class _SearchInterrupted(Exception):
     """Raised when tools.interrupt.is_interrupted() trips during a search wait."""
+
+
+def _acquire_search_slot() -> bool:
+    """Wait for the search slot (``_MAX_CONCURRENT_SEARCHES``).
+
+    A search that had to queue behind another also waits until
+    ``_QUEUED_SEARCH_GAP_SECS`` after that one finished, so a batch reaches
+    the engines as a steady trickle rather than back-to-back requests.
+    Returns False when no slot frees up within ``_SLOT_WAIT_SECS``; raises
+    :class:`_SearchInterrupted` if the user interrupts while waiting.
+    """
+    if _search_slots.acquire(blocking=False):
+        return True
+    from tools.interrupt import is_interrupted
+
+    deadline = time.monotonic() + _SLOT_WAIT_SECS
+    while time.monotonic() < deadline:
+        if is_interrupted():
+            raise _SearchInterrupted("DuckDuckGo search interrupted")
+        if _search_slots.acquire(timeout=_POLL_INTERVAL_SECS):
+            try:
+                _pause(_last_search_finished + _QUEUED_SEARCH_GAP_SECS - time.monotonic())
+            except _SearchInterrupted:
+                _search_slots.release()
+                raise
+            return True
+    return False
+
+
+def _pause(seconds: float) -> None:
+    """Sleep, waking early to raise :class:`_SearchInterrupted` on interrupt."""
+    if seconds <= 0:
+        return
+    from tools.interrupt import is_interrupted
+
+    until = time.monotonic() + seconds
+    while True:
+        if is_interrupted():
+            raise _SearchInterrupted("DuckDuckGo search interrupted")
+        left = until - time.monotonic()
+        if left <= 0:
+            return
+        time.sleep(min(_POLL_INTERVAL_SECS, left))
+
+
+def _release_search_slot() -> None:
+    global _last_search_finished
+    _last_search_finished = time.monotonic()
+    _search_slots.release()
 
 
 def _run_ddgs_search(query: str, safe_limit: int) -> list[dict[str, Any]]:
@@ -272,6 +398,30 @@ class DDGSWebSearchProvider(WebSearchProvider):
     as ``{"success": False, "error": ...}`` rather than raising.
     """
 
+    def __init__(self) -> None:
+        # Recent successful searches, (query, limit) -> (expires_at, hits).
+        # Per instance: the registry keeps one provider for the process.
+        self._cache: "OrderedDict[Tuple[str, int], Tuple[float, list]]" = OrderedDict()
+        self._cache_lock = threading.Lock()
+
+    def _cached(self, key: Tuple[str, int]) -> Optional[list]:
+        with self._cache_lock:
+            entry = self._cache.get(key)
+            if entry is None:
+                return None
+            if entry[0] < time.monotonic():
+                del self._cache[key]
+                return None
+            self._cache.move_to_end(key)
+            return [dict(hit) for hit in entry[1]]
+
+    def _remember(self, key: Tuple[str, int], hits: list) -> None:
+        with self._cache_lock:
+            self._cache[key] = (time.monotonic() + _CACHE_TTL_SECS, [dict(hit) for hit in hits])
+            self._cache.move_to_end(key)
+            while len(self._cache) > _CACHE_MAX_ENTRIES:
+                self._cache.popitem(last=False)
+
     @property
     def name(self) -> str:
         return "ddgs"
@@ -281,17 +431,21 @@ class DDGSWebSearchProvider(WebSearchProvider):
         return "DuckDuckGo (ddgs)"
 
     def is_available(self) -> bool:
-        """Return True when the ``ddgs`` package is importable.
+        """Return True when the ``ddgs`` package is importable — or will be
+        installed on the first search (the keyless default; see
+        ``tools.lazy_deps.can_lazy_install``).
 
         Probes the import once; cheap because Python caches the import. Must
         NOT perform network I/O — runs at tool-registration time and on every
         ``robo tools`` paint.
         """
-        try:
-            import ddgs  # noqa: F401
-
+        if _ddgs_importable():
             return True
-        except ImportError:
+        try:
+            from tools.lazy_deps import can_lazy_install
+
+            return can_lazy_install("search.ddgs")
+        except Exception:  # noqa: BLE001 — availability probe must never raise
             return False
 
     def supports_search(self) -> bool:
@@ -307,20 +461,41 @@ class DDGSWebSearchProvider(WebSearchProvider):
         a hard wall-clock timeout (``_SEARCH_TIMEOUT_SECS``) so a hung native
         ``primp`` call cannot freeze the Robo process (#36776, #68096).
         """
-        try:
-            import ddgs  # type: ignore  # noqa: F401 — availability probe
-        except ImportError:
-            return {
-                "success": False,
-                "error": "ddgs package is not installed — run `pip install ddgs`",
-            }
+        install_error = _ensure_ddgs_installed()
+        if install_error:
+            return {"success": False, "error": install_error}
 
         # DDGS().text yields at most `max_results` items; we cap defensively
         # in case the package ignores the hint.
         safe_limit = max(1, int(limit))
 
+        cache_key = (" ".join(str(query).split()).lower(), safe_limit)
+        cached = self._cached(cache_key)
+        if cached is not None:
+            logger.info("DDGS search '%s': %d results (cached)", query, len(cached))
+            return {"success": True, "data": {"web": cached}}
+
         try:
-            web_results = _run_ddgs_search_bounded(query, safe_limit)
+            if not _acquire_search_slot():
+                return {
+                    "success": False,
+                    "error": (
+                        "DuckDuckGo search is busy with other searches — "
+                        "try again in a moment, or run fewer searches at once."
+                    ),
+                }
+        except _SearchInterrupted:
+            return {"success": False, "error": "DuckDuckGo search interrupted"}
+
+        try:
+            try:
+                web_results = _run_ddgs_search_bounded(query, safe_limit)
+            except RuntimeError as first_error:
+                # Fast failure: the engines refused (rate limit) or found
+                # nothing. One more try after a short pause.
+                logger.info("DDGS search failed fast (%s); retrying once: %r", first_error, query)
+                _pause(_RETRY_PAUSE_SECS)
+                web_results = _run_ddgs_search_bounded(query, safe_limit)
         except TimeoutError:
             logger.warning(
                 "DDGS search timed out after %ds for query: %r",
@@ -344,17 +519,21 @@ class DDGSWebSearchProvider(WebSearchProvider):
         except Exception as exc:  # noqa: BLE001 — ddgs raises its own exceptions
             logger.warning("DDGS search error: %s", exc)
             return {"success": False, "error": f"DuckDuckGo search failed: {exc}"}
+        finally:
+            _release_search_slot()
 
         logger.info(
             "DDGS search '%s': %d results (limit %d)", query, len(web_results), limit
         )
+        if web_results:
+            self._remember(cache_key, web_results)
         return {"success": True, "data": {"web": web_results}}
 
     def get_setup_schema(self) -> Dict[str, Any]:
         return {
             "name": "DuckDuckGo (ddgs)",
-            "badge": "free · no key · search only",
-            "tag": "Search via the ddgs Python package — no API key (pair with any extract provider)",
+            "badge": "free · no key",
+            "tag": "Search via the ddgs Python package — no API key; Robo's built-in reader opens the pages",
             "env_vars": [],
             # Trigger `_run_post_setup("ddgs")` after the user picks this row
             # so the ddgs Python package gets pip-installed on first selection.

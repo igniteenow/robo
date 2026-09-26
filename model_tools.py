@@ -294,6 +294,13 @@ _tool_defs_cache: Dict[tuple, List[Dict[str, Any]]] = {}
 # serves) while keeping the cap small. (#19251)
 _TOOL_DEFS_CACHE_MAX = 8
 
+# Appended to web_search's description when web_extract is also available.
+WEB_SEARCH_READ_PAGES_HINT = (
+    " Results are titles and short snippets only: before stating specific facts"
+    " such as prices, specs, dates or quotes, open the most relevant results"
+    " with web_extract and read the page itself."
+)
+
 
 def _clear_tool_defs_cache() -> None:
     """Drop memoized get_tool_definitions() results. Called when dynamic
@@ -550,6 +557,21 @@ def _compute_tool_definitions(
                         "function": {**td["function"], "description": desc},
                     }
                     break
+
+    # web_search returns snippets only. When the page reader is available too
+    # (the "search" toolset ships web_search alone), point the model at it so
+    # prices, specs and dates come from the page rather than a snippet.
+    if {"web_search", "web_extract"} <= available_tool_names:
+        for i, td in enumerate(filtered_tools):
+            if td.get("function", {}).get("name") == "web_search":
+                filtered_tools[i] = {
+                    "type": "function",
+                    "function": {
+                        **td["function"],
+                        "description": td["function"].get("description", "") + WEB_SEARCH_READ_PAGES_HINT,
+                    },
+                }
+                break
 
     if not quiet_mode:
         if filtered_tools:

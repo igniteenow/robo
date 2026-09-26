@@ -13,6 +13,7 @@ import {
 import { __resetNativeNotifyBaselineForTests, markNativeNotifyBaseline } from './notify-baseline'
 import { $approvalRequest, setApprovalRequest } from './prompts'
 import { $activeSessionId, setActiveSessionId } from './session'
+import { resetVoiceConversation, setVoiceConversationView } from './voice-conversation'
 
 const desktopWindow = window as unknown as { roboDesktop?: Window['roboDesktop'] }
 const initialRoboDesktop = desktopWindow.roboDesktop
@@ -49,6 +50,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetVoiceConversation()
+
   if (initialRoboDesktop) {
     desktopWindow.roboDesktop = initialRoboDesktop
   } else {
@@ -261,5 +264,32 @@ describe('respondToApprovalAction', () => {
     $gateway.set(null)
     await respondToApprovalAction('bg', 'approve')
     expect(request).not.toHaveBeenCalled()
+  })
+})
+
+describe('dispatchNativeNotification during a voice chat', () => {
+  it('stays quiet about a finished turn while a voice chat is speaking the reply', () => {
+    const sessionId = freshSession()
+    setActiveSessionId(sessionId)
+    setVoiceConversationView({ active: true, level: 0, muted: false, status: 'speaking' })
+    dispatchNativeNotification({ kind: 'turnDone', sessionId, title: 'done' })
+    expect(notify).not.toHaveBeenCalled()
+  })
+
+  it('still reports a failed turn during a voice chat', () => {
+    const sessionId = freshSession()
+    setActiveSessionId(sessionId)
+    setVoiceConversationView({ active: true, level: 0, muted: false, status: 'thinking' })
+    dispatchNativeNotification({ kind: 'turnError', sessionId, title: 'failed' })
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a finished turn again once the voice chat has ended', () => {
+    const sessionId = freshSession()
+    setActiveSessionId(sessionId)
+    setVoiceConversationView({ active: true, level: 0, muted: false, status: 'idle' })
+    resetVoiceConversation()
+    dispatchNativeNotification({ kind: 'turnDone', sessionId, title: 'done' })
+    expect(notify).toHaveBeenCalledTimes(1)
   })
 })

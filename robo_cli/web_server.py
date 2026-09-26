@@ -4684,6 +4684,11 @@ def _speak_sentence_encoded(text: str) -> Optional[bytes]:
             os.unlink(file_path)
 
 
+# Shortest opening clause the speak-stream session will speak on its own
+# (about four words): shorter openers ride along with the rest of the sentence.
+_SPEAK_STREAM_FIRST_CLAUSE_MIN_LEN = 24
+
+
 @app.websocket("/api/audio/speak-stream")
 async def speak_stream_ws(ws: "WebSocket") -> None:
     """Streaming TTS for the desktop: text in, audio frames out.
@@ -4775,7 +4780,10 @@ async def speak_stream_ws(ws: "WebSocket") -> None:
         from tools.tts_streaming import SentenceChunker
         from tools.tts_tool import _strip_markdown_for_tts
 
-        chunker = SentenceChunker()
+        # The first clause of a reply is spoken as soon as it is written — the
+        # listener hears Robo start answering while the rest of the first
+        # sentence is still being generated (see SentenceChunker).
+        chunker = SentenceChunker(first_clause_min_len=_SPEAK_STREAM_FIRST_CLAUSE_MIN_LEN)
 
         # The session stays open for a whole agent turn, and the client only
         # sends `done` when the turn ends. During tool execution no text

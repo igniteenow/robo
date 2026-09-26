@@ -213,7 +213,7 @@ export const en: Translations = {
 
   voiceScreen: {
     title: 'Voice chat',
-    subtitle: 'Just talk — the whole conversation is here to read when you end the voice chat.',
+    subtitle: 'Just talk — cut in any time Robo is speaking. The whole conversation is here to read when you end the voice chat.',
     status: {
       idle: 'One moment…',
       listening: 'Listening…',
@@ -1975,6 +1975,7 @@ export const en: Translations = {
     placeholderStarting: 'Starting Robo...',
     placeholderReconnecting: 'Reconnecting to Robo…',
     placeholderFollowUp: 'Send follow-up',
+    freshChatHeading: 'What should we work on?',
     newSessionPlaceholders: [
       'What are we building?',
       'Give Robo a task',

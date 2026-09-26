@@ -1,0 +1,7 @@
+name: web-keyless
+version: 1.0.0
+description: "Free web search and page reading with no API key — rotates across the free tiers of Exa, Parallel, Firecrawl and Keenable."
+author: Robo
+kind: backend
+provides_web_providers:
+  - keyless

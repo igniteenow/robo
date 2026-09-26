@@ -1805,6 +1805,7 @@ export const ja = defineLocale({
     placeholderStarting: 'Robo を起動中...',
     placeholderReconnecting: 'Robo に再接続中…',
     placeholderFollowUp: 'フォローアップを送信',
+    freshChatHeading: '何に取り組みましょうか？',
     newSessionPlaceholders: [
       '何を作りますか？',
       'Robo にタスクを与える',

@@ -171,6 +171,26 @@ def test_encoded_client_gets_one_file_per_sentence_then_end(stream_client, monke
     assert not list(tmp_path.glob("tts_*.mp3"))
 
 
+def test_encoded_client_hears_the_opening_clause_first(stream_client, monkeypatch, tmp_path):
+    # A live reply starts speaking at its first clause, not its first full
+    # stop: the rest of the sentence is synthesized while the clause plays.
+    spoken = _patch_no_streamer(monkeypatch, tmp_path)
+
+    with stream_client.websocket_connect(_url(encoded="1")) as conn:
+        assert conn.receive_json() == {"type": "start", "format": "encoded"}
+
+        conn.send_text(
+            json.dumps({"text": "The weather in Lahore is warm and sunny, with clear skies and a light breeze.", "done": True})
+        )
+        first = conn.receive_bytes()
+        second = conn.receive_bytes()
+        assert conn.receive_json() == {"type": "end"}
+
+    assert first == b"ID3The weather in Lahore is warm and sunny,"
+    assert second == b"ID3with clear skies and a light breeze."
+    assert spoken == ["The weather in Lahore is warm and sunny,", "with clear skies and a light breeze."]
+
+
 def test_encoded_path_skips_a_failed_sentence_and_keeps_going(stream_client, monkeypatch, tmp_path):
     spoken = _patch_no_streamer(monkeypatch, tmp_path, fail_on="second")
 

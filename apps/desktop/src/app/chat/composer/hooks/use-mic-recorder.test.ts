@@ -1,12 +1,10 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { type MicRecorderErrorCopy, useMicRecorder } from './use-mic-recorder'
+import { micError, type MicRecorderErrorCopy, useMicRecorder } from './use-mic-recorder'
 
-// A voice chat listens again after every reply. With `retainDevice` the
-// microphone stays open across stop() → start(), so the next turn begins the
-// instant Robo finishes talking instead of after a device re-open; cancel()
-// (mute, end, unmount) lets the device go.
+// Push-to-talk dictation: start → speak → stop hands back one recording, and
+// the microphone is released as soon as the recording ends.
 
 const copy: MicRecorderErrorCopy = {
   microphoneAccessDenied: 'denied',
@@ -70,7 +68,8 @@ class FakeAudioContext {
   }
 
   createAnalyser() {
-    return { fftSize: 256, getByteTimeDomainData: (data: Uint8Array) => data.fill(128) }
+    // A steady tone-ish level: every sample 40 off centre.
+    return { fftSize: 256, getByteTimeDomainData: (data: Uint8Array) => data.fill(168) }
   }
 
   createMediaStreamSource() {
@@ -103,55 +102,60 @@ afterEach(() => {
 })
 
 describe('useMicRecorder', () => {
-  it('opens the device once and keeps it across turns when asked to', async () => {
+  it('records until stop() and then releases the device', async () => {
     const { result } = renderHook(() => useMicRecorder(copy))
 
-    await act(() => result.current.handle.start({ retainDevice: true }))
+    await act(() => result.current.handle.start())
     expect(getUserMedia).toHaveBeenCalledTimes(1)
     expect(requestMicrophoneAccess).toHaveBeenCalledTimes(1)
+    expect(result.current.recording).toBe(true)
 
     const stream = FakeRecorder.instances[0].stream
+    const recording = await act(() => result.current.handle.stop())
 
-    const first = await act(() => result.current.handle.stop())
-    expect(first?.audio).toBeInstanceOf(Blob)
-    // Still live: nothing was stopped, the audio graph is intact.
-    expect(stream.tracks[0].readyState).toBe('live')
-    expect(FakeAudioContext.instances[0].closed).toBe(false)
+    expect(recording?.audio).toBeInstanceOf(Blob)
+    expect(stream.tracks[0].readyState).toBe('ended')
+    expect(FakeAudioContext.instances[0].closed).toBe(true)
+    expect(result.current.recording).toBe(false)
+  })
 
-    await act(() => result.current.handle.start({ retainDevice: true }))
-    // No second permission check, no second getUserMedia, no second graph.
-    expect(getUserMedia).toHaveBeenCalledTimes(1)
-    expect(requestMicrophoneAccess).toHaveBeenCalledTimes(1)
-    expect(FakeAudioContext.instances).toHaveLength(1)
-    expect(FakeRecorder.instances[1].stream).toBe(stream)
+  it('cancel() releases the device and delivers nothing', async () => {
+    const { result } = renderHook(() => useMicRecorder(copy))
+
+    await act(() => result.current.handle.start())
+
+    const stream = FakeRecorder.instances[0].stream
 
     act(() => result.current.handle.cancel())
     expect(stream.tracks[0].readyState).toBe('ended')
-    expect(FakeAudioContext.instances[0].closed).toBe(true)
+    expect(result.current.recording).toBe(false)
   })
 
-  it('releases the device after stop() by default', async () => {
+  it('meters the level from a timer while animation frames never come (window minimized)', async () => {
     const { result } = renderHook(() => useMicRecorder(copy))
 
     await act(() => result.current.handle.start())
+    await waitFor(() => expect(result.current.level).toBeGreaterThan(0.9))
 
-    const stream = FakeRecorder.instances[0].stream
-
-    await act(() => result.current.handle.stop())
-    expect(stream.tracks[0].readyState).toBe('ended')
-
-    await act(() => result.current.handle.start())
-    expect(getUserMedia).toHaveBeenCalledTimes(2)
+    act(() => result.current.handle.cancel())
   })
 
-  it('re-opens a retained device whose track has ended (unplugged, revoked)', async () => {
+  it('refuses when the desktop says microphone access is denied', async () => {
+    requestMicrophoneAccess.mockResolvedValueOnce(false)
+
     const { result } = renderHook(() => useMicRecorder(copy))
 
-    await act(() => result.current.handle.start({ retainDevice: true }))
-    await act(() => result.current.handle.stop())
-    FakeRecorder.instances[0].stream.tracks[0].readyState = 'ended'
+    await expect(result.current.handle.start()).rejects.toThrow('denied')
+    expect(getUserMedia).not.toHaveBeenCalled()
+  })
+})
 
-    await act(() => result.current.handle.start({ retainDevice: true }))
-    expect(getUserMedia).toHaveBeenCalledTimes(2)
+describe('micError', () => {
+  it('names what went wrong with the microphone', () => {
+    expect(micError(new DOMException('x', 'NotAllowedError'), copy).message).toBe('permission')
+    expect(micError(new DOMException('x', 'NotFoundError'), copy).message).toBe('no mic')
+    expect(micError(new DOMException('x', 'NotReadableError'), copy).message).toBe('in use')
+    expect(micError(new DOMException('x', 'OverconstrainedError'), copy).message).toBe('constraints')
+    expect(micError('???', copy).message).toBe('start failed')
   })
 })

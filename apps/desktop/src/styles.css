@@ -1501,6 +1501,21 @@ code {
   font-size: 0.8125rem;
 }
 
+/* A fresh chat's composer IS the page: one big box under the heading —
+   roomier padding, larger controls and type. Tokens, so every control in the
+   box follows. */
+[data-slot='composer-dock'][data-centered] {
+  --composer-control-size: 2rem;
+  --composer-control-primary-size: 2.25rem;
+  --composer-control-gap: 0.375rem;
+  --composer-surface-pad-x: 0.875rem;
+  --composer-surface-pad-y: 0.625rem;
+}
+
+[data-slot='composer-dock'][data-centered] [data-slot='composer-rich-input'] {
+  font-size: 1rem;
+}
+
 [data-slot='composer-rich-input']:is(:empty, [data-empty])::before {
   color: var(--ui-text-tertiary) !important;
 }

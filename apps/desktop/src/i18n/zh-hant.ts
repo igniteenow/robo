@@ -1748,6 +1748,7 @@ export const zhHant = defineLocale({
     placeholderStarting: '正在啟動 Robo...',
     placeholderReconnecting: '正在重新連線至 Robo…',
     placeholderFollowUp: '傳送後續訊息',
+    freshChatHeading: '我們今天做點什麼？',
     newSessionPlaceholders: [
       '我們要建立什麼？',
       '給 Robo 一個任務',

@@ -158,7 +158,13 @@ import { rehomePrimaryConnection } from './primary-connection-rehome'
 import { decideProfileDeleteAction, profileNameFromDeleteRequest, resolveRouteProfile } from './profile-delete-routing'
 import { fetchPrimaryProfileSessions } from './profile-session-routing'
 import { createQuickEntryShortcut, quickEntryWindowBounds, sanitizeQuickEntrySettings } from './quick-entry'
-import { type ActiveWork, mergeActiveWork, normalizeActiveWork, quitPromptFor } from './quit-guard'
+import {
+  type ActiveWork,
+  mergeActiveWork,
+  normalizeActiveWork,
+  quitPromptFor,
+  wantsUnthrottledWindows
+} from './quit-guard'
 import * as remoteLifecycle from './remote-lifecycle'
 import {
   RemoteLivenessTracker,
@@ -10359,11 +10365,12 @@ const activeWorkByWebContents = new Map<number, ActiveWork>()
 
 // The same merged picture drives background throttling: chat windows run
 // unthrottled while any turn is in flight (streaming must paint while hidden)
-// and fall back to Chromium's default throttling at idle. See stream-throttle.ts.
+// or a voice chat is live (its mic loop must keep listening while hidden), and
+// fall back to Chromium's default throttling at idle. See stream-throttle.ts.
 const streamThrottle = createStreamThrottle()
 
 function updateStreamThrottleFromActiveWork() {
-  streamThrottle.update(mergeActiveWork(activeWorkByWebContents.values()).count > 0)
+  streamThrottle.update(wantsUnthrottledWindows(mergeActiveWork(activeWorkByWebContents.values())))
 }
 
 ipcMain.on('robo:active-work', (event, payload) => {

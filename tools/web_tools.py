@@ -232,7 +232,10 @@ def _get_backend() -> str:
         ("firecrawl", _has_env("FIRECRAWL_API_KEY") or _has_env("FIRECRAWL_API_URL")),
         ("searxng", _has_env("SEARXNG_URL")),
         ("brave-free", _has_env("BRAVE_SEARCH_API_KEY")),
-        ("ddgs", _ddgs_package_importable()),
+        # No key anywhere: the free tier of real search services first,
+        # DuckDuckGo scraping as the last resort.
+        ("keyless", _registered_web_provider_available("keyless") is True),
+        ("ddgs", _ddgs_available()),
     )
     for backend, available in backend_candidates:
         if available:
@@ -324,7 +327,7 @@ def _is_backend_available(backend: str) -> bool:
     if backend == "brave-free":
         return _has_env("BRAVE_SEARCH_API_KEY")
     if backend == "ddgs":
-        return _ddgs_package_importable()
+        return _ddgs_available()
     if backend == "xai":
         # Cheap probe — env var OR auth.json has OAuth tokens. Must not
         # call resolve_xai_http_credentials() here because the OAuth path
@@ -350,6 +353,27 @@ def _ddgs_package_importable() -> bool:
         import ddgs  # noqa: F401
         return True
     except ImportError:
+        return False
+
+
+def _ddgs_available() -> bool:
+    """DuckDuckGo is the keyless default search backend.
+
+    Usable when the ``ddgs`` package is importable, OR when it will install
+    itself on the first search (lazy installs allowed on this host — see
+    ``tools.lazy_deps.can_lazy_install``). The second half is what gives a
+    fresh install web search with no API key at all; without it the web
+    tools were hidden until the user found `robo tools` and a paid key.
+    No network here: this runs on every tool-schema build.
+    """
+    if _ddgs_package_importable():
+        return True
+    try:
+        from tools.lazy_deps import can_lazy_install
+
+        return can_lazy_install("search.ddgs")
+    except Exception as exc:  # noqa: BLE001 — availability probe must never raise
+        logger.debug("ddgs lazy-install probe failed: %s", exc)
         return False
 
 # ─── Firecrawl Client ────────────────────────────────────────────────────────
@@ -844,13 +868,20 @@ async def web_extract_tool(
 
             provider = _wsp_get_provider(backend) if backend else None
             if provider is None or not provider.supports_extract():
-                # When the configured name IS registered but doesn't support
-                # extract (search-only providers like brave-free / ddgs /
-                # searxng), surface that as a typed "search-only" error
-                # rather than silently switching backends. When the name
-                # isn't registered at all (typo / uninstalled plugin), fall
-                # through to the active-provider walk.
-                if provider is not None and not provider.supports_extract():
+                # A search-only provider named explicitly as the *extract*
+                # backend is a misconfiguration: say so rather than silently
+                # switching. A search-only shared backend (``web.backend:
+                # ddgs`` — the keyless default) or an unregistered name falls
+                # through to the active-provider walk and, failing that, to
+                # the built-in page reader.
+                explicit_extract = (
+                    _load_web_config().get("extract_backend") or ""
+                ).lower().strip()
+                if (
+                    provider is not None
+                    and not provider.supports_extract()
+                    and explicit_extract == provider.name
+                ):
                     return json.dumps(
                         {
                             "success": False,
@@ -858,7 +889,8 @@ async def web_extract_tool(
                                 f"{provider.display_name} is a search-only "
                                 "backend and cannot extract URL content. "
                                 "Set web.extract_backend to firecrawl, "
-                                "tavily, exa, or parallel."
+                                "tavily, exa, or parallel — or remove it to "
+                                "use the built-in page reader."
                             ),
                         },
                         ensure_ascii=False,
@@ -886,33 +918,32 @@ async def web_extract_tool(
                             },
                             ensure_ascii=False,
                         )
-                    return json.dumps(
-                        {
-                            "success": False,
-                            "error": (
-                                "No web extract provider configured. "
-                                "Set web.extract_backend to firecrawl, "
-                                "tavily, exa, or parallel."
-                            ),
-                        },
-                        ensure_ascii=False,
-                    )
+                    # No extract backend set up (the keyless default):
+                    # read the pages directly.
 
-            logger.info(
-                "Web extract via %s: %d URL(s)", provider.name, len(safe_urls)
-            )
+            if provider is None:
+                from tools.web_reader import read_pages
 
-            # Async-or-sync dispatch: parallel + firecrawl have async
-            # extract(); exa + tavily are sync.
-            import inspect
-            if inspect.iscoroutinefunction(provider.extract):
-                results = await provider.extract(safe_urls, format=format)
-            else:
-                # Run sync extract() in a thread so we don't block the
-                # event loop on network I/O.
-                results = await asyncio.to_thread(
-                    provider.extract, safe_urls, format=format
+                logger.info(
+                    "Web extract via built-in reader: %d URL(s)", len(safe_urls)
                 )
+                results = await read_pages(safe_urls)
+            else:
+                logger.info(
+                    "Web extract via %s: %d URL(s)", provider.name, len(safe_urls)
+                )
+
+                # Async-or-sync dispatch: parallel + firecrawl have async
+                # extract(); exa + tavily are sync.
+                import inspect
+                if inspect.iscoroutinefunction(provider.extract):
+                    results = await provider.extract(safe_urls, format=format)
+                else:
+                    # Run sync extract() in a thread so we don't block the
+                    # event loop on network I/O.
+                    results = await asyncio.to_thread(
+                        provider.extract, safe_urls, format=format
+                    )
 
         # Reconstruct the original input order across invalid, blocked, and
         # provider-processed entries. Providers are expected to preserve the

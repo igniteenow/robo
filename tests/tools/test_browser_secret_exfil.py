@@ -93,6 +93,15 @@ class TestBrowserSecretExfil:
 class TestWebExtractSecretExfil:
     """Verify web_extract_tool blocks URLs containing secrets."""
 
+    @pytest.fixture(autouse=True)
+    def _no_live_page_reads(self, monkeypatch):
+        """With no extract backend set up, web_extract reads pages itself;
+        keep these guard tests off the network."""
+        async def _stub(urls):
+            return [{"url": u, "title": "", "content": "", "error": "stubbed"} for u in urls]
+
+        monkeypatch.setattr("tools.web_reader.read_pages", _stub)
+
     @pytest.mark.asyncio
     async def test_blocks_api_key_in_url(self):
         from tools.web_tools import web_extract_tool

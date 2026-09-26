@@ -96,6 +96,8 @@ def take_speech_interrupted() -> bool:
 
 # Sentence boundary: after .!? followed by whitespace, or a blank line.
 SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])(?:\s|\n)|(?:\n\n)")
+# Clause boundary: after , ; : or a dash, followed by whitespace.
+CLAUSE_BOUNDARY_RE = re.compile(r"(?<=[,;:\u2013\u2014])\s")
 _THINK_BLOCK_RE = re.compile(r"<think[\s>].*?</think>", flags=re.DOTALL)
 
 
@@ -107,11 +109,19 @@ class SentenceChunker:
     ``<think>`` blocks (even split across deltas) and merges fragments shorter
     than *min_len* into the following sentence, so "Ha!" rides along with the
     sentence after it instead of stalling as a tiny clip.
+
+    With *first_clause_min_len*, the reply's FIRST piece may also end at a
+    clause (a comma, colon, semicolon or dash) once it is that long: a live
+    voice chat starts speaking after "The weather in Lahore is 34 degrees,"
+    instead of waiting for the whole first sentence to be written and
+    synthesized. Everything after the first piece is cut by sentence.
     """
 
-    def __init__(self, min_len: int = 20):
+    def __init__(self, min_len: int = 20, first_clause_min_len: int = 0):
         self.min_len = min_len
+        self.first_clause_min_len = first_clause_min_len
         self.buf = ""
+        self._emitted = False
 
     def feed(self, delta: str) -> List[str]:
         """Absorb *delta*; return every complete sentence now ready to speak."""
@@ -128,7 +138,22 @@ class SentenceChunker:
             out.append(head)
             self.buf = self.buf[m.end():]
             start = 0
+        if not out and not self._emitted and self.first_clause_min_len:
+            clause = self._first_clause()
+            if clause:
+                out.append(clause)
+        if out:
+            self._emitted = True
         return out
+
+    def _first_clause(self) -> str:
+        """Cut the opening clause off the buffer when it is long enough."""
+        for m in CLAUSE_BOUNDARY_RE.finditer(self.buf):
+            head = self.buf[: m.end()]
+            if len(head.strip()) >= self.first_clause_min_len:
+                self.buf = self.buf[m.end():]
+                return head
+        return ""
 
     def flush(self) -> List[str]:
         """Drain the tail (end-of-text or long-idle flush)."""

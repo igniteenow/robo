@@ -488,6 +488,8 @@ export interface RoboTitleBarTheme {
 export interface RoboActiveWork {
   count: number
   titles: string[]
+  /** A hands-free voice chat is live (keeps the window's mic loop running). */
+  voice?: true
 }
 
 export interface RoboWindowState {

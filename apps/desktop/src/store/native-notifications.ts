@@ -6,6 +6,7 @@ import { $gateway } from './gateway'
 import { withinNativeNotifyBaseline } from './notify-baseline'
 import { clearApprovalRequest } from './prompts'
 import { $activeSessionId } from './session'
+import { isVoiceConversationActive } from './voice-conversation'
 
 // Native OS notifications (Electron `Notification`), separate from the in-app
 // toast feed in `notifications.ts`. Each kind toggles independently.
@@ -174,6 +175,13 @@ export function dispatchNativeNotification(input: NativeNotificationInput): void
   const prefs = $nativeNotifyPrefs.get()
 
   if (!prefs.enabled || !prefs.kinds[input.kind]) {
+    return
+  }
+
+  // A hands-free voice chat answers out loud: "Robo finished" on top of the
+  // spoken reply is noise — and after a turn that was cut short, it announced
+  // a reply that never came. Failures and prompts still come through.
+  if (input.kind === 'turnDone' && isVoiceConversationActive()) {
     return
   }
 

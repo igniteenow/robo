@@ -1,5 +1,6 @@
 /**
- * Mirror of "which chats are mid-turn" to the main process.
+ * Mirror of "which chats are mid-turn" (and whether a voice chat is live) to
+ * the main process.
  *
  * The renderer is the only side that knows a turn is in flight, and the main
  * process is the only side that can intercept a quit. This module bridges the
@@ -14,15 +15,27 @@ import { computed } from 'nanostores'
 import type { RoboActiveWork } from '@/global'
 import { $sessions } from '@/store/session'
 import { $workingSessionIds } from '@/store/session-states'
+import { $voiceConversation } from '@/store/voice-conversation'
 
-const $activeWork = computed([$workingSessionIds, $sessions], (workingIds, sessions): RoboActiveWork => {
-  const titleById = new Map(sessions.map(session => [session.id, session.title?.trim() ?? '']))
+// Only the on/off edge matters here; the view itself republishes with every
+// mic level change.
+const $voiceChatLive = computed($voiceConversation, view => view.active)
 
-  return {
-    count: workingIds.length,
-    titles: workingIds.map(id => titleById.get(id) ?? '').filter(Boolean)
+const $activeWork = computed(
+  [$workingSessionIds, $sessions, $voiceChatLive],
+  (workingIds, sessions, voiceChatLive): RoboActiveWork => {
+    const titleById = new Map(sessions.map(session => [session.id, session.title?.trim() ?? '']))
+
+    return {
+      count: workingIds.length,
+      titles: workingIds.map(id => titleById.get(id) ?? '').filter(Boolean),
+      // A live voice chat keeps its window unthrottled so the mic loop keeps
+      // running while the window is minimized or covered. Never prompts on
+      // quit (quit-guard counts turns only).
+      ...(voiceChatLive && { voice: true as const })
+    }
   }
-})
+)
 
 if (typeof window !== 'undefined') {
   // `$sessions` republishes on unrelated churn (previews, heartbeats), so only

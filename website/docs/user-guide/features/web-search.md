@@ -18,19 +18,33 @@ Both are configured through a single backend selection. Providers are chosen via
 
 | Provider | Env Var | Search | Extract | Free tier |
 |----------|---------|--------|---------|-----------|
-| **Firecrawl** (default) | `FIRECRAWL_API_KEY` | ✔ | ✔ | 500 credits/mo |
+| **Firecrawl** | `FIRECRAWL_API_KEY` | ✔ | ✔ | 500 credits/mo |
 | **SearXNG** | `SEARXNG_URL` | ✔ | — | ✔ Free (self-hosted) |
 | **Brave Search (free tier)** | `BRAVE_SEARCH_API_KEY` | ✔ | — | 2 000 queries/mo |
+| **Free tier** (default) | — (no key) | ✔ | ✔ | ✔ Free |
 | **DDGS (DuckDuckGo)** | — (no key) | ✔ | — | ✔ Free |
 | **Tavily** | `TAVILY_API_KEY` | ✔ | ✔ | 1 000 searches/mo |
 | **Exa** | `EXA_API_KEY` | ✔ | ✔ | 1 000 searches/mo |
 | **Parallel** | `PARALLEL_API_KEY` | ✔ | ✔ | Paid |
 | **xAI (Grok)** | `XAI_API_KEY` or `robo auth add xai-oauth` | ✔ | — | Paid (SuperGrok or per-token) |
 
-Brave Search, DDGS, and xAI are **search-only** — pair any of them with Firecrawl/Tavily/Exa/Parallel when you also need `web_extract`. DDGS uses the [`ddgs` Python package](https://pypi.org/project/ddgs/) under the hood; if it isn't already installed, run `pip install ddgs` (or let Robo lazy-install it on first use). xAI runs Grok's server-side `web_search` tool on the Responses API — results are LLM-generated rather than index-backed, so titles, descriptions, and URL choice are all model output (see the [trust-model caveat](#xai-grok) below).
+**No API key needed.** With nothing configured, Robo uses the **free tier**: searches rotate across the anonymous free access of Exa, Parallel, Firecrawl and Keenable, moving to the next service when one is busy, so several searches at once are fine. Pages are read by Robo's [built-in page reader](#built-in-page-reader) first; only pages it can't open (bot checks, JavaScript-only pages) are handed to those services' free readers. DuckDuckGo (DDGS, installed automatically) is the last resort. Any API key you add takes over, and `web.keyless_fallback: false` in `config.yaml` turns the free tier off. Search queries — and the addresses of pages the built-in reader couldn't open — go to those services; nothing identifies you.
+
+Brave Search, DDGS, SearXNG, and xAI are **search-only** providers. When one of them is your backend, `web_extract` still works through the built-in page reader and the free tier; set `web.extract_backend` to Firecrawl/Tavily/Exa/Parallel if you prefer a hosted reader. DDGS uses the [`ddgs` Python package](https://pypi.org/project/ddgs/) under the hood; if it isn't already installed, run `pip install ddgs` (or let Robo lazy-install it on first use). xAI runs Grok's server-side `web_search` tool on the Responses API — results are LLM-generated rather than index-backed, so titles, descriptions, and URL choice are all model output (see the [trust-model caveat](#xai-grok) below).
 
 **Per-capability split:** you can use different providers for search and extract independently — for example SearXNG (free) for search and Firecrawl for extract. See [Per-capability configuration](#per-capability-configuration) below.
 ---
+
+## Built-in page reader
+
+When no extract provider is set up, `web_extract` fetches pages itself — no API key, no browser, nothing to install:
+
+- **Web pages** come back as clean Markdown: the main content with headings, lists, tables and links, without navigation, footers or cookie banners.
+- **Product and article facts** that sites publish for search engines (schema.org data, price meta tags) are listed first — price, currency, stock, seller, rating, publish date and author — so a store page yields its real price even when the visible price is drawn by JavaScript.
+- **PDF, Word, Excel, PowerPoint, OpenDocument, RTF and EPUB** links are converted to text with the same converter `read_file` uses.
+- **JSON, XML and plain text** are returned as text.
+
+It follows the same safety rules as the rest of the web tools: private and internal addresses are blocked on every redirect hop, the [website blocklist](/user-guide/configuration#website-blocklist) applies, and each page is capped at 6 MB (documents at 25 MB) and 60 seconds. Sites that answer with a bot check, or that build the whole page in JavaScript, return an error saying so; open those in the browser tool when it's enabled, or use another source.
 
 ## How `web_extract` handles long pages
 
@@ -62,7 +76,7 @@ robo tools
 
 ---
 
-### Firecrawl (default)
+### Firecrawl
 
 Full-featured search and extract. Recommended for most users.
 
@@ -88,7 +102,7 @@ When `FIRECRAWL_API_URL` is set, the API key is optional (disable server auth wi
 
 SearXNG is a privacy-respecting, open-source metasearch engine that aggregates results from 70+ search engines. **No API key required** — just point Robo at a running SearXNG instance.
 
-SearXNG is **search-only** — `web_extract` requires a separate extract provider.
+SearXNG is **search-only** — `web_extract` uses the built-in page reader unless you set a separate extract provider.
 
 #### Option A — Self-host with Docker (recommended)
 

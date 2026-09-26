@@ -214,12 +214,12 @@ class TestCheckWebApiKey:
 
 
 # ---------------------------------------------------------------------------
-# searxng-only: web_extract returns a clear error
+# searxng-only: web_extract reads pages with the built-in reader
 # ---------------------------------------------------------------------------
 
 
-class TestSearXNGOnlyExtractCrawlErrors:
-    """When searxng is the active backend, extract/crawl must return clear errors."""
+class TestSearXNGExtractFallsBackToBuiltInReader:
+    """When searxng is the active backend, web_extract reads pages itself."""
 
     _register_providers = staticmethod(register_all_web_providers)
 
@@ -230,7 +230,7 @@ class TestSearXNGOnlyExtractCrawlErrors:
         from agent.web_search_registry import _reset_for_tests
         _reset_for_tests()
 
-    def test_web_extract_searxng_returns_clear_error(self, monkeypatch):
+    def test_web_extract_searxng_reads_the_page_itself(self, monkeypatch):
         import asyncio
         from tools import web_tools
 
@@ -240,12 +240,19 @@ class TestSearXNGOnlyExtractCrawlErrors:
         async def _allow_ssrf(_url: str) -> bool:
             return True
 
+        read = []
+
+        async def fake_read_pages(urls):
+            read.extend(urls)
+            return [{"url": u, "title": "", "content": "page text", "raw_content": "page text"} for u in urls]
+
         monkeypatch.setattr(web_tools, "async_is_safe_url", _allow_ssrf)
+        monkeypatch.setattr("tools.web_reader.read_pages", fake_read_pages)
         monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False, raising=False)
 
         result_str = asyncio.get_event_loop().run_until_complete(
             web_tools.web_extract_tool(["https://example.com"])
         )
         result = json.loads(result_str)
-        assert result["success"] is False
-        assert "search-only" in result["error"].lower() or "SearXNG" in result["error"]
+        assert read == ["https://example.com"]
+        assert result["results"][0]["content"] == "page text"

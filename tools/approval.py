@@ -2275,6 +2275,11 @@ def human_wait_ceiling(session_key: str | None = None) -> float:
     Sessions whose surface registered ``wait_forever`` (interactive TUI /
     desktop) get an effectively unbounded ceiling: their prompt is a real
     barrier and must not be timed out by any consumer of this bound either.
+
+    Never more than ``threading.TIMEOUT_MAX``: a lock wait past it raises
+    ``OverflowError("timeout value is too large")``. On Windows that is about
+    49.7 days, well under the unbounded ceiling, and the error failed every
+    tool in a concurrent batch.
     """
     try:
         key = session_key if session_key is not None else get_current_session_key(default="")
@@ -2284,8 +2289,8 @@ def human_wait_ceiling(session_key: str | None = None) -> float:
         with _lock:
             policy = _gateway_wait_policy.get(key)
         if policy and policy.get("wait_forever"):
-            return _UNBOUNDED_WAIT_SECONDS
-    return float(_get_approval_timeout()) + HUMAN_WAIT_MARGIN_S
+            return min(_UNBOUNDED_WAIT_SECONDS, threading.TIMEOUT_MAX)
+    return min(float(_get_approval_timeout()) + HUMAN_WAIT_MARGIN_S, threading.TIMEOUT_MAX)
 
 
 def _clamped_window_seconds(started: float, now: float, ceiling: float) -> float:

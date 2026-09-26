@@ -68,6 +68,7 @@ export function useComposerVoice({
   const { $messages } = useComposerScope()
   const [voiceConversationActive, setVoiceConversationActive] = useState(false)
   const lastSpokenIdRef = useRef<string | null>(null)
+  const busyRef = useRef(busy)
   const ownsWakeIndicatorRef = useRef(false)
   const voiceStartRequest = useStore($voiceConversationStartRequest)
 
@@ -116,17 +117,28 @@ export function useComposerVoice({
     }
   }
 
-  const submitVoiceTurn = async (text: string) => {
-    if (busy) {
-      return
+  // The voice loop hands turns over from callbacks armed renders earlier (the
+  // microphone reports seconds after it was opened): the busy check must read
+  // the CURRENT state. Reading the render's `busy` refused — silently — every
+  // interruption captured while the model was still generating.
+  // eslint-disable-next-line no-restricted-syntax -- legitimate non-atom ref write (see eslint rule comment)
+  useEffect(() => {
+    busyRef.current = busy
+  }, [busy])
+
+  /** Send a spoken turn; `false` when the chat is still busy with another. */
+  const submitVoiceTurn = async (text: string): Promise<boolean> => {
+    if (busyRef.current) {
+      return false
     }
 
     triggerHaptic('submit')
     resetBrowseState(sessionId)
     clearDraft()
+
     // Flagged as spoken: the gateway keeps the reply short and plain for the
     // ear, and the transcript still shows exactly what was said.
-    await onSubmit(text, { voice: true })
+    return (await onSubmit(text, { voice: true })) !== false
   }
 
   const wakePausedRef = useRef(false)

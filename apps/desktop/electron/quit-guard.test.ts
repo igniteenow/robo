@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 
 import { test } from 'vitest'
 
-import { mergeActiveWork, normalizeActiveWork, quitPromptFor } from './quit-guard'
+import { mergeActiveWork, normalizeActiveWork, quitPromptFor, wantsUnthrottledWindows } from './quit-guard'
 
 test('normalizeActiveWork drops junk and keeps the count at least the title count', () => {
   assert.deepEqual(normalizeActiveWork(null), { count: 0, titles: [] })
@@ -59,4 +59,30 @@ test('quitPromptFor speaks singular for one chat', () => {
   assert.ok(prompt)
   assert.equal(prompt.message, 'Robo is still working on 1 chat.')
   assert.ok(prompt.detail.includes('mid-turn'))
+})
+
+test('normalizeActiveWork keeps a live voice chat and ignores anything but true', () => {
+  assert.deepEqual(normalizeActiveWork({ count: 0, titles: [], voice: true }), { count: 0, titles: [], voice: true })
+  assert.deepEqual(normalizeActiveWork({ count: 0, titles: [], voice: 'yes' }), { count: 0, titles: [] })
+})
+
+test('mergeActiveWork keeps the voice flag when any window reports it', () => {
+  const merged = mergeActiveWork([
+    { count: 1, titles: ['Fix login'] },
+    { count: 0, titles: [], voice: true }
+  ])
+
+  assert.deepEqual(merged, { count: 1, titles: ['Fix login'], voice: true })
+})
+
+test('a live voice chat keeps windows unthrottled but never prompts on quit', () => {
+  const voiceOnly = normalizeActiveWork({ count: 0, titles: [], voice: true })
+
+  assert.equal(wantsUnthrottledWindows(voiceOnly), true)
+  assert.equal(quitPromptFor(voiceOnly, false), null)
+})
+
+test('windows are throttled again when nothing runs and no voice chat is live', () => {
+  assert.equal(wantsUnthrottledWindows({ count: 0, titles: [] }), false)
+  assert.equal(wantsUnthrottledWindows({ count: 2, titles: [] }), true)
 })
