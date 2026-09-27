@@ -66,7 +66,8 @@ robo              # start chatting
 
 You need `git`. The installer sets up Python and Node itself and never overwrites your
 config, memory, or skills. On Debian/Ubuntu, voice input also needs `sudo apt install libportaudio2`.
-If anything looks off, run `robo doctor`.
+If anything looks off, run `robo doctor`. For scripted installs, call
+`scripts/install.sh` or `scripts/install.ps1` directly.
 
 ## Run it
 
