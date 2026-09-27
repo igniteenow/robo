@@ -58,7 +58,7 @@ description: "与 Robo Agent 的第一次对话——从安装到开始聊天，
 
 ```bash
 # Linux / macOS / WSL2 / Android (Termux)
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 ```
 
 安装脚本会在 `~/.robo/robo-engineer` 创建一个受管理的隔离环境（独立的 uv 托管解释器和 venv），这是唯一受支持的安装方式 —— 包括开发用途。请勿使用 `pip install robo-engineer`。

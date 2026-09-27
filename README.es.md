@@ -1,169 +1,189 @@
-<p align="center">
-  <img src="assets/banner.png" alt="Robo Agent" width="100%">
-</p>
+<div align="center">
 
-# Robo Agent ◆
-<p align="center">
-  <a href="https://github.com/igniteenow/robo/tree/main/website/docs">Robo Agent</a> | <a href="https://github.com/igniteenow/robo/tree/main/website/docs">Robo Desktop</a>
-</p>
-<p align="center">
-  <a href="website/docs/index.mdx"><img src="https://img.shields.io/badge/Docs-in%20this%20repo-EF8A22?style=for-the-badge" alt="Documentación"></a>
-  <a href="https://github.com/igniteenow/robo/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
-  <a href="https://github.com/igniteenow/robo/blob/main/LICENSE"><img src="https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge" alt="Licencia: MIT"></a>
-  <a href="README.md"><img src="https://img.shields.io/badge/Lang-English-blue?style=for-the-badge" alt="English"></a>
-  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/Lang-中文-red?style=for-the-badge" alt="中文"></a>
-  <a href="README.ur-pk.md"><img src="https://img.shields.io/badge/Lang-اردو-green?style=for-the-badge" alt="اردو"></a>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/robo-lockup-dark.svg">
+  <img src="assets/brand/robo-lockup-light.svg" alt="Robo by Ignitee Now" width="420">
+</picture>
 
-**El agente de IA con mejora continua.** Es el único agente con un bucle de aprendizaje integrado: crea habilidades a partir de la experiencia, las mejora durante el uso, se impulsa a sí mismo a persistir el conocimiento, busca en sus propias conversaciones pasadas y construye un modelo cada vez más profundo de quién eres a lo largo de las sesiones. Ejecútalo en un VPS de $5, un clúster de GPUs o infraestructura sin servidor que cuesta casi nada cuando está inactivo. No está atado a tu laptop — habla con él desde Telegram mientras trabaja en una VM en la nube.
+# Tu IA que de verdad hace el trabajo.
 
-Usa cualquier modelo que quieras — [OpenRouter](https://openrouter.ai) (más de 200 modelos), [NovitaAI](https://novita.ai), [NVIDIA NIM](https://build.nvidia.com) (Nemotron), [Xiaomi MiMo](https://platform.xiaomimimo.com), [z.ai/GLM](https://z.ai), [Kimi/Moonshot](https://platform.moonshot.ai), [MiniMax](https://www.minimax.io), [Hugging Face](https://huggingface.co), OpenAI, o tu propio endpoint. Cambia con `robo model` — sin cambios de código, sin dependencias.
+Dale una tarea a Robo en tu escritorio y revísala desde tu teléfono.<br>
+Funciona en tu propio ordenador, usa herramientas reales y pregunta antes de hacer algo arriesgado.
 
-<table>
-<tr><td><b>Una interfaz de terminal real</b></td><td>TUI completa con edición multilínea, autocompletado de comandos, historial de conversaciones, interrupción y redirección, y salida de herramientas en streaming.</td></tr>
-<tr><td><b>Vive donde tú vives</b></td><td>Telegram, Discord, Slack, WhatsApp, Signal y CLI — todo desde un único proceso gateway. Transcripción de notas de voz, continuidad de conversación entre plataformas.</td></tr>
-<tr><td><b>Un bucle de aprendizaje cerrado</b></td><td>Memoria curada por el agente con recordatorios periódicos. Creación autónoma de habilidades tras tareas complejas. Las habilidades mejoran solas durante el uso. Búsqueda FTS5 de sesiones con resumención por LLM para recuperación entre sesiones. Modelado de usuario dialéctico <a href="https://github.com/plastic-labs/honcho">Honcho</a>. Compatible con el estándar abierto de <a href="https://agentskills.io">agentskills.io</a>.</td></tr>
-<tr><td><b>Automatizaciones programadas</b></td><td>Planificador cron integrado con entrega a cualquier plataforma. Informes diarios, copias de seguridad nocturnas, auditorías semanales — todo en lenguaje natural, ejecutándose de forma autónoma.</td></tr>
-<tr><td><b>Delega y paraleliza</b></td><td>Lanza subagentes aislados para flujos de trabajo paralelos. Escribe scripts de Python que llaman a herramientas vía RPC, convirtiendo pipelines de múltiples pasos en turnos de coste cero de contexto.</td></tr>
-<tr><td><b>Funciona en cualquier lugar, no solo en tu laptop</b></td><td>Seis backends de terminal — local, Docker, SSH, Singularity, Modal y Daytona. Daytona y Modal ofrecen persistencia sin servidor — el entorno de tu agente hiberna cuando está inactivo y se activa bajo demanda, costando casi nada entre sesiones. Ejecútalo en un VPS de $5 o un clúster de GPUs.</td></tr>
-<tr><td><b>Listo para investigación</b></td><td>Generación de trayectorias en lote, compresión de trayectorias para entrenar la próxima generación de modelos de llamadas a herramientas.</td></tr>
-</table>
+![Windows · macOS · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0E1437?style=for-the-badge)
+![Terminal · Escritorio · Navegador · Voz · API](https://img.shields.io/badge/Terminal%20%C2%B7%20Escritorio%20%C2%B7%20Navegador%20%C2%B7%20Voz%20%C2%B7%20API-3F3E98?style=for-the-badge)
+
+[Instalar](#instalar) · [Ejecutarlo](#ejecutarlo) · [Úsalo desde cualquier lugar](#úsalo-desde-cualquier-lugar) · [Qué puede hacer](#qué-puede-hacer)
+
+[English](README.md) · **Español** · [中文](README.zh-CN.md) · [اردو](README.ur-pk.md)
+
+</div>
 
 ---
 
-## Instalación rápida
+## Encárgale cualquier cosa
 
-### Linux, macOS, WSL2, Termux
+| Día a día | Técnico |
+|---|---|
+| "Ordena mi carpeta de Descargas por tipo." | "La compilación falla. Averigua por qué y arréglalo." |
+| "Convierte estas notas de reunión en una lista de tareas con responsables y fechas." | "Revisa este log de 2 GB y dime qué se rompió anoche." |
+| "Cada mañana a las 8, mándame las noticias de tecnología por Telegram." | "Abre este .exe y dime con qué servidores se comunica." |
+| "Compara estas dos hojas de cálculo y dime quién falta en la nueva." | "Investiga las tres mejores opciones para X, compáralas y dame las fuentes." |
 
-```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
-```
+Robo planifica la tarea, la hace con herramientas reales (terminal, archivos, navegador, código), comprueba
+su propio trabajo y pregunta **Permitir una vez / Permitir en esta sesión / Denegar** antes de algo arriesgado.
+Funciona con el modelo que elijas: OpenAI, Anthropic, Gemini, DeepSeek, Kimi, OpenRouter,
+o un modelo local con Ollama o cualquier servidor compatible con OpenAI.
 
-### Windows (nativo, PowerShell)
+## Instalar
 
-> **Nota:** En Windows nativo, Robo funciona sin WSL — la CLI, el gateway, la TUI y las herramientas funcionan de forma nativa. Si prefieres usar WSL2, el comando de Linux/macOS de arriba también funciona allí. ¿Encontraste un error? Por favor [crea un issue](https://github.com/igniteenow/robo/issues).
-
-Ejecuta esto en PowerShell:
+**Windows (PowerShell)**
 
 ```powershell
-iex (irm https://github.com/igniteenow/robo)
-```
-
-El instalador se encarga de todo: uv, Python 3.11, Node.js, ripgrep, ffmpeg, **y un Git Bash portátil** (MinGit, descomprimido en `%LOCALAPPDATA%\robo\git` — no requiere administrador, completamente aislado de cualquier instalación de Git del sistema). Robo usa este Git Bash incluido para ejecutar comandos de shell.
-
-Si ya tienes Git instalado, el instalador lo detecta y lo usa en su lugar. De lo contrario, una descarga de ~45MB de MinGit es todo lo que necesitas — no tocará ni interferirá con ningún Git del sistema.
-
-> **Android / Termux:** La ruta manual probada está documentada en la [guía de Termux](website/docs/getting-started/termux.md). En Termux, Robo instala el extra `.[termux]` curado porque el extra completo `.[all]` actualmente incluye dependencias de voz incompatibles con Android.
->
-> **Windows:** Windows nativo es totalmente compatible — el comando de PowerShell de arriba instala todo. Si prefieres usar WSL2, el comando de Linux también funciona allí. La instalación nativa de Windows se encuentra en `%LOCALAPPDATA%\robo`; WSL2 instala en `~/.robo` como en Linux.
-
-Después de la instalación:
-
-```bash
-source ~/.bashrc    # recargar shell (o: source ~/.zshrc)
-robo              # ¡empieza a chatear!
-```
-
----
-
-## Primeros pasos
-
-```bash
-robo              # CLI interactiva — inicia una conversación
-robo model        # Elige tu proveedor y modelo LLM
-robo tools        # Configura qué herramientas están habilitadas
-robo config set   # Establece valores de configuración individuales
-robo gateway      # Inicia el gateway de mensajería (Telegram, Discord, etc.)
-robo setup        # Ejecuta el asistente de configuración completo
-robo update       # Actualiza a la última versión
-robo doctor       # Diagnostica cualquier problema
-```
-
-📖 **[Documentación completa →](website/docs/index.mdx)**
-
----
-
-
----
-
-## Referencia rápida: CLI vs Mensajería
-
-Robo tiene dos puntos de entrada: inicia la interfaz de terminal con `robo`, o ejecuta el gateway y habla con él desde Telegram, Discord, Slack, WhatsApp, Signal o Email. Una vez en una conversación, muchos comandos de barra son compartidos entre ambas interfaces.
-
-| Acción                              | CLI                                           | Plataformas de mensajería                                                         |
-| ----------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------- |
-| Empezar a chatear                   | `robo`                                      | Ejecuta `robo gateway setup` + `robo gateway start`, luego envía un mensaje al bot |
-| Nueva conversación                  | `/new` o `/reset`                             | `/new` o `/reset`                                                                 |
-| Cambiar modelo                      | `/model [proveedor:modelo]`                   | `/model [proveedor:modelo]`                                                       |
-| Establecer personalidad             | `/personality [nombre]`                       | `/personality [nombre]`                                                           |
-| Reintentar o deshacer último turno  | `/retry`, `/undo`                             | `/retry`, `/undo`                                                                 |
-| Comprimir contexto / ver uso        | `/compress`, `/usage`, `/insights [--days N]` | `/compress`, `/usage`, `/insights [days]`                                         |
-| Explorar habilidades                | `/skills` o `/<nombre-habilidad>`             | `/<nombre-habilidad>`                                                             |
-| Interrumpir trabajo actual          | `Ctrl+C` o enviar un nuevo mensaje            | `/stop` o enviar un nuevo mensaje                                                 |
-| Estado específico de plataforma     | `/platforms`                                  | `/status`, `/sethome`                                                             |
-
-Para las listas de comandos completas, consulta la [guía de CLI](website/docs/user-guide/cli.md) y la [guía del Gateway de Mensajería](website/docs/user-guide/messaging/index.md).
-
----
-
-## Documentación
-
-Toda la documentación está en **[website/docs](website/docs/index.mdx)**:
-
-| Sección                                                                                             | Contenido                                                    |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [Inicio rápido](website/docs/getting-started/quickstart.md)              | Instalar → configurar → primera conversación en 2 minutos   |
-| [Uso de CLI](website/docs/user-guide/cli.md)                             | Comandos, atajos de teclado, personalidades, sesiones        |
-| [Configuración](website/docs/user-guide/configuration.md)               | Archivo de configuración, proveedores, modelos, todas las opciones |
-| [Gateway de Mensajería](website/docs/user-guide/messaging/index.md)           | Telegram, Discord, Slack, WhatsApp, Signal, Home Assistant   |
-| [Seguridad](website/docs/user-guide/security.md)                        | Aprobación de comandos, emparejamiento por DM, aislamiento en contenedor |
-| [Herramientas y Toolsets](website/docs/user-guide/features/tools.md)   | Más de 40 herramientas, sistema de toolsets, backends de terminal |
-| [Sistema de Habilidades](website/docs/user-guide/features/skills.md)   | Memoria procedimental, Skills Hub, creación de habilidades   |
-| [Memoria](website/docs/user-guide/features/memory.md)                   | Memoria persistente, perfiles de usuario, mejores prácticas  |
-| [Integración MCP](website/docs/user-guide/features/mcp.md)              | Conecta cualquier servidor MCP para capacidades extendidas   |
-| [Programación Cron](website/docs/user-guide/features/cron.md)           | Tareas programadas con entrega a plataforma                  |
-| [Archivos de Contexto](website/docs/user-guide/features/context-files.md) | Contexto de proyecto que da forma a cada conversación      |
-| [Arquitectura](website/docs/developer-guide/architecture.md)            | Estructura del proyecto, bucle del agente, clases principales |
-| [Contribuir](website/docs/developer-guide/contributing.md)              | Configuración de desarrollo, proceso de PR, estilo de código |
-| [Referencia de CLI](website/docs/reference/cli-commands.md)             | Todos los comandos y flags                                   |
-| [Variables de Entorno](website/docs/reference/environment-variables.md) | Referencia completa de variables de entorno                  |
-
-## Contribuir
-
-¡Las contribuciones son bienvenidas! Consulta la [Guía de Contribución](CONTRIBUTING.es.md) para la configuración del desarrollo, el estilo de código y el proceso de PR.
-
-Inicio rápido para colaboradores — clona y comienza con `setup-robo.sh`:
-
-```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
-./setup-robo.sh     # instala uv, crea venv, instala .[all], enlaza ~/.local/bin/robo
-./robo              # detecta automáticamente el venv, no necesitas hacer `source` primero
+Set-ExecutionPolicy -Scope Process Bypass
+.\install-robo.ps1
 ```
 
-Ruta manual (equivalente a lo anterior):
+**macOS · Linux · WSL**
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv .venv --python 3.11
-source .venv/bin/activate
-uv pip install -e ".[all,dev]"
-scripts/run_tests.sh
+git clone https://github.com/igniteenow/robo
+cd robo
+bash install-robo.sh
 ```
 
----
+Después **abre una terminal nueva** (el instalador añade `robo` a tu PATH) y elige tu modelo:
 
-## Comunidad
+```bash
+robo model        # elige un proveedor y pega su clave de API
+robo              # empieza a chatear
+```
 
-- 💬 [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
-- 📚 [Skills Hub](https://agentskills.io)
-- 🐛 [Issues](https://github.com/igniteenow/robo/issues)
-- 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — Servidor MCP de control de escritorio Linux para Robo y otros hosts MCP, con árboles de accesibilidad AT-SPI, entrada Wayland/X11, capturas de pantalla y targeting de ventanas del compositor.
+Solo necesitas `git`. El instalador prepara Python y Node y nunca sobrescribe tu
+configuración, memoria ni habilidades. En Debian/Ubuntu, la voz necesita además `sudo apt install libportaudio2`.
+Si algo no va bien, ejecuta `robo doctor`.
 
----
+## Ejecutarlo
+
+Todas las formas de usar Robo comparten las mismas sesiones, memoria y configuración.
+
+| Quieres | Ejecuta | Obtienes |
+|---|---|---|
+| **Terminal** | `robo` | App de terminal a pantalla completa con chat de voz (`robo --cli` para el modo clásico) |
+| **App de escritorio** | `robo desktop` | App nativa para Windows, macOS y Linux. La primera vez la compila; luego abre al instante |
+| **Navegador** | `robo dashboard` | Robo en `http://localhost:9119`: chat, ajustes, sesiones, habilidades, MCP |
+| **Una respuesta rápida** | `robo chat -q "Resume README.md"` | Una pregunta, una respuesta, sin interfaz |
+| **Tus propias apps** | `robo gateway` | API compatible con OpenAI en `http://localhost:8642/v1` ([detalles](#api-http)) |
+
+### Voz
+
+Habla con Robo en la terminal y en la app de escritorio. La transcripción se hace en tu equipo.
+
+| Comando | Qué hace |
+|---|---|
+| `/voice on` | Chat de voz manos libres. Las respuestas se oyen y se ven en pantalla, con enlaces y detalles completos |
+| `/wake on` | Di **"Hey Roh Boh"** para empezar a hablar sin tocar el teclado |
+
+### App de escritorio
+
+- **Servidores MCP en Settings → MCP.** Añade, busca y cambia servidores Model Context Protocol sin editar archivos.
+- **Se actualiza sola.** Cuando haya una versión nueva, pulsa **Update now**. Robo se cierra, muestra el progreso y se vuelve a abrir al terminar.
+- **Conéctate a un Robo en otra máquina:** Settings → Gateway → Remote gateway.
+
+## Úsalo desde cualquier lugar
+
+Ejecuta Robo en tu PC o en un servidor y usa **la misma terminal de Robo** desde cualquier navegador: teléfono, tableta o portátil.
+
+```bash
+robo dashboard --host 0.0.0.0 --no-open
+```
+
+La primera vez, Robo te pide crear un **usuario y contraseña**. Nunca sirve una dirección
+de red sin inicio de sesión. Después abre `http://<IP-de-este-equipo>:9119` en tu otro dispositivo.
+
+- **Windows:** permite el puerto una vez, en PowerShell *como administrador*:
+  `New-NetFirewallRule -DisplayName "Robo 9119" -Direction Inbound -Protocol TCP -LocalPort 9119 -Action Allow -Profile Private`
+- **Fuera de tu red de casa:** usa una VPN como Tailscale. No abras el puerto en tu router.
+- **Detenerlo:** `robo dashboard --stop`
+
+También puedes escribirle a Robo desde **Telegram, WhatsApp, Discord, Slack** y más: ejecuta `robo gateway setup`.
+
+## Qué puede hacer
+
+- **Trabaja con tus documentos.** Adjunta logs, notas, código, CSV, JSON, HTML o PowerPoint de cualquier tamaño (`/attach <archivo>`). Robo los indexa en tu equipo y responde con los pasajes exactos.
+- **Hace trabajo real.** Programación, depuración, investigación, redacción, datos, limpieza de archivos y administración de sistemas, con una terminal real, edición de archivos, un navegador real y ejecución de código.
+- **Mira dentro del software de forma segura.** Análisis estático de programas con Ghidra, radare2 o rizin si están instalados, o con un analizador integrado si no. El archivo nunca se ejecuta.
+- **Mejora con el uso.** Guarda lo que funciona como habilidades reutilizables, mantiene memoria a largo plazo, busca en conversaciones pasadas y aprende cómo te gusta hacer las cosas.
+- **Trabaja mientras tú no.** Tareas programadas ("cada mañana a las 8…") y subagentes en paralelo.
+- **Mantiene limpio tu equipo.** Los trabajos pesados o arriesgados pueden ejecutarse en Docker, por SSH o en un sandbox en la nube (Modal, Daytona).
+
+## Comandos del día a día
+
+| Comando | Qué hace |
+|---|---|
+| `robo model` | Cambiar de modelo o proveedor |
+| `robo update` | Actualizar Robo (o **Update now** en la app de escritorio) |
+| `robo doctor` | Revisar tu instalación |
+| `/help` | Todos los comandos dentro de un chat |
+| `/edit` | Recuperar tu último mensaje y reescribirlo |
+
+Mientras Robo trabaja, simplemente escribe: tu mensaje redirige la tarea en curso.
+
+## Hazlo tuyo
+
+Todo son archivos de texto en `~/.robo` (Windows: `%USERPROFILE%\.robo`), fáciles de editar, respaldar o mover:
+
+| Archivo | Qué contiene |
+|---|---|
+| `SOUL.md` | La personalidad y reglas de Robo: tono, cuánto cuidado tiene, estilo |
+| `memories/USER.md` | Datos sobre ti, para que no tengas que repetirte |
+| `memories/MEMORY.md` | Lo que Robo ha aprendido. Se actualiza solo; también puedes decir "recuerda que…" |
+| `skills/` | Procedimientos reutilizables. Di "guarda esto como habilidad" |
+| `.env` | Tus claves de API |
+
+<details>
+<summary><b>API HTTP</b></summary>
+
+<a id="api-http"></a>
+Usa Robo desde tus propias apps o interfaces de chat como Open WebUI. Añade una clave de al menos
+16 caracteres a `~/.robo/.env` (Windows: `%USERPROFILE%\.robo\.env`):
+
+```bash
+API_SERVER_KEY=your-secret-key-16-plus-chars
+```
+
+```bash
+robo gateway
+curl http://localhost:8642/v1/chat/completions \
+  -H "Authorization: Bearer your-secret-key-16-plus-chars" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "robo-engineer", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+</details>
+
+<details>
+<summary><b>Docker (Linux y macOS)</b></summary>
+
+```bash
+ROBO_UID=$(id -u) ROBO_GID=$(id -g) docker compose up -d
+```
+
+Ejecuta el gateway y el dashboard en `http://localhost:9119`, con tus datos en `~/.robo`.
+
+</details>
+
+## Acceso anticipado
+
+Robo 3.0.1 está en acceso anticipado. Pruébalo y dinos qué te parece:
+[abre un issue](https://github.com/igniteenow/robo/issues) o escribe a
+[support@igniteenow.com](mailto:support@igniteenow.com). La voz y la GPU dependen de tu
+hardware; `robo doctor` muestra lo que está disponible.
 
 ## Licencia
 
-MIT — ver [LICENSE](LICENSE).
+[MIT](LICENSE) · Creado por [Ignitee Now](https://igniteenow.com).
 
-Open source.
+<sub>Basado en [Hermes Agent](https://github.com/NousResearch/hermes-agent) de Nous Research, con licencia MIT. Ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>

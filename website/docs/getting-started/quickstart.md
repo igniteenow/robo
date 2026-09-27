@@ -55,7 +55,7 @@ For a command-line only install without Robo Desktop, run:
 
 #### Linux / macOS / WSL2 / Android (Termux)
 ```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 ```
 
 #### Windows (native)

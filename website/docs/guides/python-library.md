@@ -15,7 +15,7 @@ Robo isn't just a CLI tool. You can import `AIAgent` directly and use it program
 Clone Robo and create its supported editable development environment:
 
 ```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
 uv sync
 ```

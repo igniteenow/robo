@@ -22,7 +22,7 @@ For a command-line only install without Robo Desktop, run:
 
 #### Linux / macOS / WSL2 / Android (Termux)
 ```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 ```
 
 #### Windows (native)
@@ -124,12 +124,12 @@ Running Robo as a dedicated unprivileged user (e.g. a `robo` systemd service acc
 
 2. **As the unprivileged service user**, run the regular installer. It will detect the missing sudo, skip `--with-deps`, and install Chromium into the user's local Playwright cache:
    ```bash
-   git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+   git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
    ```
 
    If you want to skip the Playwright step entirely — for example because you're running headless and don't need browser automation — pass `--skip-browser`:
    ```bash
-   git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+   git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
    ```
 
 3. **Make `robo` available to the service user's shells.** The installer writes the launcher to `~/.local/bin/robo`. System service accounts often have a minimal PATH that doesn't include `~/.local/bin`. Either add it to the user's environment, or symlink the launcher into a system location:

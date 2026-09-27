@@ -50,7 +50,7 @@ robo chat
 <summary><strong>从本地克隆构建</strong></summary>
 
 ```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
 nix build
 ./result/bin/robo setup
