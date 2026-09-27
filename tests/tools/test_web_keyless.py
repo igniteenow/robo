@@ -243,6 +243,118 @@ class TestRotation:
         assert page["error"] == "not tried"
 
 
+class TestDuckDuckGoFallback:
+    """When all four free services fail, the search tries DuckDuckGo before
+    giving up — if the DuckDuckGo provider is there to try."""
+
+    HIT = [{"title": "D", "url": "https://duck.example", "description": "", "position": 1}]
+
+    class _FakeDuckDuckGo:
+        def __init__(self, result, available=True):
+            self.result, self.available, self.queries = result, available, []
+
+        @property
+        def name(self):
+            return "ddgs"
+
+        def is_available(self):
+            return self.available
+
+        def supports_search(self):
+            return True
+
+        def supports_extract(self):
+            return False
+
+        def search(self, query, limit=5):
+            self.queries.append((query, limit))
+            if isinstance(self.result, Exception):
+                raise self.result
+            return self.result
+
+    @pytest.fixture
+    def duckduckgo(self, monkeypatch):
+        from agent import web_search_registry
+
+        installed = {}
+        monkeypatch.setattr(web_search_registry, "get_provider", lambda name: installed.get(name))
+
+        def install(result, available=True):
+            installed["ddgs"] = self._FakeDuckDuckGo(result, available)
+            return installed["ddgs"]
+
+        return install
+
+    def _free_services(self, monkeypatch, outcome):
+        for vendor in client.RING:
+            def fake(query, limit, _outcome=outcome):
+                if isinstance(_outcome, Exception):
+                    raise _outcome
+                return _outcome
+            monkeypatch.setattr(client, f"{vendor}_search", fake)
+
+    def test_duckduckgo_answers_when_every_free_service_fails(self, monkeypatch, ring_from_start, duckduckgo):
+        self._free_services(monkeypatch, client.KeylessError("HTTP 429"))
+        ddg = duckduckgo({"success": True, "data": {"web": self.HIT}})
+
+        result = KeylessWebProvider().search("arlo camera", 3)
+
+        assert result == {"success": True, "data": {"web": self.HIT}}
+        assert ddg.queries == [("arlo camera", 3)]
+
+    def test_duckduckgo_is_not_asked_when_a_free_service_answers(self, monkeypatch, ring_from_start, duckduckgo):
+        self._free_services(monkeypatch, self.HIT)
+        ddg = duckduckgo({"success": True, "data": {"web": []}})
+
+        assert KeylessWebProvider().search("q")["success"] is True
+        assert ddg.queries == []
+
+    def test_when_duckduckgo_fails_too_both_reasons_are_given(self, monkeypatch, ring_from_start, duckduckgo):
+        self._free_services(monkeypatch, client.KeylessError("HTTP 429"))
+        duckduckgo({"success": False, "error": "DuckDuckGo search timed out after 30s"})
+
+        result = KeylessWebProvider().search("q")
+
+        assert result["success"] is False
+        assert result["error"].startswith("All free search services are busy right now")
+        assert "DuckDuckGo was tried too: DuckDuckGo search timed out" in result["error"]
+
+    def test_empty_duckduckgo_results_count_as_nothing_found(self, monkeypatch, ring_from_start, duckduckgo):
+        self._free_services(monkeypatch, [])
+        duckduckgo({"success": True, "data": {"web": []}})
+
+        result = KeylessWebProvider().search("q")
+
+        assert result["success"] is False and "DuckDuckGo was tried too" in result["error"]
+
+    def test_a_crashing_duckduckgo_still_returns_an_answer(self, monkeypatch, ring_from_start, duckduckgo):
+        self._free_services(monkeypatch, client.KeylessError("HTTP 500"))
+        duckduckgo(RuntimeError("primp exploded"))
+
+        result = KeylessWebProvider().search("q")
+
+        assert result["success"] is False and "RuntimeError: primp exploded" in result["error"]
+
+    def test_without_duckduckgo_the_free_tier_error_stands(self, monkeypatch, ring_from_start, duckduckgo):
+        self._free_services(monkeypatch, client.KeylessError("HTTP 429"))
+        ddg = duckduckgo({"success": True, "data": {"web": self.HIT}}, available=False)
+
+        result = KeylessWebProvider().search("q")
+
+        assert result["success"] is False and "DuckDuckGo" not in result["error"]
+        assert ddg.queries == []
+
+    def test_an_interrupted_search_does_not_start_duckduckgo(self, monkeypatch, ring_from_start, duckduckgo):
+        from plugins.web.keyless import provider as keyless_provider
+
+        self._free_services(monkeypatch, client.KeylessError("HTTP 429"))
+        ddg = duckduckgo({"success": True, "data": {"web": self.HIT}})
+        monkeypatch.setattr(keyless_provider, "_interrupted", lambda: True)
+
+        assert KeylessWebProvider().search("q") == {"success": False, "error": "Search interrupted"}
+        assert ddg.queries == []
+
+
 class TestProviderExtract:
     def _reader(self, monkeypatch, results):
         async def fake_read_pages(urls):

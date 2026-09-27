@@ -1,9 +1,16 @@
 import { beforeEach, expect, test } from 'vitest'
 
-import { $notifications, clearNotifications, isDiskFullErrorMessage, notifyError } from './notifications'
+import {
+  $notifications,
+  clearAllNotifications,
+  clearNotifications,
+  isDiskFullErrorMessage,
+  notify,
+  notifyError
+} from './notifications'
 
 beforeEach(() => {
-  clearNotifications()
+  clearAllNotifications()
 })
 
 function lastMessage(): string {
@@ -54,4 +61,49 @@ test('session storage write failure is treated as disk-full class', () => {
   )
 
   expect(lastMessage()).toMatch(/Disk full/i)
+})
+
+// Opening or switching a chat clears that chat's notifications. It must not
+// clear news about Robo itself: the update popup was cleared (and, because
+// clearing counts as closing, snoozed for a day) right after every launch.
+test('opening a chat clears chat notifications but keeps app ones, without closing them', () => {
+  const closed: string[] = []
+
+  notify({ id: 'update', message: 'Update ready', onDismiss: () => closed.push('update'), scope: 'app' })
+  notify({ id: 'saved', message: 'Saved', onDismiss: () => closed.push('saved') })
+
+  clearNotifications()
+
+  expect($notifications.get().map(item => item.id)).toEqual(['update'])
+  expect(closed).toEqual(['saved'])
+})
+
+test('Clear all still clears app notifications too', () => {
+  const closed: string[] = []
+
+  notify({ id: 'update', message: 'Update ready', onDismiss: () => closed.push('update'), scope: 'app' })
+  clearAllNotifications()
+
+  expect($notifications.get()).toEqual([])
+  expect(closed).toEqual(['update'])
+})
+
+test('a burst of chat notifications never pushes out an app one', () => {
+  notify({ id: 'update', message: 'Update ready', scope: 'app' })
+
+  for (let i = 0; i < 6; i++) {
+    notify({ id: `chat-${i}`, message: `chat ${i}` })
+  }
+
+  const ids = $notifications.get().map(item => item.id)
+
+  expect(ids).toContain('update')
+  expect(ids).toHaveLength(4)
+  expect(ids.slice(0, 3)).toEqual(['chat-5', 'chat-4', 'chat-3'])
+})
+
+test('notifications are chat-scoped unless they say otherwise', () => {
+  notify({ id: 'plain', message: 'plain' })
+
+  expect($notifications.get()[0]?.scope).toBe('session')
 })

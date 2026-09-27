@@ -2396,6 +2396,8 @@ export const zh: Translations = {
     moreChanges: count => `另有 ${count} 项更改。`,
     manualTitle: '从终端更新',
     manualBody: '你是从命令行安装的 Robo，因此更新也需要在那里运行。请将此命令粘贴到终端：',
+    manualBodyWindows:
+      '你是从命令行安装的 Robo，因此更新也需要在那里运行。请先退出 Robo（它运行时 Windows 会锁定其文件），然后将此命令粘贴到 PowerShell：',
     manualPickedUp: '下次启动 Robo 时会使用新版本。',
     guiSkewTitle: '请更新桌面应用',
     guiSkewBody:

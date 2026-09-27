@@ -67,10 +67,6 @@ def main() -> None:
     if argv == ["assets"]:
         _print_assets(home)
         return
-    if argv and argv[0] == "update":
-        print("Robo updates are installed from a signed or checksum-verified Robo release package.")
-        print("Robo will not replace itself with a third-party runtime.")
-        return
 
     # The compatibility core reads argv directly. Keep process listings and
     # diagnostics branded as the product the operator launched.

@@ -106,6 +106,20 @@ def test_affirmative_answer_sets_pending_relaunch_and_returns_true(answer, capsy
     assert "Launching update" in capsys.readouterr().out
 
 
+def test_update_runs_under_the_robo_launcher(monkeypatch, capsys):
+    """The ``robo`` launcher always sets ROBO_PRODUCT_NAME=Robo. /update used
+    to refuse whenever it was set, pointing at release packages that don't
+    exist, so it could never run in a real install."""
+    monkeypatch.setenv("ROBO_PRODUCT_NAME", "Robo")
+    self_ = _make_self(modal_response="yes")
+    with patch("robo_cli.config.is_managed", return_value=False):
+        result = _call(self_)
+
+    assert result is True
+    assert self_._pending_relaunch == ["update"]
+    assert "release package" not in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------------------
 # Cancellation paths — _pending_relaunch must stay None
 # ---------------------------------------------------------------------------

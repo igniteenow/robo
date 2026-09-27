@@ -1844,6 +1844,8 @@ export interface Translations {
     moreChanges: (count: number) => string
     manualTitle: string
     manualBody: string
+    /** Windows keeps a running app's files locked, so `robo update` needs Robo closed. */
+    manualBodyWindows: string
     manualPickedUp: string
     /** GUI/backend skew (#45205): backend updated but the running desktop app
      *  package (AppImage/.deb/.rpm) was not changed and must be reinstalled. */

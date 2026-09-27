@@ -2279,10 +2279,8 @@ def _try_openrouter(explicit_api_key: str = None, model: str = None) -> Tuple[Op
             "auxiliary.free_only.",
             or_model,
         )
-        _mark_provider_unhealthy("openrouter", ttl=60)
+        _mark_provider_unhealthy("openrouter", ttl=60, reason="auxiliary.free_only skips its model", quiet=True)
         return None, None
-    if not _is_free_model(or_model):
-        _warn_paid_lane_once(or_model)
 
     pool_present, entry = _select_pool_entry("openrouter")
     if pool_present:
@@ -2290,6 +2288,9 @@ def _try_openrouter(explicit_api_key: str = None, model: str = None) -> Tuple[Op
         if or_key:
             base_url = _pool_runtime_base_url(entry, OPENROUTER_BASE_URL) or OPENROUTER_BASE_URL
             logger.debug("Auxiliary client: OpenRouter via pool")
+            # Only a lane that can actually be used can spend money.
+            if not _is_free_model(or_model):
+                _warn_paid_lane_once(or_model)
             return _create_openai_client(api_key=or_key, base_url=base_url,
                            default_headers=build_or_headers()), or_model
         # Pool exists but is exhausted (no usable runtime key) — fall through to
@@ -2298,8 +2299,11 @@ def _try_openrouter(explicit_api_key: str = None, model: str = None) -> Tuple[Op
 
     or_key = explicit_api_key or _scoped_key_env("OPENROUTER_API_KEY")
     if not or_key:
-        _mark_provider_unhealthy("openrouter", ttl=60)
+        # Not configured is the normal case for most users: nothing to warn about.
+        _mark_provider_unhealthy("openrouter", ttl=60, reason="no OpenRouter key", quiet=True)
         return None, None
+    if not _is_free_model(or_model):
+        _warn_paid_lane_once(or_model)
     logger.debug("Auxiliary client: OpenRouter")
     return _create_openai_client(api_key=or_key, base_url=OPENROUTER_BASE_URL,
                    default_headers=build_or_headers()), or_model
@@ -3334,21 +3338,32 @@ def _normalize_chain_label(provider: str) -> str:
     return _AUX_UNHEALTHY_LABEL_ALIASES.get(p, p)
 
 
-def _mark_provider_unhealthy(provider: str, ttl: Optional[float] = None) -> None:
-    """Mark ``provider`` as recently-402'd, hidden from chain iteration
-    until the TTL expires. Called from the payment-fallback branches in
-    ``call_llm`` and ``acall_llm`` after a confirmed payment error.
+def _mark_provider_unhealthy(
+    provider: str,
+    ttl: Optional[float] = None,
+    *,
+    reason: str = "payment / credit error",
+    quiet: bool = False,
+) -> None:
+    """Hide ``provider`` from chain iteration until the TTL expires.
+
+    Called from the payment-fallback branches in ``call_llm`` and
+    ``acall_llm`` after a confirmed payment error, and for other reasons a
+    provider can't serve right now (a dead credential, no key at all).
+    ``reason`` goes in the log line; ``quiet`` logs it at debug level, for
+    expected states such as a provider that simply isn't configured.
     """
     label = _normalize_chain_label(provider)
     if not label:
         return
     expires_at = time.time() + (ttl if ttl is not None else _AUX_UNHEALTHY_TTL_SECONDS)
     _aux_unhealthy_until[label] = expires_at
-    logger.warning(
-        "Auxiliary: marking %s unhealthy for %ds (payment / credit error). "
+    (logger.debug if quiet else logger.warning)(
+        "Auxiliary: marking %s unhealthy for %ds (%s). "
         "Subsequent auxiliary calls will skip it until %s.",
         label,
         int(ttl if ttl is not None else _AUX_UNHEALTHY_TTL_SECONDS),
+        reason,
         time.strftime("%H:%M:%S", time.localtime(expires_at)),
     )
 
@@ -4422,7 +4437,8 @@ def _call_fallback_candidate_sync(
         # the token is dead (expired setup token with no refresh token).
         # Quarantine the candidate so subsequent chain walks skip it, and
         # let the caller move on instead of aborting the whole task.
-        _mark_provider_unhealthy(fb_provider or fb_label)
+        # The warning below says why; the marker line would only repeat it.
+        _mark_provider_unhealthy(fb_provider or fb_label, reason="stale credential", quiet=True)
         logger.warning(
             "Auxiliary %s: fallback candidate %s has a stale/unrefreshable "
             "credential (%s) — skipping to next fallback",
@@ -4525,7 +4541,8 @@ async def _call_fallback_candidate_async(
                 except Exception as retry_err:
                     if not _is_auth_error(retry_err):
                         raise
-        _mark_provider_unhealthy(fb_provider or fb_label)
+        # The warning below says why; the marker line would only repeat it.
+        _mark_provider_unhealthy(fb_provider or fb_label, reason="stale credential", quiet=True)
         logger.warning(
             "Auxiliary %s (async): fallback candidate %s has a stale/unrefreshable "
             "credential (%s) — skipping to next fallback",

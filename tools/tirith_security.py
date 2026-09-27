@@ -630,6 +630,12 @@ def _background_install(*, log_failures: bool = True):
             _mark_install_failed(reason)
 
 
+def install_in_progress() -> bool:
+    """Return True while the background download from ensure_installed() runs."""
+    thread = _install_thread
+    return thread is not None and thread.is_alive()
+
+
 def ensure_installed(*, log_failures: bool = True):
     """Ensure tirith is available, downloading in background if needed.
 

@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 CHUNK_CHARS = 1200      # about 300 tokens: enough context, small enough to rank well
 CHUNK_OVERLAP = 160     # a sentence or two, so a fact split across chunks is still found
 READ_BLOCK = 64 * 1024
+MAX_CARRY_CHARS = READ_BLOCK  # longest unbroken run held back waiting for its end
 DEFAULT_LIMIT = 5
 MAX_SNIPPET_CHARS = 700
 
@@ -108,6 +109,54 @@ def chunk_stream(blocks: Iterable[str], size: int = CHUNK_CHARS, overlap: int = 
         yield tail
 
 
+def whole_word_blocks(pieces: Iterable[str], *, strip_html: bool = False) -> Iterator[str]:
+    """Normalise text that arrives in fixed-size pieces without cutting a word.
+
+    A read stops at an arbitrary character, so ``identif`` | ``ier`` used to be
+    indexed as two words and a search for the whole identifier found nothing.
+    Each piece is used only up to its last whitespace (and, for HTML, never
+    inside an unfinished tag); the rest is carried into the next piece.
+    """
+    carry = ""
+    for piece in pieces:
+        text = carry + piece
+        end = _complete_up_to(text, strip_html=strip_html)
+        if end == 0:
+            if len(text) <= MAX_CARRY_CHARS:
+                carry = text  # one long word so far; wait for its end
+                continue
+            # A "word" this long (minified code, base64) is split anyway, and
+            # its halves rejoined with nothing in between.
+            end, joiner = len(text), ""
+        else:
+            joiner = "\n" if text[end - 1] == "\n" else " "
+        cleaned = _clean_piece(text[:end], strip_html=strip_html)
+        carry = text[end:]
+        if cleaned:
+            yield cleaned + joiner
+    cleaned = _clean_piece(carry, strip_html=strip_html)
+    if cleaned:
+        yield cleaned + "\n"
+
+
+def _complete_up_to(text: str, *, strip_html: bool) -> int:
+    """Length of the prefix of *text* that ends on a word boundary."""
+    end = len(text)
+    while end > 0 and not text[end - 1].isspace():
+        end -= 1
+    if strip_html:
+        opened, closed = text.rfind("<", 0, end), text.rfind(">", 0, end)
+        if opened > closed:
+            end = opened  # the prefix would end inside a tag
+    return end
+
+
+def _clean_piece(text: str, *, strip_html: bool) -> str:
+    if strip_html:
+        text = html.unescape(_TAG.sub(" ", text))
+    return normalise(text)
+
+
 def _cut_point(text: str, size: int) -> int:
     window = text[: size + 1]
     for pattern in ("\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " "):
@@ -121,13 +170,7 @@ def _cut_point(text: str, size: int) -> int:
 def _text_blocks(path: Path) -> Iterator[str]:
     strip_html = path.suffix.lower() in (".html", ".htm", ".xml")
     with path.open("r", encoding="utf-8", errors="replace") as handle:
-        while True:
-            block = handle.read(READ_BLOCK)
-            if not block:
-                break
-            if strip_html:
-                block = html.unescape(_TAG.sub(" ", block))
-            yield normalise(block) + "\n"
+        yield from whole_word_blocks(iter(lambda: handle.read(READ_BLOCK), ""), strip_html=strip_html)
 
 
 def _pdf_blocks(path: Path) -> Iterator[str]:
@@ -333,7 +376,7 @@ class KnowledgeStore:
         existing = self.get(source)
         if existing and existing_sha(self._db, existing.id) == digest:
             return existing
-        blocks = (normalise(text[i:i + READ_BLOCK]) + "\n" for i in range(0, len(text), READ_BLOCK))
+        blocks = whole_word_blocks(text[i:i + READ_BLOCK] for i in range(0, len(text), READ_BLOCK))
         return self._index(source, title or source, "text", len(text.encode("utf-8")), digest, tags, blocks)
 
     def _index(self, source: str, title: str, kind: str, size: int, sha: str, tags: str, blocks: Iterable[str]) -> Document:

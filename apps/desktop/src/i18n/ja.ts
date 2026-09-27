@@ -2037,6 +2037,8 @@ export const ja = defineLocale({
     manualTitle: 'ターミナルから更新',
     manualBody:
       'Robo をコマンドラインからインストールしたため、更新もそこで実行されます。これをターミナルに貼り付けてください:',
+    manualBodyWindows:
+      'Robo をコマンドラインからインストールしたため、更新もそこで実行されます。Windows は実行中のファイルをロックするため、先に Robo を終了してから、これを PowerShell に貼り付けてください:',
     manualPickedUp: 'Robo は次回起動時に新しいバージョンを読み込みます。',
     guiSkewTitle: 'デスクトップアプリを更新してください',
     guiSkewBody:

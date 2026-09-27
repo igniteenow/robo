@@ -106,8 +106,12 @@ def resolve_robo_bin() -> Optional[str]:
         if not (_is_windows and _is_python_script(argv0)):
             return argv0
 
-    # Relative path — resolve against CWD
-    if not argv0.startswith("-") and os.path.isfile(argv0):
+    # Relative path (``./robo``) — resolve against CWD. A bare name is not a
+    # path: the ``robo`` entry point rewrites argv[0] to plain "robo", and a
+    # checkout's root holds a shell script of that name, so matching it would
+    # relaunch that script (not a Win32 program; the wrong Python on POSIX).
+    has_separator = os.sep in argv0 or (os.altsep is not None and os.altsep in argv0)
+    if not argv0.startswith("-") and has_separator and os.path.isfile(argv0):
         abs_path = os.path.abspath(argv0)
         if os.access(abs_path, os.X_OK):
             if not (_is_windows and _is_python_script(abs_path)):
@@ -121,11 +125,26 @@ def resolve_robo_bin() -> Optional[str]:
     return None
 
 
+def same_install_robo_bin() -> Optional[str]:
+    """The ``robo`` launcher installed next to this interpreter, or None.
+
+    ``venv/bin/robo`` (``venv\\Scripts\\robo.exe`` on Windows) belongs to the
+    same install as the running code, whatever ``robo`` is first on PATH.
+    """
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    name = "robo.exe" if sys.platform == "win32" else "robo"
+    candidate = os.path.join(exe_dir, name)
+    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+        return candidate
+    return None
+
+
 def build_relaunch_argv(
     extra_args: Sequence[str],
     *,
     preserve_inherited: bool = True,
     original_argv: Optional[Sequence[str]] = None,
+    same_install: bool = False,
 ) -> list[str]:
     """Construct an argv list for replacing the current process with robo.
 
@@ -135,8 +154,11 @@ def build_relaunch_argv(
             tagged with ``inherit_on_relaunch`` in the parser.
         original_argv: The original argv to scan for flags (defaults to
             ``sys.argv[1:]``).
+        same_install: Relaunch this install, never another ``robo`` found on
+            PATH. ``/update`` needs it: updating whichever install is first
+            on PATH can update a different checkout than the one running.
     """
-    bin_path = resolve_robo_bin()
+    bin_path = same_install_robo_bin() if same_install else resolve_robo_bin()
 
     if bin_path:
         argv = [bin_path]
@@ -157,6 +179,7 @@ def relaunch(
     *,
     preserve_inherited: bool = True,
     original_argv: Optional[Sequence[str]] = None,
+    same_install: bool = False,
 ) -> None:
     """Replace the current process with a fresh robo invocation.
 
@@ -179,7 +202,10 @@ def relaunch(
     new robo started" — just with two PIDs in play instead of one.
     """
     new_argv = build_relaunch_argv(
-        extra_args, preserve_inherited=preserve_inherited, original_argv=original_argv
+        extra_args,
+        preserve_inherited=preserve_inherited,
+        original_argv=original_argv,
+        same_install=same_install,
     )
     if sys.platform == "win32":
         # Windows: subprocess + exit, because execvp can't swap to .cmd/.exe shims.

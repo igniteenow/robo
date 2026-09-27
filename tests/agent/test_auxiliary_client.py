@@ -1037,6 +1037,22 @@ class TestOpenRouterPaidLaneGuard:
         assert not any("PAID lane engaged" in r.getMessage() for r in caplog.records)
         _paid_lane_warned.discard(_OPENROUTER_MODEL)
 
+    def test_no_paid_lane_warning_without_an_openrouter_key(self, monkeypatch, caplog):
+        """Most users have no OpenRouter key: nothing is engaged, nothing to warn about."""
+        import logging
+        from agent.auxiliary_client import _paid_lane_warned
+        _paid_lane_warned.discard(_OPENROUTER_MODEL)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        with patch("agent.auxiliary_client._select_pool_entry", return_value=(False, None)), \
+             patch("agent.auxiliary_client._scoped_key_env", return_value=""), \
+             patch("robo_cli.config.load_config_readonly", return_value={"auxiliary": {}}), \
+             patch("agent.auxiliary_client.OpenAI") as mock_openai:
+            with caplog.at_level(logging.WARNING, logger="agent.auxiliary_client"):
+                client, model = _try_openrouter()
+        assert (client, model) == (None, None)
+        mock_openai.assert_not_called()
+        assert [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING] == []
+
     def test_is_free_model(self):
         from agent.auxiliary_client import _is_free_model
         assert _is_free_model("nvidia/nemotron-3-ultra-550b-a55b:free")
@@ -1568,7 +1584,7 @@ class TestStaleFallbackCandidateSkip:
         assert result.choices[0].message.content == "openrouter-serves"
         assert mock_fb.call_count == 2
         assert mock_fb.call_args_list[1].kwargs.get("reason") == "stale fallback credential"
-        mock_mark.assert_called_once_with("anthropic")
+        mock_mark.assert_called_once_with("anthropic", reason="stale credential", quiet=True)
         assert stale_fb.chat.completions.create.call_count == 1
         assert healthy_fb.chat.completions.create.call_count == 1
 

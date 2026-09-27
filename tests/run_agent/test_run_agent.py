@@ -5624,10 +5624,7 @@ class TestPersistUserMessageOverride:
         messages = [
             {
                 "role": "user",
-                "content": (
-                    "[Voice input — respond concisely and conversationally, "
-                    "2-3 sentences max. No code blocks or markdown.] Hello there"
-                ),
+                "content": "[Voice input — spoken reply] Hello there",
             },
             {"role": "assistant", "content": "Hi!"},
         ]
@@ -5639,9 +5636,7 @@ class TestPersistUserMessageOverride:
         # chokepoint), so the live list keeps the original content for the
         # API call (#48677).
         assert (
-            messages[0]["content"]
-            == "[Voice input — respond concisely and conversationally, "
-            "2-3 sentences max. No code blocks or markdown.] Hello there"
+            messages[0]["content"] == "[Voice input — spoken reply] Hello there"
         )
         # But the DB write must get the override.
         batch = agent._session_db.append_messages_batch.call_args_list[0].kwargs[

@@ -13,23 +13,28 @@
 # between (config-schema bumps, venv layout changes, dependency floors).
 #
 # Usage:
-#   scripts/sandbox/pick-release-tags.sh [--count N] [--repo DIR]
+#   scripts/sandbox/pick-release-tags.sh [--count N] [--repo DIR] [--allow-none]
 #
-#   --count   how many tags to emit (default 5, minimum 1). Fewer tags than
-#             requested emits all of them.
-#   --repo    repository to read tags from (default: this checkout).
+#   --count       how many tags to emit (default 5, minimum 1). Fewer tags than
+#                 requested emits all of them.
+#   --repo        repository to read tags from (default: this checkout).
+#   --allow-none  with no release tags, emit [] instead of failing. For callers
+#                 that skip the update legs when there is nothing to update
+#                 from yet (a project before its first release).
 #
 # Reads tags from the local checkout, so it needs one fetched with tags
 # (actions/checkout with fetch-depth: 0, or `fetch-tags: true`). A shallow
-# checkout has no tags and this exits non-zero rather than silently emitting an
-# empty matrix.
+# checkout has no tags, so without --allow-none this exits non-zero rather than
+# silently emitting an empty matrix.
 #
-# Only vYYYY.M.D[.N] release tags are considered; the repo also carries
+# Release tags are vMAJOR.MINOR.PATCH (Robo's v3.0.1) or the date form
+# vYYYY.M.D, either with an optional fourth number; the repo may also carry
 # backup/* and one-off tags that are not releases.
 
 set -euo pipefail
 
 COUNT=5
+ALLOW_NONE=false
 # Default to the repository containing this script, resolved through its real
 # path so a symlinked or copied script still reads the checkout it lives in
 # rather than whatever repo the caller happens to be standing in.
@@ -42,7 +47,8 @@ while [ "$#" -gt 0 ]; do
     --repo)
       [ "$#" -ge 2 ] || { echo 'error: --repo needs a value' >&2; exit 1; }
       REPO="$2"; shift 2 ;;
-    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    --allow-none) ALLOW_NONE=true; shift ;;
+    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
     *) echo "error: unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -68,11 +74,16 @@ fi
 # lexicographic sort gets wrong.
 mapfile -t tags < <(
   git -C "$REPO" tag --list 'v*' \
-    | grep -E '^v[0-9]{4}\.[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$' \
     | sort -V
 )
 
 total="${#tags[@]}"
+if [ "$total" -eq 0 ] && [ "$ALLOW_NONE" = true ]; then
+  echo "note: no release tags in $REPO yet; nothing to update from" >&2
+  echo '[]'
+  exit 0
+fi
 if [ "$total" -eq 0 ]; then
   echo "error: no release tags found in $REPO" >&2
   echo '       A shallow clone has no tags: fetch with tags (actions/checkout' >&2

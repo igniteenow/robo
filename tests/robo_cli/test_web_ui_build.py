@@ -24,6 +24,7 @@ from robo_cli.main import (
     _compute_web_ui_content_hash,
     _missing_web_build_tool,
     _run_npm_install_deterministic,
+    _web_build_failed_to_compile,
     _web_build_toolchain_ready,
     _web_toolchain_roots,
     _web_ui_stamp_path,
@@ -221,6 +222,105 @@ class TestBuildWebUIRetryAndStaleFallback:
         out = capsys.readouterr().out
         assert "serving stale dist as fallback" in out
         assert "vite ENOMEM" in out  # combined output surfaced to user
+
+
+class TestBuildWebUICompileErrors:
+    """A type error in the source fails the same way every time it is built."""
+
+    _TS_ERROR = (
+        "src/pages/ChatPage.tsx(1467,15): error TS2322: Type '{ mondwest: true; }' "
+        "is not assignable to type 'IntrinsicAttributes & TypographyProps'.\n"
+        "npm error Lifecycle script `build` failed with error:\n"
+    )
+
+    @pytest.mark.parametrize(
+        "output,expected",
+        [
+            (_TS_ERROR, True),
+            # Written by tsc itself, not a mistake in the source: can be antivirus.
+            ("error TS5033: Could not write file 'node_modules/.tmp/tsconfig.app.tsbuildinfo': EPERM", False),
+            ("vite ENOMEM", False),
+            ("EPERM: operation not permitted, unlink", False),
+            ("sh: 1: tsc: not found", False),
+            ("", False),
+        ],
+    )
+    def test_recognises_compile_errors(self, output, expected):
+        assert _web_build_failed_to_compile(output) is expected
+
+    def _build_streaming(self, tmp_path, returncode, output):
+        """Run _build_web_ui with a build step that streams like the real helper."""
+        import subprocess
+
+        web_dir, _ = _make_web_dir(tmp_path)
+        install_ok = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        calls = []
+
+        def _fake_build(cmd, cwd, **_kwargs):
+            calls.append(cmd)
+            for line in output.splitlines():
+                print(f"    {line}")
+            return subprocess.CompletedProcess(cmd, returncode, stdout=output, stderr="")
+
+        with patch("robo_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
+             patch("robo_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+             patch("robo_cli.main._run_with_idle_timeout", side_effect=_fake_build), \
+             patch("robo_cli.main._web_ui_build_needed", return_value=True), \
+             patch("robo_cli.main._time.sleep") as mock_sleep:
+            result = _build_web_ui(web_dir)
+        return result, calls, mock_sleep
+
+    def test_compile_errors_are_not_retried(self, tmp_path):
+        result, calls, mock_sleep = self._build_streaming(tmp_path, 2, self._TS_ERROR)
+
+        assert result is False
+        assert len(calls) == 1
+        mock_sleep.assert_not_called()
+
+    def test_failed_build_prints_its_errors_once(self, tmp_path, capsys):
+        result, _calls, _sleep = self._build_streaming(tmp_path, 2, self._TS_ERROR)
+
+        out = capsys.readouterr().out
+        assert result is False
+        assert out.count("error TS2322") == 1
+        assert "Web UI build failed" in out
+
+    def test_transient_failures_still_retry_once(self, tmp_path, capsys):
+        result, calls, mock_sleep = self._build_streaming(tmp_path, 1, "EPERM: operation not permitted")
+
+        assert result is False
+        assert len(calls) == 2
+        mock_sleep.assert_called_once_with(3)
+        # Each attempt streams its own output; nothing is replayed afterwards.
+        assert capsys.readouterr().out.count("EPERM") == 2
+
+    def test_a_build_killed_for_going_quiet_says_why(self, tmp_path, capsys):
+        import sys
+
+        from robo_cli.main import _run_with_idle_timeout
+
+        with patch("robo_cli.main._time.monotonic", side_effect=[0.0, *[1000.0] * 50]):
+            result = _run_with_idle_timeout(
+                [sys.executable, "-c", "import time; time.sleep(30)"], cwd=tmp_path, idle_timeout_seconds=1
+            )
+
+        assert result.returncode != 0
+        assert "produced no output for 1s" in capsys.readouterr().out
+
+    def test_a_build_that_could_not_start_still_says_why(self, tmp_path, capsys):
+        import subprocess
+
+        web_dir, _ = _make_web_dir(tmp_path)
+        install_ok = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        not_started = subprocess.CompletedProcess([], 127, stdout="", stderr="npm: No such file or directory")
+        with patch("robo_cli.main._resolve_node_runtime_npm", return_value="/usr/bin/npm"), \
+             patch("robo_cli.main._run_npm_install_deterministic", return_value=install_ok), \
+             patch("robo_cli.main._run_with_idle_timeout", return_value=not_started), \
+             patch("robo_cli.main._web_ui_build_needed", return_value=True), \
+             patch("robo_cli.main._time.sleep"):
+            assert _build_web_ui(web_dir) is False
+
+        assert "npm: No such file or directory" in capsys.readouterr().out
 
 
 class TestBuildWebUIFlock:

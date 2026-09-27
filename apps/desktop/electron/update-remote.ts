@@ -1,13 +1,13 @@
 /**
- * Pure helpers for choosing a configured Robo update remote.
+ * Pure helpers for choosing the Robo update remote.
  *
- * Robo release packages do not inherit a third-party update source. A future
- * deployment may explicitly provide ROBO_UPDATE_REPO_URL, but the default is
- * intentionally empty so a packaged build never replaces itself from an
- * unrelated repository.
+ * Updates come from Ignitee Now's repository, the same one `robo update` and
+ * the TUI's update check use. A deployment can point elsewhere (a mirror, say)
+ * with ROBO_UPDATE_REPO_URL.
  */
 
-const OFFICIAL_REPO_HTTPS_URL = String(process.env.ROBO_UPDATE_REPO_URL || '').trim()
+const DEFAULT_UPDATE_REPO_URL = 'https://github.com/igniteenow/robo.git'
+const OFFICIAL_REPO_HTTPS_URL = String(process.env.ROBO_UPDATE_REPO_URL ?? '').trim() || DEFAULT_UPDATE_REPO_URL
 const OFFICIAL_REPO_CANONICAL = canonicalGitHubRemote(OFFICIAL_REPO_HTTPS_URL)
 
 // Normalize common GitHub remote URL forms to `host/owner/repo` (lowercased,
@@ -57,4 +57,11 @@ function isOfficialSshRemote(url) {
   return Boolean(OFFICIAL_REPO_CANONICAL) && isSshRemote(url) && canonicalGitHubRemote(url) === OFFICIAL_REPO_CANONICAL
 }
 
-export { canonicalGitHubRemote, isOfficialSshRemote, isSshRemote, OFFICIAL_REPO_CANONICAL, OFFICIAL_REPO_HTTPS_URL }
+export {
+  canonicalGitHubRemote,
+  DEFAULT_UPDATE_REPO_URL,
+  isOfficialSshRemote,
+  isSshRemote,
+  OFFICIAL_REPO_CANONICAL,
+  OFFICIAL_REPO_HTTPS_URL
+}

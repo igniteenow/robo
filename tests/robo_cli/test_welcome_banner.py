@@ -174,6 +174,32 @@ class TestContent:
     def test_no_update_notice_when_current(self, result):
         assert "robo update" not in render(update=result)
 
+    @pytest.mark.parametrize(
+        "result, shown", [(3, True), (banner.UPDATE_AVAILABLE_NO_COUNT, True), (0, False), (None, False)]
+    )
+    def test_the_banner_says_whether_it_showed_the_notice(self, result, shown):
+        """The CLI prints the notice itself later when the banner couldn't."""
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(model_tools, "check_tool_availability", return_value=([], [])))
+            stack.enter_context(patch.object(tools.mcp_tool, "get_mcp_status", return_value=[]))
+            stack.enter_context(patch.object(banner, "get_available_skills", return_value={}))
+            stack.enter_context(patch.object(banner, "get_update_result", return_value=result))
+            stack.enter_context(patch.object(banner, "get_latest_release_tag", return_value=None))
+            stack.enter_context(patch.object(banner, "get_git_banner_state", return_value=None))
+            console = Console(file=io.StringIO(), width=160)
+            assert banner.build_welcome_banner(console=console, model="m", cwd="/x", tools=[]) is shown
+
+    def test_the_notice_can_be_printed_on_its_own(self):
+        from rich.text import Text
+
+        from robo_cli.welcome_banner import update_notice_markup
+
+        with patch("robo_cli.config.recommended_update_command", return_value="robo update"):
+            assert Text.from_markup(update_notice_markup(4)).plain == "↑ 4 updates behind — run robo update"
+            assert "A newer Robo is available" in update_notice_markup(banner.UPDATE_AVAILABLE_NO_COUNT)
+        assert update_notice_markup(0) is None
+        assert update_notice_markup(None) is None
+
     def test_collaborator_failures_never_break_the_banner(self):
         with ExitStack() as stack:
             stack.enter_context(patch.object(model_tools, "check_tool_availability", side_effect=RuntimeError("x")))

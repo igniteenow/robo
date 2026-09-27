@@ -155,20 +155,29 @@ export async function scanVenvBlockers(
 // Internal helpers (exported for testing)
 // ---------------------------------------------------------------------------
 
-/** Resolve the venv python path.  Returns null if the file does not exist. */
+/**
+ * Resolve the venv python path: `venv` first, then `.venv` (what
+ * install-robo.ps1 creates), matching `robo update`. Returns null if neither
+ * exists.
+ */
 export function resolveVenvPython(updateRoot: string): string | null {
   const isWindows = process.platform === 'win32'
   const pythonName = isWindows ? 'python.exe' : 'python3'
   const scriptsDir = isWindows ? 'Scripts' : 'bin'
-  const candidate = path.join(updateRoot, 'venv', scriptsDir, pythonName)
 
-  try {
-    fs.accessSync(candidate)
+  for (const venv of ['venv', '.venv']) {
+    const candidate = path.join(updateRoot, venv, scriptsDir, pythonName)
 
-    return candidate
-  } catch {
-    return null
+    try {
+      fs.accessSync(candidate)
+
+      return candidate
+    } catch {
+      // Try the next layout.
+    }
   }
+
+  return null
 }
 
 /**

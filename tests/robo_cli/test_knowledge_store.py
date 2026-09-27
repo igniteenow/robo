@@ -141,6 +141,63 @@ class TestIndexAndSearch:
         assert "<p>" not in hit.text and "Refund & returns" in hit.text
 
 
+class TestReadBoundaries:
+    """Files and long texts are read 64K characters at a time. A word that
+    straddles two reads used to be indexed as two halves, so searching for
+    the whole word found nothing."""
+
+    TOKEN = "Zqx7Boundaryident42"
+
+    @staticmethod
+    def _filler(unit: str, length: int) -> str:
+        """Whole copies of *unit*, padded with spaces to exactly *length*."""
+        filler = unit * (length // len(unit))
+        return filler + " " * (length - len(filler))
+
+    def _straddling(self, before: int = 7) -> str:
+        text = self._filler("lorem ipsum dolor ", ks.READ_BLOCK - before) + self.TOKEN + " is the deploy key.\n"
+        assert text.index(self.TOKEN) < ks.READ_BLOCK < text.index(self.TOKEN) + len(self.TOKEN)
+        return text
+
+    def test_a_word_across_two_file_reads_is_found(self, store, tmp_path):
+        f = tmp_path / "notes.txt"
+        f.write_text(self._straddling(), encoding="utf-8")
+        store.add_file(f)
+
+        hits = store.search(self.TOKEN)
+
+        assert hits and self.TOKEN in hits[0].text
+
+    def test_a_word_across_two_text_slices_is_found(self, store):
+        store.add_text(self._straddling(before=3), source="pasted")
+
+        hits = store.search(self.TOKEN)
+
+        assert hits and self.TOKEN in hits[0].text
+
+    def test_an_html_tag_across_two_reads_is_still_stripped(self, store, tmp_path):
+        filler = self._filler("<p>refund policy text</p> ", ks.READ_BLOCK - 6)
+        f = tmp_path / "page.html"
+        f.write_text(filler + '<span class="note">Returns take nine days.</span>', encoding="utf-8")
+        store.add_file(f)
+
+        hit = store.search("returns nine days")[0]
+
+        assert "class=" not in hit.text and "<" not in hit.text
+        assert "Returns take nine days." in hit.text
+
+    def test_pieces_are_joined_at_word_boundaries_only(self):
+        joined = "".join(ks.whole_word_blocks(["alpha bra", "vo charl", "ie"]))
+
+        assert joined.split() == ["alpha", "bravo", "charlie"]
+
+    def test_one_endless_word_is_still_emitted(self):
+        blob = "x" * (ks.MAX_CARRY_CHARS * 2 + 5)
+        pieces = [blob[i:i + ks.READ_BLOCK] for i in range(0, len(blob), ks.READ_BLOCK)]
+
+        assert "".join(ks.whole_word_blocks(pieces)).replace("\n", "") == blob
+
+
 class TestOfficeAndPdf:
     def test_pptx_without_any_library(self, store, tmp_path):
         f = tmp_path / "deck.pptx"

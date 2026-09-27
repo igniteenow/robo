@@ -42,6 +42,10 @@ function totalItems(groups: readonly CommitGroup[]) {
   return groups.reduce((sum, g) => sum + g.items.length, 0)
 }
 
+// Windows keeps a running app's files locked, so `robo update` there refuses
+// until Robo is closed. The manual card says so up front.
+const isWindows = () => typeof navigator !== 'undefined' && /^win/i.test(navigator.platform || '')
+
 export function UpdatesOverlay() {
   const open = useStore($updateOverlayOpen)
   const target = useStore($updateOverlayTarget)
@@ -290,7 +294,7 @@ function ManualView({ command, message, onDone }: { command: string | null; mess
   // message + a Done button, not a copy-a-command box.
   if (!command) {
     return (
-      <div className="grid gap-5 px-6 pb-6 pt-7 pr-8">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 px-6 pb-6 pt-7 pr-8">
         <div className="flex flex-col items-center gap-3 text-center">
           <Terminal className="size-8 text-primary" />
 
@@ -305,24 +309,29 @@ function ManualView({ command, message, onDone }: { command: string | null; mess
     )
   }
 
+  // The single column is capped at the dialog's width: a long command (a full
+  // path to robo.exe) otherwise widens the grid past the dialog and the whole
+  // card is cut off on the right. The command wraps so all of it stays visible.
   return (
-    <div className="grid gap-5 px-6 pb-6 pt-7 pr-8">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-5 px-6 pb-6 pt-7 pr-8">
       <div className="flex flex-col items-center gap-3 text-center">
         <Terminal className="size-8 text-primary" />
 
         <DialogTitle className="text-center text-xl">{u.manualTitle}</DialogTitle>
-        <DialogDescription className="text-center text-sm">{u.manualBody}</DialogDescription>
+        <DialogDescription className="text-center text-sm">
+          {isWindows() ? u.manualBodyWindows : u.manualBody}
+        </DialogDescription>
       </div>
 
       <button
         className={cn(
-          'group flex w-full items-center justify-between gap-3 rounded-md border px-4 py-3 text-left transition-colors',
+          'group flex w-full min-w-0 items-center justify-between gap-3 rounded-md border px-4 py-3 text-left transition-colors',
           copied ? 'border-primary/50' : 'border-(--stroke-igniteenow) hover:border-(--ui-stroke-secondary)'
         )}
         onClick={handleCopy}
         type="button"
       >
-        <code className="min-w-0 flex-1 truncate select-all font-mono text-sm text-foreground">
+        <code className="min-w-0 flex-1 whitespace-pre-wrap break-all select-all font-mono text-sm text-foreground">
           <span className="select-none text-muted-foreground">$ </span>
           {command}
         </code>
@@ -428,7 +437,7 @@ function ErrorView({ message, onDismiss, onRetry }: { message: string; onDismiss
     <ErrorState
       className="px-6 pb-6 pt-7 pr-8"
       description={
-        <DialogDescription className="max-w-prose text-center text-sm leading-5 text-muted-foreground">
+        <DialogDescription className="max-w-prose whitespace-pre-line text-center text-sm leading-5 text-muted-foreground">
           {message || u.errorBody}
         </DialogDescription>
       }

@@ -168,6 +168,7 @@ export function reportBackendContract(contract: number | undefined): void {
     kind: 'warning',
     message: translateNow('notifications.backendOutOfDateMessage'),
     onDismiss: () => snoozeSkewToast(),
+    scope: 'app',
     title: translateNow('notifications.backendOutOfDateTitle')
   })
 }
@@ -189,6 +190,7 @@ export function reportInstallMethodWarning(message: string | undefined): void {
     kind: 'warning',
     message,
     onDismiss: () => snoozeInstallMethodToast(),
+    scope: 'app',
     title: translateNow('notifications.installMethodUnsupportedTitle')
   })
 }
@@ -232,6 +234,11 @@ export function maybeNotifyUpdateAvailable(status: DesktopUpdateStatus | null) {
     kind: 'info',
     message: translateNow('notifications.updateReadyMessage', behind),
     onDismiss: () => snoozeUpdateToast(),
+    // Ambient corner, not the top-center stack: an update is news, not an
+    // interruption of whatever the user is doing.
+    placement: 'bottom-right',
+    // Not about the chat on screen: opening a chat must not clear it.
+    scope: 'app',
     title: translateNow('notifications.updateReadyTitle')
   })
 }

@@ -2205,6 +2205,8 @@ export const en: Translations = {
     moreChanges: count => `+ ${count} more change${count === 1 ? '' : 's'} included.`,
     manualTitle: 'Update from your terminal',
     manualBody: 'You installed Robo from the command line, so updates run there too. Paste this into your terminal:',
+    manualBodyWindows:
+      'You installed Robo from the command line, so updates run there too. Quit Robo first, because Windows keeps its files locked while it runs, then paste this into PowerShell:',
     manualPickedUp: 'Robo will pick up the new version next time you launch it.',
     guiSkewTitle: 'Update the desktop app',
     guiSkewBody:

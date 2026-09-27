@@ -1,5 +1,6 @@
 """Tests for robo_cli.relaunch — unified self-relaunch utility."""
 
+import os
 import sys
 
 import pytest
@@ -19,11 +20,25 @@ class TestResolveRoboBin:
         fake = tmp_path / "robo"
         fake.write_text("#!/bin/sh\n")
         fake.chmod(0o755)
-        monkeypatch.setattr(sys, "argv", [str(fake.name)])
+        monkeypatch.setattr(sys, "argv", [os.path.join(".", fake.name)])
         monkeypatch.chdir(tmp_path)
         # Ensure we don't accidentally match a real 'robo' on PATH
         monkeypatch.setattr(relaunch_mod.shutil, "which", lambda _name: None)
         assert relaunch_mod.resolve_robo_bin() == str(fake)
+
+    def test_bare_name_does_not_pick_a_file_in_the_current_folder(self, monkeypatch, tmp_path):
+        # The `robo` entry point sets argv[0] to plain "robo", and a checkout's
+        # root has a shell script called `robo`. Relaunching from there must not
+        # run that script.
+        stray = tmp_path / "robo"
+        stray.write_text("#!/usr/bin/env sh\n")
+        stray.chmod(0o755)
+        monkeypatch.setattr(sys, "argv", ["robo"])
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            relaunch_mod.shutil, "which", lambda name: "/usr/bin/robo" if name == "robo" else None
+        )
+        assert relaunch_mod.resolve_robo_bin() == "/usr/bin/robo"
 
     def test_falls_back_to_path_which(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["-c"])  # not a real path
@@ -222,3 +237,48 @@ class TestResolveRoboBinWindowsPyGuard:
         monkeypatch.setattr(relaunch_mod.shutil, "which", lambda name: None)
 
         assert relaunch_mod.resolve_robo_bin() is None
+
+
+class TestSameInstallRelaunch:
+    """`/update` relaunches the install that is running, never whichever
+    `robo` comes first on PATH: with two installs on one machine, that
+    updated the other checkout."""
+
+    @staticmethod
+    def _venv(tmp_path, monkeypatch, *, with_launcher: bool):
+        bin_dir = tmp_path / "venv" / "bin"
+        bin_dir.mkdir(parents=True)
+        python = bin_dir / "python"
+        python.write_text("")
+        launcher = bin_dir / "robo"
+        if with_launcher:
+            launcher.write_text("#!/bin/sh\n")
+            launcher.chmod(0o755)
+        monkeypatch.setattr(relaunch_mod.sys, "platform", "linux")
+        monkeypatch.setattr(relaunch_mod.sys, "executable", str(python))
+        monkeypatch.setattr(relaunch_mod.sys, "argv", ["robo"])
+        monkeypatch.setattr(
+            relaunch_mod.shutil, "which", lambda name: "/other/install/robo" if name == "robo" else None
+        )
+        return python, launcher
+
+    def test_update_relaunch_uses_the_launcher_next_to_this_interpreter(self, monkeypatch, tmp_path):
+        _python, launcher = self._venv(tmp_path, monkeypatch, with_launcher=True)
+
+        argv = relaunch_mod.build_relaunch_argv(["update"], preserve_inherited=False, same_install=True)
+
+        assert argv == [str(launcher), "update"]
+
+    def test_update_relaunch_without_a_launcher_runs_this_interpreter(self, monkeypatch, tmp_path):
+        python, _launcher = self._venv(tmp_path, monkeypatch, with_launcher=False)
+
+        argv = relaunch_mod.build_relaunch_argv(["update"], preserve_inherited=False, same_install=True)
+
+        assert argv == [str(python), "-m", "robo_cli.main", "update"]
+
+    def test_other_relaunches_still_use_path(self, monkeypatch, tmp_path):
+        self._venv(tmp_path, monkeypatch, with_launcher=True)
+
+        argv = relaunch_mod.build_relaunch_argv(["--resume", "abc"], preserve_inherited=False)
+
+        assert argv == ["/other/install/robo", "--resume", "abc"]
