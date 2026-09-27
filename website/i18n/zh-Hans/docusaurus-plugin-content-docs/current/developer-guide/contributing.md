@@ -43,7 +43,7 @@ description: "如何为 Robo Agent 做贡献 — 开发环境配置、代码风�
 对大多数贡献者来说，最好的开发启动方式和用户安装方式相同：运行标准安装器，然后在它克隆出的仓库里开发。安装器会创建 Robo venv、配置 `robo` 命令、为 `robo update` 写入安装方式标记，并把完整 git 项目克隆到 `$ROBO_HOME/robo-engineer`（通常是 `~/.robo/robo-engineer`）。这样你的开发环境会和 CLI、updater、lazy dependency installer、gateway、docs 默认假设的布局一致。
 
 ```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 cd "${ROBO_HOME:-$HOME/.robo}/robo-engineer"
 
 # 在标准安装基础上添加开发/测试 extras。
@@ -65,7 +65,7 @@ scripts/run_tests.sh
 只有在你明确不想使用 Robo managed install layout 时才使用这种方式（例如容器或 CI job 里的临时 clone）。如果这样安装，请确保运行的是这个 venv 里的 `robo` entrypoint；运行系统 `python3 -m robo_cli.main` 可能会加载无关的系统 Python 包。
 
 ```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
 
 # 使用 Python 3.11 创建虚拟环境

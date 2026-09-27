@@ -3,7 +3,8 @@
 ## Before you begin
 
 - Use Python 3.11, 3.12, or 3.13.
-- Extract Robo into a **new directory**. Do not unzip over an older copy.
+- Clone Robo into a **new directory**. Do not copy it over an older install;
+  update an existing one with `robo update`.
 - Keep secrets in `~/.robo/.env` (Windows: `%USERPROFILE%\.robo\.env`).
 - The installer preserves an existing Robo home. If a `.env` exists beside the
   installer, it is copied only when the destination `.env` does not exist.
@@ -11,7 +12,7 @@
 ## Kali, Debian, Ubuntu, Raspberry Pi OS, macOS, WSL
 
 ```bash
-git clone https://github.com/igniteenow/robo.git robo
+git clone https://github.com/igniteenow/robo robo
 cd robo
 bash install-robo.sh
 ```
@@ -42,7 +43,7 @@ Optional installer arguments:
 ## Windows 10/11 PowerShell
 
 ```powershell
-git clone https://github.com/igniteenow/robo.git robo
+git clone https://github.com/igniteenow/robo robo
 cd .\robo
 Set-ExecutionPolicy -Scope Process Bypass
 .\install-robo.ps1
@@ -100,14 +101,16 @@ is included for compatible runtimes and hardware integrations.
 
 ## Moving an existing `.env` safely
 
-Linux/Kali example when the backup is `/home/kali/robo.env.backup`:
+Linux/macOS, when your backup is `~/robo.env.backup`:
 
 ```bash
-mkdir -p /home/kali/.robo
-chmod 700 /home/kali/.robo
-cp /home/kali/robo.env.backup /home/kali/.robo/.env
-chmod 600 /home/kali/.robo/.env
+mkdir -p ~/.robo
+chmod 700 ~/.robo
+cp ~/robo.env.backup ~/.robo/.env
+chmod 600 ~/.robo/.env
 ```
+
+Windows: copy the backup to `%USERPROFILE%\.robo\.env`.
 
 Do not delete the backup until `robo model` and a real provider response both
 work. Robo does not need the `.env` inside its program directory.
@@ -125,12 +128,16 @@ The asset report should point into `.robo/assets/face` and
 desktop text interfaces continue to work; wake/voice dependencies are installed
 separately from the core runtime.
 
-## Updating without merge prompts
+## Updating
 
-Never extract a new zip over the old directory. Extract into a new versioned
-folder, run its installer, verify it, and only then remove the old program
-folder. Operator state stays in `.robo`, so program upgrades do not overwrite
-configuration or memory.
+```bash
+robo update
+```
+
+In the desktop app, click **Update now** when Robo says an update is ready: on
+Windows Robo closes, shows a progress window, and reopens when it is done.
+Your settings, memory, and skills in `.robo` are never overwritten, and local
+changes to the checkout are kept.
 
 ## Troubleshooting
 

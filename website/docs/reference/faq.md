@@ -205,7 +205,7 @@ source ~/.bashrc
 # If you previously installed with sudo, clean up:
 sudo rm /usr/local/bin/robo
 # Then re-run the standard installer
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 ```
 
 ---
@@ -745,7 +745,7 @@ Skills with very long descriptions are truncated to 40 characters in the Telegra
 
 1. Install Robo Agent on the new machine:
    ```bash
-   git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+   git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
    ```
 
 2. On the **source machine**, create a full backup:

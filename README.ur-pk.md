@@ -1,205 +1,177 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/robo-lockup-dark.svg">
+  <img src="assets/brand/robo-lockup-light.svg" alt="Robo by Ignitee Now" width="420">
+</picture>
+
+<h1 dir="rtl">آپ کا AI جو واقعی کام کر کے دیتا ہے۔</h1>
+
+<p dir="rtl">اپنی میز پر روبو کو کام دیں، اور فون سے اس کی پیش رفت دیکھیں۔<br>
+یہ آپ کے اپنے کمپیوٹر پر چلتا ہے، اصل ٹولز استعمال کرتا ہے، اور کسی بھی خطرناک قدم سے پہلے آپ سے پوچھتا ہے۔</p>
+
+![Windows · macOS · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0E1437?style=for-the-badge)
+![Terminal · Desktop · Browser · Voice · API](https://img.shields.io/badge/Terminal%20%C2%B7%20Desktop%20%C2%B7%20Browser%20%C2%B7%20Voice%20%C2%B7%20API-3F3E98?style=for-the-badge)
+
+[English](README.md) · [Español](README.es.md) · [中文](README.zh-CN.md) · **اردو**
+
+</div>
+
+---
+
 <div dir="rtl">
 
-<p align="center">
-  <img src="assets/banner.png" alt="Robo Agent" width="100%">
-</p>
+## اسے کوئی بھی کام دیں
 
-# روبو ایجنٹ (Robo Agent)
+| روزمرہ | تکنیکی |
+|---|---|
+| "میرے Downloads فولڈر کو فائل کی قسم کے حساب سے ترتیب دو۔" | "ہماری build فیل ہو رہی ہے۔ وجہ ڈھونڈو اور ٹھیک کرو۔" |
+| "ان میٹنگ نوٹس کو ذمہ داروں اور تاریخوں کے ساتھ کاموں کی فہرست بنا دو۔" | "اس 2 GB سرور لاگ کو دیکھو اور بتاؤ کل رات کیا خراب ہوا۔" |
+| "ہر صبح 8 بجے مجھے Telegram پر ٹیک کی خبریں بھیجو۔" | "یہ .exe کھولو اور بتاؤ یہ کن سرورز سے بات کرتی ہے۔" |
+| "ان دو اسپریڈشیٹس کا موازنہ کرو اور بتاؤ نئی میں کون غائب ہے۔" | "X کے تین بہترین آپشنز پر تحقیق کرو، موازنہ کرو اور ذرائع دو۔" |
 
-<p align="center">
-  <a href="website/docs/index.mdx"><img src="https://img.shields.io/badge/Docs-in%20this%20repo-EF8A22?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://github.com/igniteenow/robo/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
-  <a href="https://github.com/igniteenow/robo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
-  <a href="README.md"><img src="https://img.shields.io/badge/Lang-English-lightgrey?style=for-the-badge" alt="English"></a>
-  <a href="README.zh-CN.md"><img src="https://img.shields.io/badge/Lang-中文-red?style=for-the-badge" alt="中文"></a>
-</p>
+روبو کام کی منصوبہ بندی کرتا ہے، اسے اصل ٹولز (ٹرمینل، فائلیں، براؤزر، کوڈ) سے مکمل کرتا ہے، اپنا کام خود چیک کرتا ہے،
+اور کسی بھی خطرناک قدم سے پہلے پوچھتا ہے: **Allow once / Allow for this session / Deny**۔
+یہ آپ کے منتخب کردہ ماڈل کے ساتھ کام کرتا ہے: OpenAI، Anthropic، Gemini، DeepSeek، Kimi، OpenRouter،
+یا Ollama یا کسی بھی OpenAI-compatible سرور کے ذریعے مقامی (local) ماڈل۔
 
-**خود کو بہتر بنانے والا اے آئی (AI) ایجنٹ۔** یہ واحد ایجنٹ ہے جس میں سیکھنے کا عمل (learning loop) پہلے سے موجود ہے — یہ اپنے تجربات سے نئی مہارتیں (skills) بناتا ہے، استعمال کے دوران ان کو بہتر کرتا ہے، معلومات کو محفوظ رکھنے کے لیے خود کو یاد دہانی کرواتا ہے، اپنی پرانی بات چیت کو تلاش کر سکتا ہے، اور مختلف سیشنز کے دوران آپ کے بارے میں ایک گہری سمجھ پیدا کرتا ہے۔ اسے $5 والے VPS پر چلائیں، GPU کلسٹر پر، یا سرور لیس (serverless) انفراسٹرکچر پر جس کی قیمت استعمال نہ ہونے پر تقریباً صفر ہے۔ یہ آپ کے لیپ ٹاپ تک محدود نہیں ہے — آپ ٹیلی گرام (Telegram) سے اس کے ساتھ بات چیت کر سکتے ہیں جبکہ یہ کلاؤڈ VM پر کام کر رہا ہو۔
+## انسٹال کریں
 
-آپ اپنی مرضی کا کوئی بھی ماڈل استعمال کر سکتے ہیں — [OpenRouter](https://openrouter.ai) (200 سے زائد ماڈلز)، [NovitaAI](https://novita.ai) (ماڈل API، ایجنٹ سینڈ باکس، اور GPU کلاؤڈ کے لیے اے آئی مقامی کلاؤڈ)، [NVIDIA NIM](https://build.nvidia.com) (Nemotron)، [Xiaomi MiMo](https://platform.xiaomimimo.com)، [z.ai/GLM](https://z.ai)، [Kimi/Moonshot](https://platform.moonshot.ai)، [MiniMax](https://www.minimax.io)، [Hugging Face](https://huggingface.co)، OpenAI، یا اپنا حسب ضرورت اینڈ پوائنٹ (endpoint) استعمال کریں۔ ماڈل تبدیل کرنے کے لیے صرف `robo model` استعمال کریں — کسی کوڈ کو تبدیل کرنے کی ضرورت نہیں، کوئی پابندی نہیں۔
-
-<table>
-<tr><td><b>حقیقی ٹرمینل انٹرفیس</b></td><td>مکمل TUI جس میں ملٹی لائن ایڈیٹنگ، سلیش-کمانڈ آٹو کمپلیٹ، بات چیت کی ہسٹری، انٹرپٹ اور ری ڈائریکٹ، اور سٹریمنگ ٹول آؤٹ پٹ شامل ہے۔</td></tr>
-<tr><td><b>یہ وہاں موجود ہے جہاں آپ ہیں</b></td><td>ٹیلی گرام، ڈسکارڈ (Discord)، سلیک (Slack)، واٹس ایپ (WhatsApp)، سگنل (Signal)، اور CLI — سب ایک ہی گیٹ وے پروسیس سے کام کرتے ہیں۔ وائس میمو (Voice memo) ٹرانسکرپشن، کراس پلیٹ فارم بات چیت کا تسلسل۔</td></tr>
-<tr><td><b>سیکھنے کا ایک مکمل عمل</b></td><td>ایجنٹ کی اپنی ترتیب دی گئی میموری، جس میں وہ خود کو وقتاً فوقتاً یاد دہانی کرواتا ہے۔ پیچیدہ کاموں کے بعد خود کار طریقے سے مہارت (skill) کی تخلیق۔ استعمال کے دوران مہارتوں میں بہتری۔ LLM سمرائزیشن کے ساتھ FTS5 سیشن سرچ تاکہ پرانے سیشنز کی یاددہانی کی جا سکے۔ <a href="https://github.com/plastic-labs/honcho">Honcho</a> کے ذریعے صارف کی ماڈلنگ۔ <a href="https://agentskills.io">agentskills.io</a> اوپن سٹینڈرڈ کے ساتھ مکمل مطابقت۔</td></tr>
-<tr><td><b>شیڈول کی گئی خودکار کارروائیاں</b></td><td>بلٹ ان (Built-in) کرون (cron) شیڈیولر جو کسی بھی پلیٹ فارم پر ڈیلیوری کے لیے استعمال ہو سکتا ہے۔ روزانہ کی رپورٹس، رات کے بیک اپس، ہفتہ وار آڈٹس — یہ سب کچھ قدرتی زبان (natural language) میں اور بغیر کسی نگرانی کے کام کرتا ہے۔</td></tr>
-<tr><td><b>کام کی تقسیم اور متوازی عمل</b></td><td>متوازی (parallel) کاموں کے لیے الگ سے ذیلی ایجنٹس (subagents) بنائیں۔ پائتھون (Python) سکرپٹس لکھیں جو RPC کے ذریعے ٹولز کو استعمال کریں، تاکہ کئی مراحل پر مشتمل کاموں کو بغیر کسی سیاق و سباق (context) کے خرچ کے، ایک ہی باری میں انجام دیا جا سکے۔</td></tr>
-<tr><td><b>کہیں بھی چلائیں، صرف اپنے لیپ ٹاپ پر نہیں</b></td><td>چھ (Six) ٹرمینل بیک اینڈز — لوکل، Docker، SSH، Singularity، Modal، اور Daytona۔ ڈیٹونا (Daytona) اور موڈل (Modal) سرور لیس (serverless) فعالیت پیش کرتے ہیں — جب آپ کا ایجنٹ فارغ ہوتا ہے تو اس کا ماحول سلیپ (hibernate) ہو جاتا ہے اور ضرورت پڑنے پر خود بخود جاگ جاتا ہے، جس کی وجہ سے سیشنز کے درمیان لاگت تقریباً صفر رہتی ہے۔ اسے $5 والے VPS یا GPU کلسٹر پر چلائیں۔</td></tr>
-<tr><td><b>تحقیق کے لیے تیار</b></td><td>بیچ (Batch) ٹریجیکٹری (trajectory) جنریشن، اگلی نسل کے ٹول کالنگ ماڈلز کی تربیت کے لیے ٹریجیکٹری کمپریشن۔</td></tr>
-</table>
-
----
-
-## فوری انسٹالیشن (Quick Install)
-
-### لینکس (Linux)، میک او ایس (macOS)، ڈبلیو ایس ایل ٹو (WSL2)، ٹرمکس (Termux)
-
-<div dir="ltr">
-
-```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
-```
+**Windows (PowerShell)**
 
 </div>
-
-### ونڈوز (نیٹو، پاور شیل)
-
-> **توجہ فرمائیں:** مقامی ونڈوز (Native Windows) پر روبو بغیر WSL کے چلتا ہے — CLI، گیٹ وے، TUI، اور ٹولز سب مقامی طور پر کام کرتے ہیں۔ اگر آپ WSL2 استعمال کرنا پسند کرتے ہیں، تو اوپر دی گئی لینکس/میک او ایس کی کمانڈ وہاں بھی کام کرے گی۔ کوئی مسئلہ نظر آیا؟ براہ کرم [مسائل (issues) درج کریں](https://github.com/igniteenow/robo/issues)۔
-
-اسے پاور شیل (PowerShell) میں چلائیں:
-
-<div dir="ltr">
 
 ```powershell
-iex (irm https://github.com/igniteenow/robo)
-```
-
-</div>
-
-انسٹالر سب کچھ خود سنبھالتا ہے: uv، Python 3.11، Node.js، ripgrep، ffmpeg، **اور ایک پورٹ ایبل (portable) گٹ بیش (Git Bash)** (یعنی MinGit، جو `%LOCALAPPDATA%\robo\git` میں ان پیک ہوتا ہے — اس کے لیے ایڈمن کی اجازت درکار نہیں، اور یہ سسٹم کے کسی بھی گٹ انسٹال سے بالکل الگ ہے)۔ روبو اس بنڈل شدہ گٹ بیش کو شیل کمانڈز چلانے کے لیے استعمال کرتا ہے۔
-
-اگر آپ کے پاس پہلے سے گٹ (Git) انسٹال ہے، تو انسٹالر اسے شناخت کر لیتا ہے اور اسے ہی استعمال کرتا ہے۔ بصورت دیگر آپ کو صرف ~45MB کے MinGit ڈاؤنلوڈ کی ضرورت ہوگی — یہ آپ کے سسٹم کے گٹ پر کوئی اثر نہیں ڈالے گا۔
-
-> **اینڈرائیڈ (Android) / ٹرمکس (Termux):** ٹیسٹ کیا گیا مینوئل طریقہ [Termux گائیڈ](website/docs/getting-started/termux.md) میں موجود ہے۔ ٹرمکس پر روبو ایک مخصوص `.[termux]` ایکسٹرا انسٹال کرتا ہے کیونکہ مکمل `.[all]` ایکسٹرا میں ایسی وائس ڈیپینڈینسیز شامل ہیں جو اینڈرائیڈ کے ساتھ مطابقت نہیں رکھتیں۔
->
-> **ونڈوز (Windows):** مقامی ونڈوز کی مکمل سپورٹ موجود ہے — اوپر دی گئی پاور شیل کی کمانڈ سب کچھ انسٹال کر دیتی ہے۔ اگر آپ WSL2 استعمال کرنا چاہتے ہیں، تو لینکس کی کمانڈ وہاں کام کرتی ہے۔ مقامی ونڈوز میں انسٹالیشن `%LOCALAPPDATA%\robo` میں ہوتی ہے؛ جبکہ WSL2 میں لینکس کی طرح `~/.robo` میں ہوتی ہے۔ روبو کا وہ واحد فیچر جسے فی الحال خاص طور پر WSL2 کی ضرورت ہے وہ براؤزر پر مبنی ڈیش بورڈ چیٹ پین ہے (یہ POSIX PTY استعمال کرتا ہے — کلاسک CLI اور گیٹ وے دونوں مقامی طور پر چلتے ہیں)۔
-
-انسٹالیشن کے بعد:
-
-<div dir="ltr">
-
-```bash
-source ~/.bashrc    # شیل کو ری لوڈ کریں (یا: source ~/.zshrc)
-robo              # بات چیت شروع کریں!
-```
-
-</div>
-
----
-
-## آغاز کریں (Getting Started)
-
-<div dir="ltr">
-
-```bash
-robo              # انٹرایکٹو CLI — بات چیت شروع کریں
-robo model        # اپنا LLM پرووائیڈر اور ماڈل منتخب کریں
-robo tools        # کنفیگر کریں کہ کون سے ٹولز ایکٹو ہیں
-robo config set   # انفرادی کنفگ (config) ویلیوز سیٹ کریں
-robo gateway      # میسجنگ گیٹ وے شروع کریں (ٹیلی گرام، ڈسکارڈ، وغیرہ)
-robo setup        # مکمل سیٹ اپ وزرڈ چلائیں (یہ سب کچھ ایک ساتھ کنفیگر کر دے گا)
-robo update       # لیٹسٹ ورژن پر اپ ڈیٹ کریں
-robo doctor       # کسی بھی مسئلے کی تشخیص کریں
-```
-
-</div>
-
-📖 **[مکمل دستاویزات →](website/docs/index.mdx)**
-
----
-
-
----
-
-## CLI بمقابلہ میسجنگ فوری حوالہ
-
-روبو کے دو بنیادی انٹر فیس ہیں: آپ ٹرمینل UI کو `robo` کے ساتھ شروع کریں، یا گیٹ وے چلا کر اس کے ساتھ ٹیلی گرام، ڈسکارڈ، سلیک، واٹس ایپ، سگنل، یا ای میل کے ذریعے بات کریں۔ جب آپ کسی بات چیت میں ہوتے ہیں، تو بہت سی سلیش (slash) کمانڈز دونوں انٹرفیسز میں ایک جیسی ہوتی ہیں۔
-
-<div dir="ltr">
-
-| کارروائی (Action)                         | سی ایل آئی (CLI)                              | میسجنگ پلیٹ فارمز (Messaging platforms)                                          |
-| --------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------- |
-| بات چیت شروع کریں                       | `robo`                                      | `robo gateway setup` اور `robo gateway start` چلائیں، پھر بوٹ کو میسج بھیجیں |
-| نئی بات چیت شروع کریں                   | `/new` یا `/reset`                            | `/new` یا `/reset`                                                               |
-| ماڈل تبدیل کریں                         | `/model [provider:model]`                     | `/model [provider:model]`                                                        |
-| پرسنلٹی (Personality) سیٹ کریں           | `/personality [name]`                         | `/personality [name]`                                                            |
-| پچھلی باری کو دوبارہ یا منسوخ (undo) کریں | `/retry`، `/undo`                             | `/retry`، `/undo`                                                                |
-| کانٹیکسٹ (context) کمپریس کریں / استعمال چیک کریں | `/compress`، `/usage`، `/insights [--days N]` | `/compress`، `/usage`، `/insights [days]`                                        |
-| مہارتیں (Skills) براؤز کریں             | `/skills` یا `/<skill-name>`                  | `/<skill-name>`                                                                  |
-| موجودہ کام کو روکیں                     | `Ctrl+C` دبائیں یا نیا میسج بھیجیں            | `/stop` یا نیا میسج بھیجیں                                                       |
-| پلیٹ فارم کے لحاظ سے سٹیٹس              | `/platforms`                                  | `/status`، `/sethome`                                                            |
-
-</div>
-
-مکمل کمانڈ لسٹ کے لیے، [CLI گائیڈ](website/docs/user-guide/cli.md) اور [میسجنگ گیٹ وے گائیڈ](website/docs/user-guide/messaging/index.md) دیکھیں۔
-
----
-
-## دستاویزات (Documentation)
-
-تمام دستاویزات **[website/docs](website/docs/index.mdx)** پر موجود ہیں:
-
-<div dir="ltr">
-
-| سیکشن (Section)                                                                                     | تفصیل (What's Covered)                                     |
-| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| [فوری آغاز (Quickstart)](website/docs/getting-started/quickstart.md)     | انسٹالیشن → سیٹ اپ → 2 منٹ میں پہلی بات چیت شروع کریں       |
-| [CLI کا استعمال](website/docs/user-guide/cli.md)                         | کمانڈز، کی بائنڈنگز (keybindings)، پرسنلٹیز (personalities)، سیشنز |
-| [کنفیگریشن (Configuration)](website/docs/user-guide/configuration.md)    | کنفگ فائل، پرووائیڈرز، ماڈلز، اور تمام آپشنز               |
-| [میسجنگ گیٹ وے](website/docs/user-guide/messaging/index.md)                    | ٹیلی گرام، ڈسکارڈ، سلیک، واٹس ایپ، سگنل، ہوم اسسٹنٹ         |
-| [سیکیورٹی (Security)](website/docs/user-guide/security.md)              | کمانڈ کی منظوری، DM پیئرنگ (pairing)، کنٹینر آئسولیشن       |
-| [ٹولز اور ٹول سیٹس](website/docs/user-guide/features/tools.md)          | 40 سے زائد ٹولز، ٹول سیٹ سسٹم، ٹرمینل بیک اینڈز             |
-| [مہارتوں کا سسٹم (Skills System)](website/docs/user-guide/features/skills.md)| پروسیجرل (Procedural) میموری، سکلز ہب، نئی مہارتیں بنانا    |
-| [میموری (Memory)](website/docs/user-guide/features/memory.md)            | مستقل میموری، یوزر پروفائلز، بہترین طریقہ کار              |
-| [MCP انضمام (Integration)](website/docs/user-guide/features/mcp.md)      | صلاحیتوں کو بڑھانے کے لیے کسی بھی MCP سرور کو جوڑیں        |
-| [کرون (Cron) شیڈیولنگ](website/docs/user-guide/features/cron.md)         | پلیٹ فارم ڈیلیوری کے ساتھ شیڈول کیے گئے کام                 |
-| [کانٹیکسٹ (Context) فائلز](website/docs/user-guide/features/context-files.md)| پروجیکٹ کا سیاق و سباق (context) جو ہر بات چیت پر اثر انداز ہوتا ہے |
-| [آرکیٹیکچر (Architecture)](website/docs/developer-guide/architecture.md) | پروجیکٹ کا ڈھانچہ، ایجنٹ لوپ، اہم کلاسز                    |
-| [تعاون (Contributing)](website/docs/developer-guide/contributing.md)     | ڈیویلپمنٹ سیٹ اپ، PR کا طریقہ کار، کوڈنگ کا انداز          |
-| [CLI حوالہ جات (Reference)](website/docs/reference/cli-commands.md)      | تمام کمانڈز اور فلیگز (flags)                              |
-| [انوائرمنٹ ویری ایبلز](website/docs/reference/environment-variables.md)  | مکمل انوائرمنٹ ویری ایبل حوالہ جات                         |
-
-</div>
-
-
----
-
-## تعاون کریں (Contributing)
-
-ہم آپ کے تعاون کا خیرمقدم کرتے ہیں! ڈیویلپمنٹ سیٹ اپ، کوڈ کے انداز اور PR کے طریقہ کار کے لیے براہ کرم ہماری [Contributing گائیڈ](website/docs/developer-guide/contributing.md) دیکھیں۔
-
-معاونین (contributors) کے لیے فوری آغاز — کلون (clone) کریں اور `setup-robo.sh` چلائیں:
-
-<div dir="ltr">
-
-```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
-./setup-robo.sh     # uv کو انسٹال کرتا ہے، venv بناتا ہے، .[all] کو انسٹال کرتا ہے، اور ~/.local/bin/robo کا سیم لنک (symlink) بناتا ہے
-./robo              # خود بخود venv کی شناخت کرتا ہے، پہلے `source` کرنے کی ضرورت نہیں
+Set-ExecutionPolicy -Scope Process Bypass
+.\install-robo.ps1
 ```
 
+<div dir="rtl">
+
+**macOS · Linux · WSL**
+
 </div>
-
-مینوئل طریقہ (اوپر والے طریقے کے مساوی):
-
-<div dir="ltr">
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv .venv --python 3.11
-source .venv/bin/activate
-uv pip install -e ".[all,dev]"
-scripts/run_tests.sh
+git clone https://github.com/igniteenow/robo
+cd robo
+bash install-robo.sh
 ```
+
+<div dir="rtl">
+
+پھر **نیا ٹرمینل کھولیں** (انسٹالر `robo` کو آپ کے PATH میں شامل کرتا ہے) اور اپنا ماڈل منتخب کریں:
 
 </div>
 
----
+```bash
+robo model        # choose a provider and paste its API key
+robo              # start chatting
+```
 
-## کمیونٹی (Community)
+<div dir="rtl">
 
-- 💬 [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
-- 📚 [سکلز ہب (Skills Hub)](https://agentskills.io)
-- 🐛 [مسائل (Issues)](https://github.com/igniteenow/robo/issues)
-- 🔌 [computer-use-linux](https://github.com/avifenesh/computer-use-linux) — روبو اور دیگر MCP ہوسٹس کے لیے لینکس (Linux) ڈیسک ٹاپ کنٹرول MCP سرور، جس میں AT-SPI ایکسیسیبلٹی ٹریز، Wayland/X11 ان پٹ، سکرین شاٹس، اور کمپوزیٹر ونڈو ٹارگیٹنگ شامل ہے۔
+صرف `git` پہلے سے ہونا ضروری ہے۔ انسٹالر Python اور Node خود سیٹ اپ کرتا ہے اور آپ کی کنفیگریشن، میموری یا اسکلز کو کبھی اوور رائٹ نہیں کرتا۔
+Debian/Ubuntu پر آواز کے لیے یہ بھی چاہیے: `sudo apt install libportaudio2`۔
+اگر کچھ ٹھیک نہ لگے تو `robo doctor` چلائیں۔
 
----
+## چلائیں
 
-## لائسنس (License)
+روبو کو چلانے کے تمام طریقے ایک ہی سیشنز، میموری اور سیٹنگز استعمال کرتے ہیں۔
 
-MIT — تفصیلات کے لیے [LICENSE](LICENSE) دیکھیں۔
+| آپ کو چاہیے | چلائیں | آپ کو ملے گا |
+|---|---|---|
+| **ٹرمینل** | `robo` | آواز کے ساتھ فل اسکرین ٹرمینل ایپ (کلاسک پرامپٹ کے لیے `robo --cli`) |
+| **ڈیسک ٹاپ ایپ** | `robo desktop` | Windows، macOS، Linux کے لیے ایپ۔ پہلی بار build ہوتی ہے، پھر فوراً کھلتی ہے |
+| **براؤزر** | `robo dashboard` | `http://localhost:9119` پر روبو: چیٹ، سیٹنگز، سیشنز، اسکلز، MCP |
+| **ایک فوری جواب** | `robo chat -q "Summarize README.md"` | ایک سوال، ایک جواب، بغیر UI |
+| **آپ کی اپنی ایپس** | `robo gateway` | `http://localhost:8642/v1` پر OpenAI-compatible API |
 
-اوپن سورس۔
+### آواز
+
+ٹرمینل اور ڈیسک ٹاپ ایپ دونوں میں روبو سے بات کریں۔ آواز سے ٹیکسٹ آپ کے اپنے کمپیوٹر پر بنتا ہے۔
+
+| کمانڈ | کیا کرتی ہے |
+|---|---|
+| `/voice on` | ہینڈز فری وائس چیٹ۔ جواب سنائی بھی دیتے ہیں اور اسکرین پر مکمل لنکس اور تفصیل کے ساتھ نظر بھی آتے ہیں |
+| `/wake on` | کی بورڈ چھوئے بغیر بات شروع کرنے کے لیے **"Hey Roh Boh"** کہیں |
+
+### ڈیسک ٹاپ ایپ
+
+- **MCP سرورز: Settings → MCP۔** فائلیں ایڈٹ کیے بغیر Model Context Protocol سرورز شامل کریں، تلاش کریں اور بدلیں۔
+- **خود اپڈیٹ ہوتی ہے۔** نیا ورژن آنے پر **Update now** دبائیں۔ روبو بند ہو کر پیش رفت دکھاتا ہے اور مکمل ہونے پر خود دوبارہ کھل جاتا ہے۔
+- **کسی دوسری مشین پر چلنے والے روبو سے جڑیں:** Settings → Gateway → Remote gateway۔
+
+## کہیں سے بھی استعمال کریں
+
+روبو کو اپنے PC یا سرور پر چلائیں، پھر کسی بھی براؤزر (فون، ٹیبلٹ یا لیپ ٹاپ) سے **وہی روبو ٹرمینل** استعمال کریں۔
+
+</div>
+
+```bash
+robo dashboard --host 0.0.0.0 --no-open
+```
+
+<div dir="rtl">
+
+پہلی بار روبو آپ سے **یوزر نیم اور پاس ورڈ** بنانے کو کہے گا۔ لاگ اِن کے بغیر یہ کبھی نیٹ ورک ایڈریس پر نہیں چلتا۔
+پھر اپنے دوسرے ڈیوائس پر `http://<this-computer's-IP>:9119` کھولیں۔
+
+- **Windows:** ایک بار پورٹ کی اجازت دیں، PowerShell میں *Administrator کے طور پر*:
+  `New-NetFirewallRule -DisplayName "Robo 9119" -Direction Inbound -Protocol TCP -LocalPort 9119 -Action Allow -Profile Private`
+- **گھر کے نیٹ ورک سے باہر:** Tailscale جیسا VPN استعمال کریں۔ اپنے راؤٹر پر پورٹ فارورڈ نہ کریں۔
+- **بند کرنے کے لیے:** `robo dashboard --stop`
+
+آپ روبو کو **Telegram، WhatsApp، Discord، Slack** وغیرہ سے بھی پیغام بھیج سکتے ہیں: `robo gateway setup` چلائیں۔
+
+## یہ کیا کر سکتا ہے
+
+- **آپ کے دستاویزات سے کام کرتا ہے۔** کسی بھی سائز کی لاگز، نوٹس، کوڈ، CSV، JSON، HTML یا PowerPoint فائلیں لگائیں (`/attach <file>`)۔ روبو انہیں آپ کے کمپیوٹر پر انڈیکس کرتا ہے اور اصل عبارت کے ساتھ جواب دیتا ہے۔
+- **اصل کام کرتا ہے۔** کوڈنگ، ڈیبگنگ، تحقیق، لکھائی، ڈیٹا کا کام، فائلوں کی صفائی اور سسٹم ایڈمن — اصل ٹرمینل، فائل ایڈیٹنگ، اصل براؤزر اور کوڈ چلانے کے ساتھ۔
+- **سافٹ ویئر کے اندر محفوظ طریقے سے دیکھتا ہے۔** Ghidra، radare2 یا rizin انسٹال ہوں تو ان سے، ورنہ بلٹ اِن پارسر سے اسٹیٹک تجزیہ۔ فائل کبھی چلائی نہیں جاتی۔
+- **استعمال کے ساتھ بہتر ہوتا ہے۔** جو طریقہ کام کرے اسے دوبارہ استعمال کے قابل اسکل بنا لیتا ہے، طویل مدتی میموری رکھتا ہے، پرانی گفتگو تلاش کرتا ہے، اور سیکھتا ہے کہ آپ کام کیسے پسند کرتے ہیں۔
+- **آپ کی غیر موجودگی میں کام کرتا ہے۔** شیڈول کیے گئے کام ("ہر صبح 8 بجے…") اور ایک ساتھ چلنے والے سب ایجنٹس۔
+- **آپ کی مشین صاف رکھتا ہے۔** بھاری یا خطرناک کام Docker، SSH یا کلاؤڈ سینڈ باکس (Modal، Daytona) میں چل سکتے ہیں۔
+
+## روزمرہ کی کمانڈز
+
+| کمانڈ | کیا کرتی ہے |
+|---|---|
+| `robo model` | ماڈل یا پرووائیڈر بدلیں |
+| `robo update` | روبو اپڈیٹ کریں (یا ڈیسک ٹاپ ایپ میں **Update now**) |
+| `robo doctor` | اپنا سیٹ اپ چیک کریں |
+| `/help` | چیٹ کے اندر تمام کمانڈز |
+| `/edit` | اپنا آخری پیغام واپس لے کر دوبارہ لکھیں |
+
+جب روبو کام کر رہا ہو تو بس لکھیں: آپ کا پیغام جاری کام کا رخ بدل دیتا ہے۔
+
+## اسے اپنا بنائیں
+
+سب کچھ `~/.robo` (Windows: `%USERPROFILE%\.robo`) میں سادہ فائلوں کی صورت میں ہے، جنہیں ایڈٹ، بیک اپ یا منتقل کرنا آسان ہے:
+
+| فائل | اس میں کیا ہے |
+|---|---|
+| `SOUL.md` | روبو کی شخصیت اور اصول: لہجہ، احتیاط کی سطح، انداز |
+| `memories/USER.md` | آپ کے بارے میں معلومات، تاکہ آپ کو بار بار نہ بتانا پڑے |
+| `memories/MEMORY.md` | جو روبو نے سیکھا۔ خود اپڈیٹ ہوتی ہے؛ آپ "یاد رکھو کہ…" بھی کہہ سکتے ہیں |
+| `skills/` | دوبارہ استعمال ہونے والے طریقے۔ کہیں "اسے اسکل کے طور پر محفوظ کرو" |
+| `.env` | آپ کی API keys |
+
+HTTP API اور Docker کی تفصیل کے لیے [انگریزی README](README.md#http-api) دیکھیں۔
+
+## ابتدائی رسائی (Early access)
+
+روبو 3.0.1 ابتدائی رسائی میں ہے۔ اسے آزمائیں اور ہمیں اپنی رائے دیں:
+[issue کھولیں](https://github.com/igniteenow/robo/issues) یا
+[support@igniteenow.com](mailto:support@igniteenow.com) پر ای میل کریں۔ آواز اور GPU کا کام آپ کے ہارڈ ویئر پر منحصر ہے؛
+`robo doctor` بتاتا ہے کہ کیا دستیاب ہے۔
+
+## لائسنس
+
+[MIT](LICENSE) · [Ignitee Now](https://igniteenow.com) کی تیار کردہ۔
+
+<sub>Nous Research کے MIT لائسنس یافتہ [Hermes Agent](https://github.com/NousResearch/hermes-agent) پر مبنی۔ دیکھیں [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)۔</sub>
 
 </div>

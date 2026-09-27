@@ -124,7 +124,7 @@ development environment on the same layout the CLI, updater, lazy dependency
 installer, gateway, and docs assume.
 
 ```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 cd "${ROBO_HOME:-$HOME/.robo}/robo-engineer"
 
 # Add dev/test extras on top of the standard install.
@@ -156,7 +156,7 @@ which silently destroys the running runtime mid-session. Keeping it outside the
 tree means no relative path from the workspace resolves to it.
 
 ```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
 
 # Create venv with Python 3.11, OUTSIDE the source tree
@@ -1000,6 +1000,7 @@ test(tools): add unit tests for file_operations
 
 - **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions) — questions, showcasing projects, sharing skills, design proposals and architecture discussions
 - **Skills Hub**: Upload specialized skills to a registry and share them with the community
+- **Email**: [support@igniteenow.com](mailto:support@igniteenow.com) — anything that doesn't fit an issue or discussion (security reports: see [SECURITY.md](SECURITY.md))
 
 ---
 

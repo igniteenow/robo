@@ -81,7 +81,7 @@ Esto no es una barra de calidad — es una decisión de acoplamiento y mantenimi
 ### Clonar e instalar
 
 ```bash
-git clone https://github.com/igniteenow/robo.git
+git clone https://github.com/igniteenow/robo
 cd robo
 
 # Crear venv con Python 3.11
@@ -593,6 +593,7 @@ test(tools): añadir tests unitarios para file_operations
 
 - **GitHub Discussions**: [github.com/igniteenow/robo/discussions](https://github.com/igniteenow/robo/discussions) — para preguntas, mostrar proyectos, compartir habilidades, propuestas de diseño y discusiones de arquitectura
 - **Skills Hub**: Sube habilidades especializadas a un registro y compártelas con la comunidad
+- **Correo**: [support@igniteenow.com](mailto:support@igniteenow.com) — lo que no encaje en un issue o una discusión (informes de seguridad: ver [SECURITY.es.md](SECURITY.es.md))
 
 ---
 

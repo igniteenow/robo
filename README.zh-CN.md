@@ -1,157 +1,189 @@
-<p align="center">
-  <img src="assets/banner.png" alt="Robo Agent" width="100%">
-</p>
+<div align="center">
 
-# Robo Agent ◆
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/robo-lockup-dark.svg">
+  <img src="assets/brand/robo-lockup-light.svg" alt="Robo by Ignitee Now" width="420">
+</picture>
 
-<p align="center">
-  <a href="website/docs/index.mdx"><img src="https://img.shields.io/badge/Docs-in%20this%20repo-EF8A22?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://github.com/igniteenow/robo/discussions"><img src="https://img.shields.io/badge/Discussions-181717?style=for-the-badge&logo=github&logoColor=white" alt="Discussions"></a>
-  <a href="https://github.com/igniteenow/robo/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
-  <a href="README.md"><img src="https://img.shields.io/badge/Lang-English-lightgrey?style=for-the-badge" alt="English"></a>
-  <a href="README.ur-pk.md"><img src="https://img.shields.io/badge/Lang-اردو-green?style=for-the-badge" alt="اردو"></a>
-</p>
+# 真正替你把活干完的 AI。
 
-**自进化 AI 代理。** 它是唯一内置学习闭环的智能代理——从经验中创建技能，在使用中改进技能，主动持久化知识，搜索过往对话，并在跨会话中逐步构建对你的深度理解。可以在 $5 的 VPS 上运行，也可以在 GPU 集群上运行，或者使用几乎零成本的 Serverless 基础设施。它不绑定你的笔记本——你可以在 Telegram 上与它对话，而它在云端 VM 上工作。
+在电脑前把任务交给 Robo，用手机随时查看进度。<br>
+它运行在你自己的电脑上，使用真实的工具，遇到有风险的操作会先问你。
 
-支持任意模型——[OpenRouter](https://openrouter.ai)（200+ 模型）、[NVIDIA NIM](https://build.nvidia.com)（Nemotron）、[小米 MiMo](https://platform.xiaomimimo.com)、[z.ai/GLM](https://z.ai)、[Kimi/Moonshot](https://platform.moonshot.ai)、[MiniMax](https://www.minimax.io)、[Hugging Face](https://huggingface.co)、OpenAI，或自定义端点。使用 `robo model` 即可切换——无需改代码，无锁定。
+![Windows · macOS · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0E1437?style=for-the-badge)
+![终端 · 桌面 · 浏览器 · 语音 · API](https://img.shields.io/badge/%E7%BB%88%E7%AB%AF%20%C2%B7%20%E6%A1%8C%E9%9D%A2%20%C2%B7%20%E6%B5%8F%E8%A7%88%E5%99%A8%20%C2%B7%20%E8%AF%AD%E9%9F%B3%20%C2%B7%20API-3F3E98?style=for-the-badge)
 
-<table>
-<tr><td><b>真正的终端界面</b></td><td>完整的 TUI，支持多行编辑、斜杠命令自动补全、对话历史、中断重定向和流式工具输出。</td></tr>
-<tr><td><b>随你所在</b></td><td>Telegram、Discord、Slack、WhatsApp、Signal 和 CLI——全部从单个网关进程运行。语音备忘录转写、跨平台对话连续性。</td></tr>
-<tr><td><b>闭环学习</b></td><td>代理管理记忆并定期自我提醒。复杂任务后自动创建技能。技能在使用中自我改进。FTS5 会话搜索配合 LLM 摘要实现跨会话回溯。<a href="https://github.com/plastic-labs/honcho">Honcho</a> 辩证式用户建模。兼容 <a href="https://agentskills.io">agentskills.io</a> 开放标准。</td></tr>
-<tr><td><b>定时自动化</b></td><td>内置 cron 调度器，支持向任何平台投递。日报、夜间备份、周审计——全部用自然语言描述，无人值守运行。</td></tr>
-<tr><td><b>委派与并行</b></td><td>生成隔离子代理处理并行工作流。编写 Python 脚本通过 RPC 调用工具，将多步管道压缩为零上下文开销的轮次。</td></tr>
-<tr><td><b>随处运行</b></td><td>六种终端后端——本地、Docker、SSH、Daytona、Singularity 和 Modal。Daytona 和 Modal 提供 Serverless 持久化——代理环境空闲时休眠、按需唤醒，空闲期间几乎零成本。$5 VPS 或 GPU 集群都能跑。</td></tr>
-<tr><td><b>研究就绪</b></td><td>批量轨迹生成、轨迹压缩——用于训练下一代工具调用模型。</td></tr>
-</table>
+[安装](#安装) · [运行](#运行) · [随处使用](#随处使用) · [能做什么](#能做什么)
+
+[English](README.md) · [Español](README.es.md) · **中文** · [اردو](README.ur-pk.md)
+
+</div>
 
 ---
 
-## 快速安装
+## 交给它任何事
 
-```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+| 日常 | 技术 |
+|---|---|
+| "把我的下载文件夹按类型整理好。" | "构建失败了，找出原因并修好。" |
+| "把这份会议记录整理成带负责人和截止日期的待办清单。" | "看完这个 2 GB 的服务器日志，告诉我昨晚哪里出了问题。" |
+| "每天早上 8 点，通过 Telegram 给我发科技新闻。" | "打开这个 .exe，告诉我它会连接哪些服务器。" |
+| "对比这两个表格，列出新表里少了谁。" | "调研 X 的三个最佳方案，做对比并给出来源。" |
+
+Robo 会规划任务，用真实工具（终端、文件、浏览器、代码）完成它，并检查自己的结果；
+在任何有风险的操作之前，都会问你 **允许一次 / 本次会话允许 / 拒绝**。
+模型由你选择：OpenAI、Anthropic、Gemini、DeepSeek、Kimi、OpenRouter，
+或通过 Ollama、任意 OpenAI 兼容服务器运行的本地模型。
+
+## 安装
+
+**Windows（PowerShell）**
+
+```powershell
+git clone https://github.com/igniteenow/robo
+cd robo
+Set-ExecutionPolicy -Scope Process Bypass
+.\install-robo.ps1
 ```
 
-支持 Linux、macOS、WSL2 和 Android (Termux)。安装程序会自动处理平台特定的配置。
-
-> **Android / Termux：** 已测试的手动安装路径请参考 [Termux 指南](website/docs/getting-started/termux.md)。在 Termux 上，Robo 会安装精选的 `.[termux]` 扩展，因为完整的 `.[all]` 扩展会拉取 Android 不兼容的语音依赖。
->
-> **Windows：** 在 PowerShell 中运行：
-> ```powershell
-> iex (irm https://github.com/igniteenow/robo)
-> ```
-> 安装完成后，可能需要重启终端，然后运行 `robo` 开始对话。
-
-安装后：
+**macOS · Linux · WSL**
 
 ```bash
-source ~/.bashrc    # 重新加载 shell（或: source ~/.zshrc）
-robo              # 开始对话！
+git clone https://github.com/igniteenow/robo
+cd robo
+bash install-robo.sh
 ```
 
----
-
-## 快速入门
+然后**打开一个新的终端**（安装程序会把 `robo` 加入 PATH），选择你的模型：
 
 ```bash
-robo              # 交互式 CLI — 开始对话
-robo model        # 选择 LLM 提供商和模型
-robo tools        # 配置启用的工具
-robo config set   # 设置单个配置项
-robo gateway      # 启动消息网关（Telegram、Discord 等）
-robo setup        # 运行完整设置向导（一次性配置所有内容）
-robo update       # 更新到最新版本
-robo doctor       # 诊断问题
+robo model        # 选择服务商并粘贴 API 密钥
+robo              # 开始对话
 ```
 
-📖 **[完整文档 →](website/docs/index.mdx)**
+只需要预先安装 `git`。安装程序会自动准备 Python 和 Node，并且不会覆盖你的配置、记忆或技能。
+在 Debian/Ubuntu 上，语音输入还需要 `sudo apt install libportaudio2`。
+遇到问题时运行 `robo doctor`。
 
----
+## 运行
 
+所有使用方式共享同一套会话、记忆和设置。
 
----
+| 你想要 | 运行 | 得到 |
+|---|---|---|
+| **终端** | `robo` | 带语音对话的全屏终端应用（经典模式：`robo --cli`） |
+| **桌面应用** | `robo desktop` | Windows、macOS、Linux 原生应用。首次运行会构建，之后秒开 |
+| **浏览器** | `robo dashboard` | 在 `http://localhost:9119` 使用 Robo：对话、设置、会话、技能、MCP |
+| **快速问一句** | `robo chat -q "总结 README.md"` | 一问一答，无界面 |
+| **你自己的应用** | `robo gateway` | 兼容 OpenAI 的 API：`http://localhost:8642/v1`（[详情](#http-api)） |
 
-## CLI 与消息平台 快速对照
+### 语音
 
-Robo 有两种入口：用 `robo` 启动终端 UI，或运行网关从 Telegram、Discord、Slack、WhatsApp、Signal 或 Email 与之对话。进入对话后，许多斜杠命令在两种界面中通用。
+在终端和桌面应用里都可以直接和 Robo 说话。语音转文字在你的电脑本地完成。
 
-| 操作 | CLI | 消息平台 |
-|------|-----|----------|
-| 开始对话 | `robo` | 运行 `robo gateway setup` + `robo gateway start`，然后给机器人发消息 |
-| 开始新对话 | `/new` 或 `/reset` | `/new` 或 `/reset` |
-| 更换模型 | `/model [provider:model]` | `/model [provider:model]` |
-| 设置人格 | `/personality [name]` | `/personality [name]` |
-| 重试或撤销上一轮 | `/retry`、`/undo` | `/retry`、`/undo` |
-| 压缩上下文 / 查看用量 | `/compress`、`/usage`、`/insights [--days N]` | `/compress`、`/usage`、`/insights [days]` |
-| 浏览技能 | `/skills` 或 `/<skill-name>` | `/skills` 或 `/<skill-name>` |
-| 中断当前工作 | `Ctrl+C` 或发送新消息 | `/stop` 或发送新消息 |
-| 平台特定状态 | `/platforms` | `/status`、`/sethome` |
+| 命令 | 作用 |
+|---|---|
+| `/voice on` | 免手动语音对话。回复会朗读出来，同时在屏幕上显示完整的链接和细节 |
+| `/wake on` | 说 **"Hey Roh Boh"** 即可开始说话，无需碰键盘 |
 
-完整命令列表请参阅 [CLI 指南](website/docs/user-guide/cli.md) 和 [消息网关指南](website/docs/user-guide/messaging/index.md)。
+### 桌面应用
 
----
+- **在 设置 → MCP 中管理 MCP 服务器。** 无需编辑文件即可添加、搜索和切换 Model Context Protocol 服务器。
+- **自动更新。** 有新版本时点击 **Update now**：Robo 会关闭、显示进度，完成后自动重新打开。
+- **连接另一台机器上的 Robo：** 设置 → 网关 → 远程网关。
 
-## 文档
+## 随处使用
 
-所有文档位于 **[website/docs](website/docs/index.mdx)**：
-
-| 章节 | 内容 |
-|------|------|
-| [快速开始](website/docs/getting-started/quickstart.md) | 安装 → 设置 → 2 分钟内开始首次对话 |
-| [CLI 使用](website/docs/user-guide/cli.md) | 命令、快捷键、人格、会话 |
-| [配置](website/docs/user-guide/configuration.md) | 配置文件、提供商、模型、所有选项 |
-| [消息网关](website/docs/user-guide/messaging/index.md) | Telegram、Discord、Slack、WhatsApp、Signal、Home Assistant |
-| [安全](website/docs/user-guide/security.md) | 命令审批、DM 配对、容器隔离 |
-| [工具与工具集](website/docs/user-guide/features/tools.md) | 40+ 工具、工具集系统、终端后端 |
-| [技能系统](website/docs/user-guide/features/skills.md) | 过程记忆、技能中心、创建技能 |
-| [记忆](website/docs/user-guide/features/memory.md) | 持久记忆、用户画像、最佳实践 |
-| [MCP 集成](website/docs/user-guide/features/mcp.md) | 连接任意 MCP 服务器扩展能力 |
-| [定时调度](website/docs/user-guide/features/cron.md) | 定时任务与平台投递 |
-| [上下文文件](website/docs/user-guide/features/context-files.md) | 影响每次对话的项目上下文 |
-| [架构](website/docs/developer-guide/architecture.md) | 项目结构、代理循环、关键类 |
-| [贡献](website/docs/developer-guide/contributing.md) | 开发设置、PR 流程、代码风格 |
-| [CLI 参考](website/docs/reference/cli-commands.md) | 所有命令和标志 |
-| [环境变量](website/docs/reference/environment-variables.md) | 完整环境变量参考 |
-
-## 贡献
-
-欢迎贡献！请参阅 [贡献指南](website/docs/developer-guide/contributing.md) 了解开发设置、代码风格和 PR 流程。
-
-贡献者快速开始——使用标准安装器，然后在它创建的完整 git checkout 中开发：
-`$ROBO_HOME/robo-engineer`（通常是 `~/.robo/robo-engineer`）。这会匹配
-`robo update`、托管 venv、lazy dependencies、gateway 和 docs tooling 使用的布局。
+在你的电脑或服务器上运行 Robo，然后在任何浏览器（手机、平板、笔记本）里使用**同一个 Robo 终端**。
 
 ```bash
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
-cd "${ROBO_HOME:-$HOME/.robo}/robo-engineer"
-uv pip install -e ".[all,dev]"
-scripts/run_tests.sh
+robo dashboard --host 0.0.0.0 --no-open
 ```
 
-手动克隆备用路径（用于一次性 clone / CI，或你明确不想使用 managed install layout 时）：
+第一次运行时，Robo 会让你创建**用户名和密码**。没有登录，它绝不会在网络地址上提供服务。
+然后在另一台设备上打开 `http://<这台电脑的IP>:9119`。
+
+- **Windows：** 用*管理员身份*打开 PowerShell，放行端口一次：
+  `New-NetFirewallRule -DisplayName "Robo 9119" -Direction Inbound -Protocol TCP -LocalPort 9119 -Action Allow -Profile Private`
+- **在家庭网络之外访问：** 使用 Tailscale 等 VPN，不要在路由器上做端口转发。
+- **停止：** `robo dashboard --stop`
+
+你也可以通过 **Telegram、WhatsApp、Discord、Slack** 等给 Robo 发消息：运行 `robo gateway setup`。
+
+## 能做什么
+
+- **基于你的文档工作。** 附加任意大小的日志、笔记、代码、CSV、JSON、HTML 或 PowerPoint 文件（`/attach <文件>`）。Robo 在本地建立索引，并引用原文段落回答。
+- **做真正的工作。** 编程、调试、调研、写作、数据处理、文件整理和系统管理——使用真实的终端、文件编辑、真实的浏览器和代码执行。
+- **安全地查看软件内部。** 已安装 Ghidra、radare2 或 rizin 时用它们做静态分析，否则使用内置解析器。文件永远不会被运行。
+- **越用越聪明。** 把有效的做法保存为可复用的技能，拥有长期记忆，可搜索过去的对话，并学习你喜欢的做事方式。
+- **在你休息时工作。** 定时任务（"每天早上 8 点……"）和并行的子代理。
+- **保持你的电脑干净。** 繁重或有风险的任务可以在 Docker、SSH 或云沙箱（Modal、Daytona）中运行。
+
+## 常用命令
+
+| 命令 | 作用 |
+|---|---|
+| `robo model` | 切换模型或服务商 |
+| `robo update` | 更新 Robo（或在桌面应用中点击 **Update now**） |
+| `robo doctor` | 检查安装情况 |
+| `/help` | 对话中的全部命令 |
+| `/edit` | 撤回上一条消息并重写 |
+
+Robo 工作时，直接输入即可：你的消息会调整正在进行的任务。
+
+## 按你的方式定制
+
+所有内容都是 `~/.robo`（Windows：`%USERPROFILE%\.robo`）里的普通文件，方便编辑、备份或迁移：
+
+| 文件 | 内容 |
+|---|---|
+| `SOUL.md` | Robo 的性格和规则：语气、谨慎程度、风格 |
+| `memories/USER.md` | 关于你的信息，免得你反复说明 |
+| `memories/MEMORY.md` | Robo 学到的东西。会自动更新；你也可以说"记住……" |
+| `skills/` | 可复用的操作流程。说"把这个存成技能"即可 |
+| `.env` | 你的 API 密钥 |
+
+<details>
+<summary><b>HTTP API</b></summary>
+
+<a id="http-api"></a>
+在你自己的应用或 Open WebUI 等聊天前端中使用 Robo。在 `~/.robo/.env`（Windows：`%USERPROFILE%\.robo\.env`）
+中添加一个至少 16 个字符的密钥：
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv venv venv --python 3.11
-source venv/bin/activate
-uv pip install -e ".[all,dev]"
-python -m pytest tests/ -q
+API_SERVER_KEY=your-secret-key-16-plus-chars
 ```
 
----
+```bash
+robo gateway
+curl http://localhost:8642/v1/chat/completions \
+  -H "Authorization: Bearer your-secret-key-16-plus-chars" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "robo-engineer", "messages": [{"role": "user", "content": "Hello!"}]}'
+```
 
-## 社区
+</details>
 
-- 💬 [GitHub Discussions](https://github.com/igniteenow/robo/discussions)
-- 📚 [技能中心](https://agentskills.io)
-- 🐛 [问题反馈](https://github.com/igniteenow/robo/issues)
+<details>
+<summary><b>Docker（Linux 和 macOS）</b></summary>
 
----
+```bash
+ROBO_UID=$(id -u) ROBO_GID=$(id -g) docker compose up -d
+```
+
+在 `http://localhost:9119` 运行网关和控制台，数据保存在 `~/.robo`。
+
+</details>
+
+## 抢先体验
+
+Robo 3.0.1 正处于抢先体验阶段。欢迎试用并告诉我们你的想法：
+[提交 issue](https://github.com/igniteenow/robo/issues) 或发邮件至
+[support@igniteenow.com](mailto:support@igniteenow.com)。语音和 GPU 功能取决于你的硬件；
+`robo doctor` 会显示可用的功能。
 
 ## 许可证
 
-MIT — 详见 [LICENSE](LICENSE)。
+[MIT](LICENSE) · 由 [Ignitee Now](https://igniteenow.com) 打造。
 
-开源项目。
+<sub>基于 Nous Research 的 MIT 许可项目 [Hermes Agent](https://github.com/NousResearch/hermes-agent)。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。</sub>

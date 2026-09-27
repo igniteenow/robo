@@ -44,7 +44,7 @@ Good verification targets:
 
 ```bash
 # Install (shell installer — sets up uv, Python, the venv, and the launcher)
-git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 
 # Interactive chat (default surface; set display.interface: tui to launch the Ink TUI instead)
 robo
