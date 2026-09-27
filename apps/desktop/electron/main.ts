@@ -32,7 +32,7 @@ import {
 import nodePty from 'node-pty'
 
 import { classifyActiveRuntime } from './active-runtime-state'
-import { stopBackendChild as stopBackendChildImpl } from './backend-child'
+import { releaseBackendsForUpdate, stopBackendChild as stopBackendChildImpl } from './backend-child'
 import { dashboardFallbackArgs, sourceDeclaresServe } from './backend-command'
 import { createBackendConnectionState } from './backend-connection-state'
 import { buildDesktopBackendEnv, normalizeRoboHomeRoot, roboManagedNodePathEntries } from './backend-env'
@@ -194,6 +194,18 @@ import { createStreamThrottle } from './stream-throttle'
 import { nativeOverlayWidth as computeNativeOverlayWidth, macTitleBarOverlayHeight } from './titlebar-overlay-width'
 import { resolveBehindCount, shouldCountCommits } from './update-count'
 import { waitForUpdateClearance } from './update-gate'
+import {
+  checkoutRootForExecutable,
+  isSamePath,
+  UPDATE_HANDOFF_PIDS_ENV,
+  venvDirForRoot,
+  windowsLauncherForRoot,
+  windowsManualUpdateCommand,
+  windowsUpdateInWindowArgs,
+  windowsUpdateWindowArgs,
+  windowsUpdateWindowPython,
+  windowsUpdateWindowScript
+} from './update-install'
 import { readLiveUpdateMarker, updateHandoffConflict, writeUpdateMarker } from './update-marker'
 import { runRebuildWithRetry } from './update-rebuild'
 import {
@@ -2451,17 +2463,24 @@ function writeZoomState(zoomLevel) {
 }
 
 // Match the backend's source resolution but bias toward a real git checkout.
-// Dev → SOURCE_REPO_ROOT. Packaged/CLI install → ACTIVE_ROBO_ROOT.
+// Dev → SOURCE_REPO_ROOT. A packaged app `robo desktop` built inside a
+// checkout → that checkout. Any other packaged/CLI install → ACTIVE_ROBO_ROOT.
 // ROBO_DESKTOP_ROBO_ROOT always wins so devs can pin a worktree.
 function resolveUpdateRoot() {
   const candidates = [
     process.env.ROBO_DESKTOP_ROBO_ROOT && path.resolve(process.env.ROBO_DESKTOP_ROBO_ROOT),
     !IS_PACKAGED && isRoboSourceRoot(SOURCE_REPO_ROOT) ? SOURCE_REPO_ROOT : null,
+    IS_PACKAGED ? checkoutRootForExecutable(process.execPath, isRoboSourceRoot) : null,
     isRoboSourceRoot(ACTIVE_ROBO_ROOT) ? ACTIVE_ROBO_ROOT : null
   ].filter(Boolean)
 
   return candidates.find(c => directoryExists(path.join(c, '.git'))) || candidates[0] || ACTIVE_ROBO_ROOT
 }
+
+// Network git calls in the update check get a deadline: a fetch that never
+// returns would otherwise hold the check open, and every later check (and so
+// the update popup) waits behind it until the app restarts.
+const UPDATE_NETWORK_TIMEOUT_MS = 90_000
 
 function runGit(args, options: any = {}): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -2477,6 +2496,15 @@ function runGit(args, options: any = {}): Promise<{ code: number; stdout: string
 
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+
+    const timer = options.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true
+          child.kill()
+        }, options.timeoutMs)
+      : null
+
     child.stdout.on('data', chunk => {
       const text = chunk.toString()
       stdout += text
@@ -2487,8 +2515,24 @@ function runGit(args, options: any = {}): Promise<{ code: number; stdout: string
       stderr += text
       options.onLine?.('stderr', text)
     })
-    child.once('error', reject)
-    child.once('exit', code => resolve({ code, stdout, stderr }))
+    child.once('error', error => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+
+      reject(error)
+    })
+    child.once('exit', code => {
+      if (timer) {
+        clearTimeout(timer)
+      }
+
+      resolve(
+        timedOut
+          ? { code: code ?? -1, stdout, stderr: `git ${args[0]} timed out after ${options.timeoutMs / 1000}s` }
+          : { code, stdout, stderr }
+      )
+    })
   })
 }
 
@@ -2522,7 +2566,11 @@ async function resolveHealedBranch(updateRoot, branch) {
 
   const originUrl = await getOriginUrl(updateRoot)
   const remote = isOfficialSshRemote(originUrl) ? OFFICIAL_REPO_HTTPS_URL : 'origin'
-  const probe = await runGit(['ls-remote', '--exit-code', '--heads', remote, branch], { cwd: updateRoot })
+
+  const probe = await runGit(['ls-remote', '--exit-code', '--heads', remote, branch], {
+    cwd: updateRoot,
+    timeoutMs: UPDATE_NETWORK_TIMEOUT_MS
+  })
 
   if (probe.code !== 2) {
     return branch
@@ -2539,14 +2587,6 @@ async function resolveHealedBranch(updateRoot, branch) {
 }
 
 async function checkUpdates() {
-  if (!OFFICIAL_REPO_HTTPS_URL) {
-    return {
-      supported: false,
-      reason: 'release-package-managed',
-      message: 'Install Robo updates from a signed or checksum-verified Robo release package.'
-    }
-  }
-
   const updateRoot = resolveUpdateRoot()
   let { branch } = readDesktopUpdateConfig()
   const gitDir = path.join(updateRoot, '.git')
@@ -2569,7 +2609,10 @@ async function checkUpdates() {
 
     const [currentSha, target, dirtyStr, currentBranch] = await Promise.all([
       git(['rev-parse', 'HEAD']),
-      runGit(['ls-remote', OFFICIAL_REPO_HTTPS_URL, `refs/heads/${branch}`], { cwd: updateRoot }),
+      runGit(['ls-remote', OFFICIAL_REPO_HTTPS_URL, `refs/heads/${branch}`], {
+        cwd: updateRoot,
+        timeoutMs: UPDATE_NETWORK_TIMEOUT_MS
+      }),
       git(['status', '--porcelain']),
       git(['rev-parse', '--abbrev-ref', 'HEAD'])
     ])
@@ -2601,7 +2644,10 @@ async function checkUpdates() {
     }
   }
 
-  const fetched = await runGit(['fetch', '--quiet', 'origin', branch], { cwd: updateRoot })
+  const fetched = await runGit(['fetch', '--quiet', 'origin', branch], {
+    cwd: updateRoot,
+    timeoutMs: UPDATE_NETWORK_TIMEOUT_MS
+  })
 
   if (fetched.code !== 0) {
     return {
@@ -2742,9 +2788,10 @@ function repairMacUpdaterHelper(updater) {
 // fresh entry points. On Windows this is the file the running backend
 // `robo.exe` holds open; on POSIX it's never mandatory-locked.
 function venvRoboShimPath(updateRoot) {
-  return IS_WINDOWS
-    ? path.join(updateRoot, 'venv', 'Scripts', 'robo.exe')
-    : path.join(updateRoot, 'venv', 'bin', 'robo')
+  // `venv` or `.venv`, whichever this checkout runs from.
+  const venv = venvDirForRoot(updateRoot, fileExists) || path.join(updateRoot, 'venv')
+
+  return IS_WINDOWS ? path.join(venv, 'Scripts', 'robo.exe') : path.join(venv, 'bin', 'robo')
 }
 
 // Best-effort lock probe mirroring the Rust updater's is_locked(): a running
@@ -2837,67 +2884,36 @@ async function releaseBackendLock(updateRoot, tag) {
     return { unlocked: true }
   }
 
-  // Collect every backend PID the desktop owns: primary window backend + pool.
-  const pids = []
-  const roboProcess = backendConnectionState.getProcess()
-
-  if (roboProcess && Number.isInteger(roboProcess.pid)) {
-    pids.push(roboProcess.pid)
-  }
-
-  for (const entry of backendPool.values()) {
-    if (entry.process && Number.isInteger(entry.process.pid)) {
-      pids.push(entry.process.pid)
-    }
-  }
-
-  // Graceful first (lets Python flush), then tree-kill to catch grandchildren.
-  if (roboProcess && !roboProcess.killed) {
-    try {
-      roboProcess.kill('SIGTERM')
-    } catch {
-      void 0
-    }
-  }
-
-  stopAllPoolBackends()
-
-  for (const pid of pids) {
-    forceKillProcessTree(pid)
-  }
-
   const shim = venvRoboShimPath(updateRoot)
-  const deadlineMs = Date.now() + 15000
 
-  while (Date.now() < deadlineMs) {
-    if (!isShimLocked(shim)) {
-      rememberLog(`[${tag}] venv shim unlocked; safe to proceed`)
+  const unlocked = await releaseBackendsForUpdate({
+    backendPids: () => {
+      const pids = []
+      const roboProcess = backendConnectionState.getProcess()
 
-      return { unlocked: true }
-    }
-
-    // A supervised backend can respawn between kill and check (grandchildren,
-    // pool entries registered mid-teardown). Re-collect and re-kill each pass
-    // instead of trusting the initial sweep.
-    const stragglers = []
-
-    const currentRoboProcess = backendConnectionState.getProcess()
-
-    if (currentRoboProcess && Number.isInteger(currentRoboProcess.pid)) {
-      stragglers.push(currentRoboProcess.pid)
-    }
-
-    for (const entry of backendPool.values()) {
-      if (entry.process && Number.isInteger(entry.process.pid)) {
-        stragglers.push(entry.process.pid)
+      if (roboProcess && Number.isInteger(roboProcess.pid)) {
+        pids.push(roboProcess.pid)
       }
-    }
 
-    for (const pid of stragglers) {
-      forceKillProcessTree(pid)
-    }
+      for (const entry of backendPool.values()) {
+        if (entry.process && Number.isInteger(entry.process.pid)) {
+          pids.push(entry.process.pid)
+        }
+      }
 
-    await new Promise(r => setTimeout(r, 300))
+      return pids
+    },
+    forceKillProcessTree,
+    isShimLocked: () => isShimLocked(shim),
+    now: () => Date.now(),
+    sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
+    stopPoolBackends: stopAllPoolBackends
+  })
+
+  if (unlocked) {
+    rememberLog(`[${tag}] venv shim unlocked; safe to proceed`)
+
+    return { unlocked: true }
   }
 
   // Do NOT proceed past a held lock: handing off to the updater while another
@@ -2932,7 +2948,11 @@ async function applyUpdates(opts = {}) {
   updateInFlight = true
 
   try {
-    const updater = resolveUpdaterBinary()
+    const updateRoot = resolveUpdateRoot()
+    // The staged installer always updates ACTIVE_ROBO_ROOT. When this app
+    // belongs to a different checkout, handing off would update the wrong
+    // install, so that checkout gets the manual command instead.
+    const updater = isSamePath(updateRoot, ACTIVE_ROBO_ROOT) ? resolveUpdaterBinary() : null
 
     if (!updater && !IS_WINDOWS) {
       // macOS/Linux: never hand off, staged robo-setup or not — the resolver
@@ -2948,30 +2968,22 @@ async function applyUpdates(opts = {}) {
     if (!updater) {
       // No staged updater binary — this is a CLI-installed user (they ran
       // `robo desktop`, never the Tauri installer that self-copies
-      // robo-setup.exe into ROBO_HOME). They DO have a working `robo`
-      // on PATH / in the venv, so the correct path is the one-liner in their
-      // native medium. We show the EXACT command, branch-pinned to the
-      // checkout they're on — bare `robo update` defaults to main and would
-      // silently switch a bb/gui (or any non-main) install off-branch. Mirror
-      // the GUI button's contract: append --branch <current> for non-main
-      // checkouts, keep it bare for main so the card stays clean.
-      const updateRoot = resolveUpdateRoot()
-      let command = 'robo update'
+      // robo-setup.exe into ROBO_HOME). Update against the branch the
+      // checkout is on — bare `robo update` defaults to main and would
+      // silently switch a bb/gui (or any non-main) install off-branch.
+      const branch = await currentUpdateBranch(updateRoot)
+      const inWindow = await applyUpdatesWindowsInWindow(updateRoot, branch)
 
-      try {
-        const head = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: updateRoot })
-        const current = (head.stdout || '').trim()
-
-        if (head.code === 0 && current && current !== 'HEAD') {
-          const branch = await resolveHealedBranch(updateRoot, current)
-
-          if (branch !== 'main') {
-            command = `robo update --branch ${branch}`
-          }
-        }
-      } catch {
-        // Best-effort: fall back to bare `robo update` if branch detection fails.
+      if (inWindow) {
+        return inWindow
       }
+
+      // Can't run it for them (no git checkout or no venv here): show the
+      // EXACT command instead. It names this checkout's own robo.exe: a bare
+      // `robo` runs whichever install comes first on PATH, which may be
+      // another one.
+      const launcher = windowsLauncherForRoot(updateRoot, fileExists)
+      const command = windowsManualUpdateCommand(launcher, branch)
 
       rememberLog(`[updates] no staged updater; surfacing manual \`${command}\` for CLI install at ${updateRoot}`)
       emitUpdateProgress({ stage: 'manual', message: command, percent: null })
@@ -3000,7 +3012,6 @@ async function applyUpdates(opts = {}) {
     })
     repairMacUpdaterHelper(updater)
 
-    const updateRoot = resolveUpdateRoot()
     const { branch: configuredBranch } = readDesktopUpdateConfig()
     const branch = await resolveHealedBranch(updateRoot, configuredBranch || DEFAULT_UPDATE_BRANCH)
     const updaterArgs = ['--update', '--branch', branch]
@@ -3036,7 +3047,7 @@ async function applyUpdates(opts = {}) {
       emitUpdateProgress({ stage: 'error', message, percent: null })
       startRobo().catch(() => {})
 
-      return { ok: false, error: message }
+      return { ok: false, error: 'venv-locked', message }
     }
 
     // Preflight: after releasing our own backends, check for remaining
@@ -3124,6 +3135,181 @@ async function applyUpdates(opts = {}) {
   } finally {
     updateInFlight = false
   }
+}
+
+// The branch the checkout is on (healed to main when it's gone upstream), or
+// null when detached or unknown.
+async function currentUpdateBranch(updateRoot) {
+  try {
+    const head = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: updateRoot })
+    const current = (head.stdout || '').trim()
+
+    if (head.code === 0 && current && current !== 'HEAD') {
+      return await resolveHealedBranch(updateRoot, current)
+    }
+  } catch {
+    // Best-effort: update against the default branch.
+  }
+
+  return null
+}
+
+// Start a process that outlives this app. Resolves with it once Windows has
+// created it, or null when it could not be started.
+function spawnDetachedUpdateProcess(command, args, options): Promise<ReturnType<typeof spawn> | null> {
+  return new Promise(resolve => {
+    let child
+
+    try {
+      child = spawn(command, args, { ...options, detached: true, stdio: 'ignore' })
+    } catch (error) {
+      rememberLog(`[updates] could not start ${command}: ${error.message}`)
+      resolve(null)
+
+      return
+    }
+
+    child.once('spawn', () => resolve(child))
+    child.once('error', error => {
+      rememberLog(`[updates] ${command} failed to start: ${error.message}`)
+      resolve(null)
+    })
+  })
+}
+
+function readTextFile(file) {
+  try {
+    return fs.readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+// Windows, CLI install: run the update for the user instead of asking them
+// to paste a command. `robo update` can't run while this app is open (the app,
+// its backend and its own files are what it replaces), so we hand it to the
+// update window (robo_cli/update_window.py) and quit: the window waits for us
+// to exit, runs the update with a progress bar, and the update reopens the app
+// when it succeeds. Without the window (an older checkout, no Tk) the update
+// runs in a console window instead. Returns null when this checkout can't be
+// updated either way, so the caller shows the manual command.
+async function applyUpdatesWindowsInWindow(updateRoot, branch) {
+  const venv = venvDirForRoot(updateRoot, fileExists)
+
+  if (!venv || !directoryExists(path.join(updateRoot, '.git'))) {
+    return null
+  }
+
+  const handoffConflict = updateHandoffConflict(ROBO_HOME)
+
+  if (handoffConflict) {
+    rememberLog(`[updates] refusing update: ${handoffConflict.message}`)
+    emitUpdateProgress({ stage: 'error', message: handoffConflict.message, percent: null })
+
+    return { ok: false, error: 'update-already-running', message: handoffConflict.message }
+  }
+
+  emitUpdateProgress({
+    stage: 'restart',
+    message:
+      'Robo closes while the update installs. An update window shows the progress, and Robo reopens by itself when it is done.',
+    percent: 100
+  })
+
+  preflightStateDb(ROBO_HOME, rememberLog)
+
+  const lock = await releaseBackendLockForUpdate(updateRoot)
+  const scanOutcome = await scanVenvBlockers(updateRoot)
+
+  if (!lock.unlocked && scanOutcome.kind !== 'blocked') {
+    const message =
+      'Update aborted: another process is holding the Robo install open ' +
+      '(a second Robo window or a terminal running robo?). Close it and retry.'
+
+    emitUpdateProgress({ stage: 'error', message, percent: null })
+    startRobo().catch(() => {})
+
+    return { ok: false, error: 'venv-locked', message }
+  }
+
+  if (scanOutcome.kind !== 'clear') {
+    const blocked = scanOutcome.kind === 'blocked'
+    const message = blocked ? formatBlockerMessage(scanOutcome.result) : formatProbeFailedMessage()
+
+    rememberLog(`[updates] not updating: ${blocked ? 'venv in use' : `venv check failed: ${scanOutcome.error}`}`)
+    emitUpdateProgress({ stage: 'error', message, percent: null })
+    startRobo().catch(() => {})
+
+    return { ok: false, error: blocked ? 'venv-blocked' : 'venv-probe-failed', message }
+  }
+
+  const python = path.join(venv, 'Scripts', 'python.exe')
+  const reopen = IS_PACKAGED ? 'packaged' : 'source'
+  const env = { ...process.env, ROBO_HOME, PATH: pathWithRoboManagedNode(path.join(venv, 'Scripts')) }
+  const consoleArgs = windowsUpdateInWindowArgs(branch, reopen)
+
+  const startConsoleUpdate = () =>
+    spawnDetachedUpdateProcess(python, consoleArgs, {
+      cwd: updateRoot,
+      env: { ...env, [UPDATE_HANDOFF_PIDS_ENV]: String(process.pid) },
+      windowsHide: true
+    })
+
+  const script = windowsUpdateWindowScript(updateRoot)
+  const windowPython = fileExists(script) ? windowsUpdateWindowPython(venv, readTextFile, fileExists) : null
+  let started = null
+  let updater = python
+  let startedWith = null
+
+  if (windowPython) {
+    const args = windowsUpdateWindowArgs({ branch, python, reopen, root: updateRoot, script, waitPid: process.pid })
+
+    // Not hidden: this is the window the user watches.
+    started = await spawnDetachedUpdateProcess(windowPython, args, { cwd: updateRoot, env, windowsHide: false })
+
+    if (started) {
+      updater = windowPython
+      startedWith = `${windowPython} ${args.join(' ')}`
+      // The window exits non-zero only when it started no update at all
+      // (without Tk it runs the update in a console itself and exits 0).
+      // Until we quit, that still gets the console update.
+      started.once('exit', code => {
+        if (code !== 0) {
+          rememberLog(`[updates] update window exited early (${code}); running the update in a console`)
+          startConsoleUpdate().catch(() => {})
+        }
+      })
+    }
+  }
+
+  if (!started) {
+    started = await startConsoleUpdate()
+    startedWith = `${python} ${consoleArgs.join(' ')}`
+  }
+
+  if (!started) {
+    const message = "Couldn't start the update. Close Robo and run `robo update` in a terminal."
+
+    emitUpdateProgress({ stage: 'error', message, percent: null })
+    startRobo().catch(() => {})
+
+    return { ok: false, error: 'spawn-failed', message }
+  }
+
+  started.unref()
+
+  // Our own pid: until we exit, the renderer's update gate parks instead of
+  // respawning a backend, and a second click is refused. The update claims
+  // the marker for itself once we're gone.
+  writeUpdateMarker(ROBO_HOME, process.pid)
+  rememberLog(`[updates] started ${startedWith}; quitting so the update can run`)
+
+  isQuittingForHandoff = true
+  setTimeout(() => {
+    app.quit()
+  }, UPDATE_HANDOFF_DWELL_MS)
+
+  return { ok: true, handedOff: true, updater }
 }
 
 async function handOffWindowsBootstrapRecovery(reason) {

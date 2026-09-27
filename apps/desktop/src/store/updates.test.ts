@@ -96,6 +96,16 @@ describe('maybeNotifyUpdateAvailable', () => {
     expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({ icon: 'gift' })
   })
 
+  it('pops up in the bottom-right corner and stays until the user acts on it', () => {
+    maybeNotifyUpdateAvailable(status())
+    expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({ durationMs: 0, placement: 'bottom-right' })
+  })
+
+  it('is app news, so opening a chat does not clear it', () => {
+    maybeNotifyUpdateAvailable(status())
+    expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({ scope: 'app' })
+  })
+
   it('stays quiet for new commits once the toast was closed', () => {
     maybeNotifyUpdateAvailable(status())
     lastToast().onDismiss() // user closes it → cooldown starts

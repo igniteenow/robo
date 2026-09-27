@@ -1976,6 +1976,8 @@ export const zhHant = defineLocale({
     moreChanges: count => `另有 ${count} 項變更。`,
     manualTitle: '從終端機更新',
     manualBody: '您是從命令列安裝的 Robo，因此更新也需要在那裡執行。請將此指令貼到終端機：',
+    manualBodyWindows:
+      '您是從命令列安裝的 Robo，因此更新也需要在那裡執行。請先結束 Robo（它執行時 Windows 會鎖定其檔案），然後將此指令貼到 PowerShell：',
     manualPickedUp: '下次啟動 Robo 時會使用新版本。',
     guiSkewTitle: '請更新桌面應用程式',
     guiSkewBody:

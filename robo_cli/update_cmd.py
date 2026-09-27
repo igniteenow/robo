@@ -906,7 +906,7 @@ def _update_via_zip(args):
     if not uv_bin:
         uv_bin = _ensure_uv_for_termux(pip_cmd)
     if uv_bin:
-        uv_env = {**os.environ, "VIRTUAL_ENV": str(_m().PROJECT_ROOT / "venv")}
+        uv_env = {**os.environ, "VIRTUAL_ENV": str(_m()._project_venv_dir())}
         if _m()._is_termux_env(uv_env):
             uv_env.pop("PYTHONPATH", None)
             uv_env.pop("PYTHONHOME", None)
@@ -1534,6 +1534,12 @@ def _sync_with_upstream_if_needed(git_cmd: list[str], cwd: Path) -> None:
     if not has_upstream:
         # Check if user previously declined
         if _should_skip_upstream_prompt():
+            return
+
+        # Nobody to ask (the desktop's update window, the dashboard's Update
+        # button): leave the question for the next update run in a terminal
+        # rather than recording a "no" the user never gave.
+        if sys.stdin is None or not sys.stdin.isatty():
             return
 
         # Ask user if they want to add upstream
@@ -2787,7 +2793,7 @@ def _venv_core_imports_healthy() -> tuple[bool, str]:
     Returns ``(healthy, detail)``. Never raises; unknown states report
     healthy so a probe failure can't force needless reinstalls.
     """
-    venv_dir = _m().PROJECT_ROOT / "venv"
+    venv_dir = _m()._project_venv_dir()
     venv_python = venv_python_path(venv_dir, windows=_m()._is_windows())
     if not venv_python.exists():
         # No venv interpreter at all. In a dev checkout that's normal (the
@@ -2865,7 +2871,7 @@ def _detect_venv_python_processes(
     except Exception:
         return []
 
-    venv_dir = _m().PROJECT_ROOT / "venv"
+    venv_dir = _m()._project_venv_dir()
     try:
         venv_prefix = str(venv_dir.resolve()).lower().rstrip(os.sep) + os.sep
     except OSError:
@@ -2953,6 +2959,154 @@ def _format_venv_python_holders_message(matches: list[tuple[int, str, str]]) -> 
     lines.append("  (or use `robo update --force-venv` to proceed anyway at your own risk)")
     return "\n".join(lines)
 
+# ---------------------------------------------------------------------------
+# Windows: finish a terminal `robo update` in a new window
+# ---------------------------------------------------------------------------
+#
+# `robo update` typed in a terminal runs under the venv's robo.exe launcher,
+# which stays open until the update ends. Reinstalling Robo must replace
+# robo.exe, which Windows refuses while it runs, and renaming it aside
+# (_quarantine_running_robo_exe) fails when the launcher holds its own file.
+# So the dependency step failed on every terminal update. Instead the update
+# restarts itself from the venv's python in a new console window and the
+# launcher exits, leaving robo.exe free to be replaced.
+
+UPDATE_HANDOFF_ENV = "ROBO_UPDATE_HANDOFF_PIDS"
+
+_CREATE_NEW_CONSOLE = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
+_CREATE_BREAKAWAY_FROM_JOB = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0x01000000)
+
+
+def _normalized_path(path: Path) -> str:
+    try:
+        path = path.resolve()
+    except OSError:
+        pass
+    return os.path.normcase(str(path))
+
+
+def _launchers_running_this_update(scripts_dir: Path | None) -> list[int]:
+    """PIDs of this venv's ``robo.exe`` launchers among this process's ancestors.
+
+    The launcher is rarely the direct parent: robo.exe starts the venv's
+    python.exe, which is itself a small redirector that starts the real
+    interpreter, and ``/update`` from the TUI adds a second robo.exe further
+    up. Each of them keeps robo.exe locked. Empty off Windows, or when the
+    process tree can't be read.
+    """
+    if scripts_dir is None or not _m()._is_windows():
+        return []
+    shims = {_normalized_path(shim) for shim in _m()._robo_exe_shims(scripts_dir)}
+    if not shims:
+        return []
+    try:
+        import psutil
+
+        ancestors = psutil.Process(os.getpid()).parents()
+    except Exception:
+        return []
+    pids = []
+    for proc in ancestors:
+        try:
+            exe = proc.exe()
+        except Exception:
+            continue
+        if exe and _normalized_path(Path(exe)) in shims:
+            pids.append(proc.pid)
+    return pids
+
+
+def _hand_off_update_to_new_window(argv: list[str], launcher_pids: list[int]) -> bool:
+    """Restart this update from the venv's python in a new console window.
+
+    The new process gets the PIDs to wait for, so it only touches the venv
+    once this process and its launchers have exited. It breaks away from the
+    launcher's job object when allowed, so closing the launcher can't take
+    the new window down with it.
+    """
+    wait_for = ",".join(str(pid) for pid in [*launcher_pids, os.getpid()])
+    env = {**os.environ, UPDATE_HANDOFF_ENV: wait_for}
+    command = [sys.executable, "-m", "robo_cli.main", *argv]
+    for flags in (_CREATE_NEW_CONSOLE | _CREATE_BREAKAWAY_FROM_JOB, _CREATE_NEW_CONSOLE):
+        try:
+            subprocess.Popen(command, cwd=str(_m().PROJECT_ROOT), env=env, creationflags=flags)
+            break
+        except OSError as exc:
+            logger.debug("Could not hand the update off to a new window (flags %#x): %s", flags, exc)
+    else:
+        return False
+    print("→ The update continues in a new window.")
+    print("  Windows keeps robo.exe locked while it runs, so it can't reinstall itself from here.")
+    return True
+
+
+def _wait_for_handoff_launcher(pids: str, timeout: float = 30.0) -> None:
+    """In a handed-off update, wait until the processes that started it exit."""
+    try:
+        import psutil
+    except Exception:
+        return
+    procs = []
+    for raw in pids.split(","):
+        try:
+            procs.append(psutil.Process(int(raw)))
+        except Exception:
+            continue  # already exited, or not a PID
+    if not procs:
+        return
+    try:
+        psutil.wait_procs(procs, timeout=timeout)
+    except Exception as exc:
+        logger.debug("Waiting for the update launcher to exit failed: %s", exc)
+
+
+def _pause_before_window_closes() -> None:
+    """Keep a handed-off update's window open until the user has read it."""
+    try:
+        input("\nPress Enter to close this window.")
+    except (EOFError, KeyboardInterrupt, OSError):
+        pass
+
+
+REOPEN_WINDOW_CLOSE_SECONDS = 5
+
+
+def _reopen_desktop_after_update(mode: str, *, succeeded: bool) -> None:
+    """Finish the desktop's "Update now": reopen the app it quit, or say how.
+
+    *mode* is how the app was running: ``packaged`` or ``source`` (a
+    ``robo desktop --source`` build). Only a finished update reopens it; after
+    a failure the window stays open on the error.
+    """
+    if not succeeded:
+        print()
+        print("Robo wasn't reopened because the update didn't finish.")
+        print("Fix the problem above, then start Robo again with: robo desktop")
+        return
+
+    print()
+    print("→ Reopening Robo...")
+    command = [sys.executable, "-m", "robo_cli.main", "desktop"]
+    if mode == "source":
+        command.append("--source")
+    try:
+        reopened = subprocess.run(command, cwd=str(_m().PROJECT_ROOT)).returncode == 0
+    except OSError as exc:
+        logger.debug("Could not reopen the desktop app: %s", exc)
+        reopened = False
+    if not reopened:
+        print("  Couldn't reopen Robo. Start it again with: robo desktop")
+        return
+
+    # The app is back, so nobody needs to read this window any more.
+    import atexit
+
+    atexit.unregister(_pause_before_window_closes)
+    if sys.stdout is not None and sys.stdout.isatty():
+        print(f"This window closes in {REOPEN_WINDOW_CLOSE_SECONDS} seconds.")
+        _time.sleep(REOPEN_WINDOW_CLOSE_SECONDS)
+
+
 def _venv_launcher_ancestors(pids: list[int]) -> list[int]:
     """Return venv-interpreter ancestors of *pids* that hold the install open.
 
@@ -2984,7 +3138,7 @@ def _venv_launcher_ancestors(pids: list[int]) -> list[int]:
     except Exception:
         return []
 
-    venv_dir = _m().PROJECT_ROOT / "venv"
+    venv_dir = _m()._project_venv_dir()
     try:
         venv_prefix = str(venv_dir.resolve()).lower().rstrip(os.sep) + os.sep
     except OSError:
@@ -3450,8 +3604,58 @@ def _discard_lockfile_churn(git_cmd, repo_root):
         # Never let lockfile cleanup block an update.
         pass
 
+def _crlf_copies_of_lf_files(git_cmd, repo_root):
+    """Tracked files whose working copy differs from the index only in CRLF.
+
+    Returns ``[(relative_path, lf_bytes), ...]`` where ``lf_bytes`` is exactly
+    the committed content, or ``None`` when the tree can't be read. Decided by
+    content, never by git's stat cache: a CRLF copy git wrote itself has the
+    stat info git recorded for it, so ``git diff`` trusts it and reads it clean
+    until something touches the file. A file with any real edit is never
+    returned.
+    """
+    fmt = subprocess.run(
+        git_cmd + ["rev-parse", "--show-object-format"],
+        cwd=repo_root, capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    algorithm = fmt.stdout.strip() or "sha1"
+    if fmt.returncode != 0 or algorithm not in {"sha1", "sha256"}:
+        return None
+    listing = subprocess.run(
+        git_cmd + ["ls-files", "--stage", "--eol", "-z"],
+        cwd=repo_root, capture_output=True,
+    )
+    if listing.returncode != 0:
+        return None
+
+    copies = []
+    for record in listing.stdout.decode("utf-8", errors="surrogateescape").split("\0"):
+        # "<mode> <object> <stage>\ti/lf    w/crlf  attr/<attrs>\t<path>"
+        parts = record.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        meta, eol, rel = parts
+        fields, eol_fields = meta.split(), eol.split()
+        if len(fields) != 3 or fields[0] not in {"100644", "100755"} or fields[2] != "0":
+            continue
+        index_eol = eol_fields[0] if eol_fields else ""
+        work_eol = eol_fields[1] if len(eol_fields) > 1 else ""
+        if index_eol != "i/lf" or work_eol not in {"w/crlf", "w/mixed"}:
+            continue
+        if "eol=crlf" in eol or "-text" in eol:
+            continue  # the repo asks for these bytes as they are
+        try:
+            data = (Path(repo_root) / rel).read_bytes().replace(b"\r\n", b"\n")
+        except OSError:
+            continue
+        blob = hashlib.new(algorithm, b"blob %d\0" % len(data) + data).hexdigest()
+        if blob == fields[1]:
+            copies.append((rel, data))
+    return copies
+
+
 def _normalize_managed_eol(git_cmd, repo_root):
-    """Take a managed checkout off ``core.autocrlf=true`` without leaving it dirty.
+    """Keep a managed checkout's working tree in LF and off ``core.autocrlf=true``.
 
     Git for Windows ships ``core.autocrlf=true`` in its system config, which
     renormalizes this repo's LF text files to CRLF in the working tree. That
@@ -3462,62 +3666,17 @@ def _normalize_managed_eol(git_cmd, repo_root):
     ``install.ps1`` forever — so ``robo update``, which ships with the checkout
     itself, is the only path left that can fix them.
 
-    The pin and the cleanup are one operation. Under ``autocrlf=true`` git
-    compares normalized content, so a CRLF working tree reads clean; pinning
-    alone would expose every text file as modified and hand the update an
-    autostash of the whole tree. So the pin is written only after the tree is
-    verified clean under it, and a checkout we cannot fully normalize is left
-    exactly as it was. Best-effort: never blocks an update.
+    The pin alone is not enough: the CRLF copies git already wrote stay on
+    disk. Git trusts its stat cache, so they read clean — until anything
+    touches them, and then the whole tree turns up modified (an earlier version
+    of this function pinned checkouts in exactly that state, which is why the
+    rewrite also runs on checkouts that are already pinned). So each run
+    rewrites, as LF, every file whose working copy differs from the index only
+    in line endings, judged by content. A file with a real edit is never
+    touched. The pin is written only once every such file was rewritten, so a
+    checkout we cannot fully normalize keeps working as it did. Best-effort:
+    never blocks an update.
     """
-    # -c, not config: evaluate the tree as it WOULD look pinned, without
-    # persisting anything we might not be able to follow through on.
-    probe = git_cmd + ["-c", "core.autocrlf=false"]
-
-    def _dirty(*extra):
-        out = subprocess.run(
-            probe + ["diff", "-z", "--name-only", *extra],
-            cwd=repo_root,
-            capture_output=True,
-            text=True, encoding="utf-8", errors="replace",
-        )
-        if out.returncode != 0:
-            return None
-        return {p for p in out.stdout.split("\0") if p}
-
-    def _real_dirty():
-        # Files with a *content* change once CRLF differences are ignored.
-        # NOTE: ``diff --name-only --ignore-cr-at-eol`` still LISTS CR-only
-        # files (the name list is computed from blob/stat differences before
-        # the CR filter is applied), so it cannot be used to isolate real
-        # edits. ``--numstat`` does honor the filter: a CR-only file produces
-        # no numstat record, while a genuinely-edited file does. Parse the
-        # paths out of numstat instead.
-        out = subprocess.run(
-            probe + ["-c", "core.quotepath=false",
-                     "diff", "--numstat", "--ignore-cr-at-eol"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True, encoding="utf-8", errors="replace",
-        )
-        if out.returncode != 0:
-            return None
-        paths = set()
-        for line in out.stdout.splitlines():
-            if not line.strip():
-                continue
-            # Format: "<added>\t<deleted>\t<path>". Rename detection is off in
-            # plain diff, so there is exactly one path field per record.
-            parts = line.split("\t", 2)
-            if len(parts) == 3 and parts[2]:
-                paths.add(parts[2])
-        return paths
-
-    def _eol_only():
-        all_dirty, real_dirty = _dirty(), _real_dirty()
-        if all_dirty is None or real_dirty is None:
-            return None
-        return all_dirty - real_dirty
-
     try:
         effective = subprocess.run(
             git_cmd + ["config", "--get", "core.autocrlf"],
@@ -3525,31 +3684,44 @@ def _normalize_managed_eol(git_cmd, repo_root):
             capture_output=True,
             text=True, encoding="utf-8", errors="replace",
         )
-        # Only "true" rewrites LF to CRLF on checkout. Unset, false, and input
-        # all leave the working tree alone, so there is nothing to repair.
-        if effective.stdout.strip().lower() != "true":
+        autocrlf = effective.stdout.strip().lower()
+        if autocrlf == "input":
+            return  # an explicit choice to leave the working tree alone
+
+        copies = _crlf_copies_of_lf_files(git_cmd, repo_root)
+        if copies is None:
             return
 
-        eol_only = _eol_only()
-        if eol_only is None:
-            return
-        if eol_only:
-            # Pathspec over stdin, not argv: a fully renormalized checkout is
-            # thousands of paths, well past the Windows command-line limit.
+        rewritten = []
+        for rel, data in copies:
+            path = Path(repo_root) / rel
+            temp = path.with_name(f".{path.name}.robo-eol")
+            try:
+                temp.write_bytes(data)
+                shutil.copymode(path, temp)
+                os.replace(temp, path)
+                rewritten.append(rel)
+            except OSError:
+                # e.g. a file held open by a running process
+                try:
+                    temp.unlink()
+                except OSError:
+                    pass
+        if rewritten:
+            # The files are smaller now, and git takes a size change as an
+            # edit without reading the file; re-index them (same content, so
+            # the same blobs) to record their new size. Paths over stdin: a
+            # whole tree is past the Windows command-line limit.
             subprocess.run(
-                probe
-                + ["checkout", "--pathspec-from-file=-", "--pathspec-file-nul", "--"],
+                git_cmd + ["update-index", "-q", "-z", "--stdin"],
                 cwd=repo_root,
-                input="\0".join(sorted(eol_only)),
+                input="\0".join(rewritten).encode("utf-8", errors="surrogateescape"),
                 capture_output=True,
-                text=True, encoding="utf-8", errors="replace",
                 check=False,
             )
-            if _eol_only():
-                # Still dirty — persisting the pin here would only surface churn
-                # we failed to clear. Leave the checkout as we found it.
-                return
-            print(f"→ Normalized line-ending churn ({len(eol_only)} file(s))")
+            print(f"→ Normalized line-ending churn ({len(rewritten)} file(s))")
+        if len(rewritten) < len(copies) or autocrlf != "true":
+            return
 
         subprocess.run(
             git_cmd + ["config", "core.autocrlf", "false"],
@@ -3560,6 +3732,15 @@ def _normalize_managed_eol(git_cmd, repo_root):
     except Exception:
         # Never let line-ending cleanup block an update.
         pass
+
+def _is_git_command(cmd) -> bool:
+    """True when a failed subprocess command was a git invocation."""
+    if isinstance(cmd, (list, tuple)):
+        program = str(cmd[0]) if cmd else ""
+    else:
+        program = str(cmd or "").split(" ", 1)[0]
+    return program.replace("\\", "/").rsplit("/", 1)[-1].lower() in {"git", "git.exe"}
+
 
 def _cmd_update_impl(args, gateway_mode: bool):
     """Body of ``cmd_update`` — kept separate so the wrapper can always
@@ -3735,6 +3916,11 @@ def _cmd_update_impl(args, gateway_mode: bool):
         return
 
     # Fetch and pull
+    # Set once git has moved the checkout to the new code. From then on a
+    # failure (typically the dependency install) is not "git is broken", and
+    # the ZIP fallback below must not run: it copies a fresh download over the
+    # whole checkout, wiping local changes and build output.
+    code_updated = False
     try:
 
         # Resolve the target branch up front so the fetch can be scoped to it.
@@ -3890,10 +4076,19 @@ def _cmd_update_impl(args, gateway_mode: bool):
             # otherwise "Already up to date!" gaslights the user while their
             # install stays bricked.
             healthy, detail = _venv_core_imports_healthy()
-            if not healthy:
-                print("⚠ Checkout is current, but the venv is unhealthy:")
-                print(f"  {detail}")
-                print("→ Repairing Python dependencies...")
+            # The breadcrumb from an interrupted install means the full
+            # dependency install never finished, even when the core imports
+            # still work. Finish it here; this is the command the launch-time
+            # recovery tells the user to run.
+            unfinished_install = _m()._update_marker_path().exists()
+            if not healthy or unfinished_install:
+                if not healthy:
+                    print("⚠ Checkout is current, but the venv is unhealthy:")
+                    print(f"  {detail}")
+                    print("→ Repairing Python dependencies...")
+                else:
+                    print("⚠ A previous update stopped before it finished installing dependencies.")
+                    print("→ Finishing the dependency install...")
                 _write_update_incomplete_marker()
                 from robo_cli.managed_uv import ensure_uv
 
@@ -3901,20 +4096,19 @@ def _cmd_update_impl(args, gateway_mode: bool):
                 # A managed install whose venv is gone entirely (interrupted
                 # repair after the old venv was moved aside) needs the venv
                 # recreated before dependencies can be installed into it.
+                repair_venv = _m()._project_venv_dir()
                 venv_python_missing = not (
-                    venv_python_path(
-                        _m().PROJECT_ROOT / "venv", windows=_m()._is_windows()
-                    )
+                    venv_python_path(repair_venv, windows=_m()._is_windows())
                 ).exists()
                 if venv_python_missing and repair_uv:
                     print("→ Recreating virtual environment...")
                     subprocess.run(
-                        [repair_uv, "venv", "venv"],
+                        [repair_uv, "venv", repair_venv.name],
                         cwd=_m().PROJECT_ROOT,
                         check=False,
                     )
                 if repair_uv:
-                    repair_env = {**os.environ, "VIRTUAL_ENV": str(_m().PROJECT_ROOT / "venv")}
+                    repair_env = {**os.environ, "VIRTUAL_ENV": str(repair_venv)}
                     _m()._install_python_dependencies_with_optional_fallback(
                         [repair_uv, "pip"], env=repair_env, group="all"
                     )
@@ -4032,6 +4226,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                 sys.exit(1)
 
             update_succeeded = True
+            code_updated = True
         finally:
             if auto_stash_ref is not None:
                 # Don't attempt stash restore if the code update itself failed —
@@ -4099,7 +4294,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
         install_group = "all"
 
         if uv_bin:
-            uv_env = {**os.environ, "VIRTUAL_ENV": str(_m().PROJECT_ROOT / "venv")}
+            uv_env = {**os.environ, "VIRTUAL_ENV": str(_m()._project_venv_dir())}
             if _m()._is_termux_env(uv_env):
                 uv_env.pop("PYTHONPATH", None)
                 uv_env.pop("PYTHONHOME", None)
@@ -5427,6 +5622,19 @@ def _cmd_update_impl(args, gateway_mode: bool):
             sys.exit(1)
 
     except subprocess.CalledProcessError as e:
+        if code_updated or not _is_git_command(e.cmd):
+            # Git worked; a later step (usually the dependency install)
+            # failed. The ZIP fallback below is only for a broken git.
+            print()
+            if code_updated:
+                print(f"✗ The code was updated, but a later step failed: {e}")
+                print("  Your checkout is on the new version and your local changes are kept.")
+            else:
+                print(f"✗ Update failed: {e}")
+                print("  Your code was not changed.")
+            print("  Close every Robo window (desktop app, TUI, gateway), then run `robo update` again")
+            print("  to finish installing dependencies.")
+            sys.exit(1)
         if sys.platform == "win32":
             print(f"⚠ Git update failed: {e}")
             print("→ Falling back to ZIP download...")

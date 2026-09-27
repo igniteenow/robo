@@ -655,6 +655,137 @@ class TestCmdUpdateZipBranchRefusal:
         assert "Downloading latest version" not in out
 
 
+class TestCmdUpdateFailureAfterPull:
+    """Once git has moved the checkout, a failed later step must not fall
+    back to the ZIP download. On Windows it did: a dependency install that
+    could not replace the running robo.exe raised, the updater took it for
+    broken git, and copied a fresh download over the whole checkout, wiping
+    the user's restored local changes and build output."""
+
+    @staticmethod
+    def _pull_succeeds_then_install_fails():
+        git = _make_run_side_effect(commit_count="1")
+
+        def side_effect(cmd, **kwargs):
+            parts = [str(c) for c in cmd]
+            if "pip" in " ".join(parts) and "install" in parts:
+                raise subprocess.CalledProcessError(2, cmd)
+            return git(cmd, **kwargs)
+
+        return side_effect
+
+    @pytest.mark.parametrize("platform", ["linux", "win32"])
+    @patch("shutil.which", return_value=None)
+    @patch("subprocess.run")
+    def test_install_failure_after_pull_stops_without_zip(self, mock_run, _which, platform, capsys):
+        from robo_cli import main as cli_main
+        from robo_cli import update_cmd
+
+        mock_run.side_effect = self._pull_succeeds_then_install_fails()
+        with patch.object(update_cmd.sys, "platform", platform), patch.object(
+            cli_main, "_is_windows", return_value=False
+        ), patch.object(update_cmd, "_update_via_zip") as zip_update, pytest.raises(SystemExit) as exc:
+            cmd_update(SimpleNamespace())
+
+        assert exc.value.code == 1
+        zip_update.assert_not_called()
+        out = capsys.readouterr().out
+        assert "The code was updated" in out
+        assert "Falling back to ZIP" not in out
+
+
+class TestCmdUpdateFinishesInterruptedInstall:
+    """An install that stopped partway leaves ``.update-incomplete``. The
+    launch-time recovery tells the user to run ``robo update``, so that
+    command must finish the install even when there are no new commits,
+    instead of answering "Already up to date!" and leaving the warning on
+    every launch."""
+
+    @staticmethod
+    def _up_to_date(tmp_path, monkeypatch, *, interrupted: bool):
+        from robo_cli import main as cli_main
+        from robo_cli import update_cmd
+
+        marker = tmp_path / ".update-incomplete"
+        if interrupted:
+            marker.write_text("started=1\n")
+        monkeypatch.setattr(cli_main, "_update_marker_path", lambda: marker)
+        monkeypatch.setattr(cli_main, "_is_windows", lambda: False)
+        monkeypatch.setattr(update_cmd, "_venv_core_imports_healthy", lambda: (True, ""))
+        return marker
+
+    @patch("shutil.which", return_value="/usr/bin/uv")
+    @patch("subprocess.run")
+    def test_up_to_date_update_finishes_an_interrupted_install(self, mock_run, _which, tmp_path, monkeypatch, capsys):
+        from robo_cli import main as cli_main
+
+        mock_run.side_effect = _make_run_side_effect(commit_count="0")
+        marker = self._up_to_date(tmp_path, monkeypatch, interrupted=True)
+        with patch.object(cli_main, "_install_python_dependencies_with_optional_fallback") as install:
+            cmd_update(SimpleNamespace())
+
+        install.assert_called_once()
+        assert not marker.exists()
+        out = capsys.readouterr().out
+        assert "Finishing the dependency install" in out
+        assert "Already up to date" not in out
+
+    @patch("shutil.which", return_value="/usr/bin/uv")
+    @patch("subprocess.run")
+    def test_up_to_date_update_without_a_breadcrumb_installs_nothing(self, mock_run, _which, tmp_path, monkeypatch, capsys):
+        from robo_cli import main as cli_main
+
+        mock_run.side_effect = _make_run_side_effect(commit_count="0")
+        self._up_to_date(tmp_path, monkeypatch, interrupted=False)
+        with patch.object(cli_main, "_install_python_dependencies_with_optional_fallback") as install:
+            cmd_update(SimpleNamespace())
+
+        install.assert_not_called()
+        assert "Already up to date" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("platform", ["linux", "win32"])
+    @patch("shutil.which", return_value="/usr/bin/uv")
+    @patch("subprocess.run")
+    def test_failed_install_with_no_new_commits_never_falls_back_to_zip(
+        self, mock_run, _which, platform, tmp_path, monkeypatch, capsys
+    ):
+        from robo_cli import main as cli_main
+        from robo_cli import update_cmd
+
+        mock_run.side_effect = _make_run_side_effect(commit_count="0")
+        marker = self._up_to_date(tmp_path, monkeypatch, interrupted=True)
+        failure = subprocess.CalledProcessError(2, ["/usr/bin/uv", "pip", "install", "-e", ".[all]"])
+        with patch.object(update_cmd.sys, "platform", platform), patch.object(
+            cli_main, "_install_python_dependencies_with_optional_fallback", side_effect=failure
+        ), patch.object(update_cmd, "_update_via_zip") as zip_update, pytest.raises(SystemExit) as exc:
+            cmd_update(SimpleNamespace())
+
+        assert exc.value.code == 1
+        zip_update.assert_not_called()
+        assert marker.exists(), "the next `robo update` must try again"
+        out = capsys.readouterr().out
+        assert "Your code was not changed" in out
+        assert "Falling back to ZIP" not in out
+
+
+@pytest.mark.parametrize(
+    ("cmd", "is_git"),
+    [
+        (["git", "-c", "windows.appendAtomically=false", "fetch"], True),
+        ([r"C:\Program Files\Git\cmd\git.exe", "merge"], True),
+        ("git rev-list --count", True),
+        (["/usr/bin/uv", "pip", "install"], False),
+        ([r"C:\robo\.venv\Scripts\python.exe", "-m", "pip"], False),
+        ([], False),
+        (None, False),
+    ],
+)
+def test_only_git_failures_count_as_a_broken_git(cmd, is_git):
+    from robo_cli import update_cmd
+
+    assert update_cmd._is_git_command(cmd) is is_git
+
+
 def test_is_termux_env_true_for_termux_prefix():
     from robo_cli import main as hm
 

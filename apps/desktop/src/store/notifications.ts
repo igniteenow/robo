@@ -11,6 +11,16 @@ export interface NotificationAction {
 
 export type NotificationPlacement = 'default' | 'bottom-right'
 
+/**
+ * `session` (the default) notifications are about the chat on screen and are
+ * cleared when it changes. `app` notifications are news about Robo itself (an
+ * update is ready, the backend is out of date): they stay until the user
+ * closes them. Opening a chat used to clear them too, and clearing counts as
+ * closing, so the update popup was gone and snoozed for a day within a second
+ * of launch.
+ */
+export type NotificationScope = 'session' | 'app'
+
 export interface AppNotification {
   id: string
   kind: NotificationKind
@@ -27,6 +37,7 @@ export interface AppNotification {
   onDismiss?: () => void
   createdAt: number
   placement?: NotificationPlacement
+  scope?: NotificationScope
 }
 
 export interface NotificationInput {
@@ -42,10 +53,12 @@ export interface NotificationInput {
   onDismiss?: () => void
   durationMs?: number
   placement?: NotificationPlacement
+  scope?: NotificationScope
 }
 
 let notificationCounter = 0
 const timers = new Map<string, number>()
+const MAX_NOTIFICATIONS = 4
 
 export const $notifications = atom<AppNotification[]>([])
 
@@ -168,12 +181,13 @@ export function notify(input: NotificationInput): string {
     action: input.action,
     onDismiss: input.onDismiss,
     createdAt: Date.now(),
-    placement: input.placement ?? defaultPlacement(kind, input.action)
+    placement: input.placement ?? defaultPlacement(kind, input.action),
+    scope: input.scope ?? 'session'
   }
 
   window.clearTimeout(timers.get(id))
   timers.delete(id)
-  $notifications.set([notification, ...$notifications.get().filter(item => item.id !== id)].slice(0, 4))
+  $notifications.set(newestFirst([notification, ...$notifications.get().filter(item => item.id !== id)]))
 
   const duration = input.durationMs ?? defaultDuration(kind)
 
@@ -206,16 +220,36 @@ export function dismissNotification(id: string) {
   dismissed?.onDismiss?.()
 }
 
-export function clearNotifications() {
-  for (const timer of timers.values()) {
-    window.clearTimeout(timer)
+// Keep the newest few, but never let chat notifications push out app ones.
+function newestFirst(items: AppNotification[]): AppNotification[] {
+  const appCount = items.filter(item => item.scope === 'app').length
+  let sessionRoom = Math.max(0, MAX_NOTIFICATIONS - appCount)
+
+  return items.filter(item => item.scope === 'app' || sessionRoom-- > 0)
+}
+
+function removeNotifications(shouldRemove: (item: AppNotification) => boolean) {
+  const all = $notifications.get()
+  const removed = all.filter(shouldRemove)
+
+  for (const item of removed) {
+    window.clearTimeout(timers.get(item.id))
+    timers.delete(item.id)
   }
 
-  timers.clear()
-  const all = $notifications.get()
-  $notifications.set([])
+  $notifications.set(all.filter(item => !shouldRemove(item)))
 
-  for (const item of all) {
+  for (const item of removed) {
     item.onDismiss?.()
   }
+}
+
+/** Clear the current chat's notifications; app notifications stay. */
+export function clearNotifications() {
+  removeNotifications(item => item.scope !== 'app')
+}
+
+/** Clear everything, as the user asked to ("Clear all"). */
+export function clearAllNotifications() {
+  removeNotifications(() => true)
 }

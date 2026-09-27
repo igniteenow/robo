@@ -1,4 +1,4 @@
-"""Regression: the Windows installer must not spawn a bare ``powershell``.
+r"""Regression: the Windows installer must not spawn a bare ``powershell``.
 
 A user on Windows reported the installer getting stuck; running
 ``git clone https://github.com/igniteenow/robo.git robo; cd robo; .\install-robo.ps1`` failed at the

@@ -321,7 +321,7 @@ def _fake_psutil_tree(tree, venv_exe, worker_exe, dead=None):
 @patch.object(cli_main, "_is_windows", return_value=True)
 def test_venv_launcher_ancestors_returns_venv_side_parent(_winp, monkeypatch):
     """The worker's venv-side parent is reported so the guard set is covered."""
-    venv_exe = str(cli_main.PROJECT_ROOT / "venv" / "Scripts" / "python.exe")
+    venv_exe = str(cli_main._project_venv_dir() / "Scripts" / "python.exe")
     worker_exe = r"C:\Users\x\AppData\Roaming\uv\python\cpython-3.11\python.exe"
 
     # worker 200 -> launcher 100 (even == venv-side)
@@ -334,7 +334,7 @@ def test_venv_launcher_ancestors_returns_venv_side_parent(_winp, monkeypatch):
 @patch.object(cli_main, "_is_windows", return_value=True)
 def test_venv_launcher_ancestors_ignores_non_venv_parents(_winp, monkeypatch):
     """A Scheduled Task's cmd.exe / an operator shell is not a venv holder."""
-    venv_exe = str(cli_main.PROJECT_ROOT / "venv" / "Scripts" / "python.exe")
+    venv_exe = str(cli_main._project_venv_dir() / "Scripts" / "python.exe")
     worker_exe = r"C:\Windows\System32\cmd.exe"
 
     # worker 200 -> parent 101 (odd == NOT venv-side)
@@ -366,7 +366,7 @@ def test_pause_kill_set_covers_venv_guard_abort_set(
     import robo_cli.gateway as gateway_mod
     import gateway.status as status_mod
 
-    venv_exe = str(cli_main.PROJECT_ROOT / "venv" / "Scripts" / "python.exe")
+    venv_exe = str(cli_main._project_venv_dir() / "Scripts" / "python.exe")
     worker_exe = r"C:\Users\x\AppData\Roaming\uv\python\cpython-3.11\python.exe"
 
     profile_home = tmp_path / "profiles" / "default"

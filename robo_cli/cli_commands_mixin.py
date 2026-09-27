@@ -3445,11 +3445,6 @@ class CLICommandsMixin:
         prompt_toolkit cleans up terminal modes).  Returns ``False`` / falsy
         when cancelled.
         """
-        if (os.environ.get("ROBO_PRODUCT_NAME") or "").strip().lower() == "robo":
-            print("  Robo updates come from a checksum-verified Robo release package.")
-            print("  This runtime will not replace Robo with a third-party project.")
-            return False
-
         from robo_cli.config import is_managed, format_managed_message
 
         if is_managed():

@@ -2431,7 +2431,7 @@ def _launch_tui(
         print()
         print("Launching update...")
         print()
-        relaunch(["update"], preserve_inherited=False)
+        relaunch(["update"], preserve_inherited=False, same_install=True)
 
     sys.exit(code)
 
@@ -4953,6 +4953,9 @@ def _print_version_info(*, check_updates: bool = True) -> None:
                 f"Update available: {behind} {commits_word} behind — "
                 f"run '{recommended_update_command()}'"
             )
+        elif behind is not None and behind < 0:
+            # Behind by an amount a shallow clone can't count.
+            print(f"Update available — run '{recommended_update_command()}'")
         elif behind == 0:
             print("Up to date")
     except Exception:
@@ -5386,6 +5389,11 @@ def _run_with_idle_timeout(
             "    a stuck Node process, or an antivirus scan stalling I/O.\n"
         )
         combined += msg
+        # Say why here, with the rest of the streamed output.
+        try:
+            print(msg.rstrip("\n"), flush=True)
+        except (UnicodeEncodeError, OSError, ValueError):
+            pass
         # Force a non-zero rc even if terminate() raced with a clean exit.
         if rc == 0:
             rc = 124  # GNU `timeout` convention
@@ -5596,6 +5604,21 @@ def _missing_web_build_tool(output: str) -> str | None:
     return None
 
 
+# A type error at a place in a source file: ``src/App.tsx(12,5): error TS2322:``.
+# Errors without a location (``error TS5033: Could not write file ... EPERM``)
+# can be the transient Windows I/O the retry exists for.
+_WEB_BUILD_COMPILE_ERROR = re.compile(r"\(\d+,\d+\): error TS\d+:")
+
+
+def _web_build_failed_to_compile(output: str) -> bool:
+    """Return True when a failed ``npm run build`` reported errors in the source.
+
+    Those come out the same on every run, so the timed retry (meant for
+    transient Windows I/O races) would only print them again.
+    """
+    return bool(_WEB_BUILD_COMPILE_ERROR.search(output))
+
+
 def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
     """Build the web UI frontend if npm is available, serializing across processes.
 
@@ -5739,7 +5762,7 @@ def _do_build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
             _say(f"  ⚠ Build could not resolve {missing_tool} — reinstalling web dependencies...")
             _install_web_deps(silent=False)
             r2 = _run_with_idle_timeout([npm, "run", "build"], cwd=web_dir, env=build_env)
-        if r2.returncode != 0:
+        if r2.returncode != 0 and not _web_build_failed_to_compile((r2.stdout or "") + (r2.stderr or "")):
             # Retry once after a short delay — covers boot-time races on Windows
             # (antivirus scanning Node.js binaries, npm cache not ready, transient
             # I/O when launched via Scheduled Task at logon). See issue #23817.
@@ -5771,7 +5794,10 @@ def _do_build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
             f"  {'✗' if fatal else '⚠'} Web UI build failed"
             + ("" if fatal else " (robo web will not be available)")
         )
-        _relay(r2)
+        # The build's own output already streamed above; stderr only holds a
+        # launch failure (npm vanished between the lookup and the call).
+        if r2.stderr and r2.stderr.strip():
+            _say(r2.stderr.rstrip())
         if fatal:
             _say("  Run manually:  npm install --workspace web && npm run build -w web")
         return False
@@ -7988,7 +8014,7 @@ def _recover_core_update_marker_locked() -> None:
 
         uv_bin = ensure_uv()
         if uv_bin:
-            uv_env = {**os.environ, "VIRTUAL_ENV": str(PROJECT_ROOT / "venv")}
+            uv_env = {**os.environ, "VIRTUAL_ENV": str(_project_venv_dir())}
             if _is_termux_env(uv_env):
                 uv_env.pop("PYTHONPATH", None)
                 uv_env.pop("PYTHONHOME", None)
@@ -8010,21 +8036,7 @@ def _recover_core_update_marker_locked() -> None:
         # the exact manual recovery command in the meantime.
         logger.debug("Interrupted-install recovery failed: %s", exc)
         print("✗ Could not auto-recover the interrupted install.")
-        if self_locked:
-            print(
-                "  Robo is still running from the launcher that needs "
-                "replacing. Close other Robo windows, restart from a "
-                "different terminal, then run:"
-            )
-            print(f'    cd /d "{PROJECT_ROOT}"')
-            print(
-                f'    "{sys.executable}" -m pip install -e ".[all]"'
-            )
-        else:
-            print("  Recover manually with:")
-            print(f"    cd {PROJECT_ROOT}")
-            print(f"    {sys.executable} -m ensurepip --upgrade")
-            print(f"    {sys.executable} -m pip install -e '.[all]'")
+        print("  Close every Robo window, then run `robo update` to finish it.")
 
 
 def _windows_running_robo_launcher_locked() -> bool:
@@ -8071,7 +8083,7 @@ def _default_venv_install_target() -> tuple[list[str], dict[str, str] | None]:
     except Exception:
         uv_bin = None
     if uv_bin:
-        env = {**os.environ, "VIRTUAL_ENV": str(PROJECT_ROOT / "venv")}
+        env = {**os.environ, "VIRTUAL_ENV": str(_project_venv_dir())}
         if _is_termux_env(env):
             env.pop("PYTHONPATH", None)
             env.pop("PYTHONHOME", None)
@@ -8122,9 +8134,21 @@ def _is_windows() -> bool:
     return sys.platform == "win32"
 
 
+def _project_venv_dir() -> Path:
+    """The checkout's virtualenv: ``venv`` (managed installs) or ``.venv``.
+
+    ``install-robo.sh`` / ``install-robo.ps1`` create ``.venv``. Everything that
+    guards, repairs or reinstalls into the venv resolves it here, so a ``.venv``
+    install gets the same protection as a ``venv`` one.
+    """
+    from robo_cli.managed_uv import project_venv_dir
+
+    return project_venv_dir(PROJECT_ROOT)
+
+
 def _venv_scripts_dir() -> Path | None:
     """Return the venv Scripts directory if we're running inside the project venv."""
-    venv_dir = PROJECT_ROOT / "venv"
+    venv_dir = _project_venv_dir()
     if not venv_dir.is_dir():
         return None
     from robo_constants import venv_bin_dir
@@ -9246,6 +9270,41 @@ def cmd_update(args):
 
     gateway_mode = getattr(args, "gateway", False)
 
+    # Windows: a terminal `robo update` runs under the venv's robo.exe, which
+    # the dependency step must replace. Finish the update in a new window from
+    # the venv's python so robo.exe is free (see update_cmd.UPDATE_HANDOFF_ENV).
+    from robo_cli.update_cmd import (
+        UPDATE_HANDOFF_ENV,
+        _hand_off_update_to_new_window,
+        _launchers_running_this_update,
+        _pause_before_window_closes,
+        _reopen_desktop_after_update,
+        _wait_for_handoff_launcher,
+    )
+
+    handoff_pids = os.environ.pop(UPDATE_HANDOFF_ENV, "")
+    if getattr(args, "new_window", False) and _is_windows():
+        # Started detached by the desktop app, with no console of its own:
+        # continue in a new window once the app (whose pid it passed) exits.
+        app_pids = [int(pid) for pid in handoff_pids.split(",") if pid.strip().isdigit()]
+        argv = [arg for arg in sys.argv[1:] if arg != "--new-window"]
+        if _hand_off_update_to_new_window(argv, app_pids):
+            return
+        # No window: update here, still after the app has gone.
+    if handoff_pids:
+        if all(stream is not None and stream.isatty() for stream in (sys.stdin, sys.stdout)):
+            import atexit
+
+            # A console of its own: keep it open until the user has read it.
+            # (The desktop's update window reads our output through a pipe.)
+            # Registered first so it runs last, after every other exit handler.
+            atexit.register(_pause_before_window_closes)
+        _wait_for_handoff_launcher(handoff_pids)
+    elif not gateway_mode and sys.stdin is not None and sys.stdin.isatty():
+        launcher_pids = _launchers_running_this_update(_venv_scripts_dir())
+        if launcher_pids and _hand_off_update_to_new_window(sys.argv[1:], launcher_pids):
+            return
+
     # Protect against mid-update terminal disconnects (SIGHUP) and tolerate
     # writes to a closed stdout.  No-op in gateway mode.  See
     # _install_hangup_protection for rationale.
@@ -9262,17 +9321,27 @@ def cmd_update(args):
         describe_holder,
     )
 
+    reopen_desktop = getattr(args, "reopen_desktop", None)
     _update_lock = UpdateLock()
     if not _update_lock.acquire():
         print(describe_holder(_update_lock.holder))
         _finalize_update_output(_update_io_state)
+        if reopen_desktop:
+            _reopen_desktop_after_update(reopen_desktop, succeeded=False)
         sys.exit(UPDATE_EXIT_CONCURRENT)
 
+    succeeded = False
     try:
         _cmd_update_impl(args, gateway_mode=gateway_mode)
+        succeeded = True
+    except SystemExit as exc:
+        succeeded = exc.code in (0, None)
+        raise
     finally:
         _update_lock.release()
         _finalize_update_output(_update_io_state)
+        if reopen_desktop:
+            _reopen_desktop_after_update(reopen_desktop, succeeded=succeeded)
 
 
 def _coalesce_session_name_args(argv: list) -> list:

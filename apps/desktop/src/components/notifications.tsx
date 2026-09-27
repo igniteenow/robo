@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import {
   $notifications,
   type AppNotification,
-  clearNotifications,
+  clearAllNotifications,
   dismissNotification,
   type NotificationKind
 } from '@/store/notifications'
@@ -130,7 +130,7 @@ function TopCenterStack({
           <Button className="-ml-2" onClick={onToggleExpanded} size="xs" type="button" variant="text">
             {expanded ? copy.hide : copy.show} {copy.more(older.length)}
           </Button>
-          <Button className="-mr-2" onClick={clearNotifications} size="xs" type="button" variant="text">
+          <Button className="-mr-2" onClick={clearAllNotifications} size="xs" type="button" variant="text">
             {copy.clearAll}
           </Button>
         </div>

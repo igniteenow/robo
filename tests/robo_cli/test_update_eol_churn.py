@@ -8,18 +8,20 @@ installs, but checkouts created before that landed cannot receive the fix, so
 
 The pin and the cleanup are one operation: under ``autocrlf=true`` git compares
 normalized content, so the CRLF tree reads clean and pinning alone would expose
-the whole tree as modified. These tests pin down that coupling.
+the whole tree as modified. These tests pin down that coupling — including the
+common case where git's stat cache hides the CRLF copies even from a pinned
+``git diff``, which an earlier version missed and pinned anyway.
 """
 
 from __future__ import annotations
 
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
+from robo_cli import update_cmd
 from robo_cli.update_cmd import _normalize_managed_eol
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
@@ -75,6 +77,31 @@ def _managed_repo(tmp_path: Path, files: dict[str, bytes]) -> Path:
     return repo
 
 
+def _trusted_by_the_stat_cache(repo: Path, files) -> Path:
+    """Age the checkout the way a real install ages: git's index holds the CRLF
+    copies' size and time, and is newer than them, so git no longer re-reads
+    them. ``git diff`` then reports nothing even with the pin applied — the case
+    real installs are in, which the stat-stale fixture above can't show."""
+    import os as _os
+    import time as _time
+
+    past = _time.time() - 600
+    for name in files:
+        _os.utime(repo / name, (past, past))
+    _git(repo, "update-index", "-q", "--really-refresh")
+    return repo
+
+
+def _touch_all(repo: Path, files) -> None:
+    """Make git re-read every file, as antivirus, a backup tool or a copy would."""
+    import os as _os
+    import time as _time
+
+    later = _time.time() + 60
+    for name in files:
+        _os.utime(repo / name, (later, later))
+
+
 def _dirty(repo: Path) -> set[str]:
     out = subprocess.run(
         ["git", "-c", "core.autocrlf=false", "diff", "--name-only"],
@@ -84,6 +111,14 @@ def _dirty(repo: Path) -> set[str]:
         check=True,
     )
     return {line for line in out.stdout.splitlines() if line}
+
+
+def _status(repo: Path) -> str:
+    """What the user sees: ``git status``, which trusts a size change as an edit."""
+    out = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True, check=True
+    )
+    return out.stdout.strip()
 
 
 def _autocrlf(repo: Path) -> str:
@@ -114,6 +149,7 @@ def test_churn_invisible_under_autocrlf_true_is_still_found(tmp_path: Path) -> N
     _normalize_managed_eol(GIT_CMD, repo)
 
     assert _dirty(repo) == set()
+    assert _status(repo) == ""
     assert b"\r\n" not in (repo / "a.py").read_bytes()
     assert _autocrlf(repo) == "false"
 
@@ -124,6 +160,7 @@ def test_churn_is_cleared_and_the_pin_is_persisted(tmp_path: Path) -> None:
     _normalize_managed_eol(GIT_CMD, repo)
 
     assert _dirty(repo) == set()
+    assert _status(repo) == ""
     assert b"\r\n" not in (repo / "a.py").read_bytes()
     assert _autocrlf(repo) == "false"
 
@@ -136,6 +173,7 @@ def test_real_edits_survive_even_when_line_endings_also_flipped(tmp_path: Path) 
     _normalize_managed_eol(GIT_CMD, repo)
 
     assert _dirty(repo) == {"both.py"}
+    assert _status(repo) == "M both.py"
     assert (repo / "both.py").read_bytes() == b"z = 3\r\nz += 1\r\n"
     assert _autocrlf(repo) == "false"
 
@@ -150,35 +188,84 @@ def test_pin_alone_is_written_when_there_is_no_churn(tmp_path: Path) -> None:
     assert _autocrlf(repo) == "false"
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="shim needs a POSIX shell")
-def test_pin_is_withheld_when_the_churn_cannot_be_cleared(tmp_path: Path) -> None:
-    """If normalization can't finish, the checkout is left as found — pinning
-    anyway would surface churn we failed to clear."""
+def test_pin_is_withheld_when_the_churn_cannot_be_cleared(tmp_path: Path, monkeypatch) -> None:
+    """If normalization can't finish, the pin is withheld — pinning anyway
+    would surface churn we failed to clear."""
     repo = _managed_repo(tmp_path, {"a.py": b"x = 1\n"})
-    # Real git everywhere except the restore, which fails. Stands in for any
-    # reason it cannot finish: a git too old for --pathspec-from-file, an
-    # unwritable working tree, a file locked by a running process.
-    shim = tmp_path / "git-no-checkout"
-    shim.write_text(
-        '#!/bin/sh\nfor a in "$@"; do [ "$a" = checkout ] && exit 1; done\nexec git "$@"\n'
-    )
-    shim.chmod(0o755)
 
-    _normalize_managed_eol([str(shim)], repo)
+    def locked(src, dst):  # a file held open by a running process
+        raise PermissionError(13, "The process cannot access the file", str(dst))
+
+    monkeypatch.setattr(update_cmd.os, "replace", locked)
+
+    _normalize_managed_eol(GIT_CMD, repo)
 
     assert _autocrlf(repo) == "true"
-    assert b"\r\n" in (repo / "a.py").read_bytes()
+    assert (repo / "a.py").read_bytes() == b"x = 1\r\n"
+    assert sorted(p.name for p in repo.iterdir() if p.name != ".git") == ["a.py"]  # no temp left behind
 
 
-def test_already_pinned_checkout_is_untouched(tmp_path: Path) -> None:
-    repo = _managed_repo(tmp_path, {"a.py": b"x = 1\n"})
+def test_crlf_copies_hidden_by_the_stat_cache_are_still_rewritten(tmp_path: Path) -> None:
+    """The real-install case: nothing looks dirty, even to a pinned ``git diff``.
+
+    Pinning here without rewriting leaves every file CRLF on disk and git none
+    the wiser, until something touches the files and the whole tree reads as
+    modified (and ``git apply`` of any patch fails outright).
+    """
+    files = {"a.py": b"x = 1\ny = 2\n", "web/package.json": b'{\n  "name": "web"\n}\n'}
+    repo = _trusted_by_the_stat_cache(_managed_repo(tmp_path, files), files)
+    assert _dirty(repo) == set()  # invisible to git...
+    assert b"\r\n" in (repo / "a.py").read_bytes()  # ...but there
+
+    _normalize_managed_eol(GIT_CMD, repo)
+
+    for name, body in files.items():
+        assert (repo / name).read_bytes() == body
+    assert _autocrlf(repo) == "false"
+    assert _status(repo) == ""
+    _touch_all(repo, files)
+    assert _dirty(repo) == set()
+    assert _status(repo) == ""
+
+
+def test_a_checkout_pinned_by_an_earlier_version_is_repaired(tmp_path: Path) -> None:
+    """Pinned already, CRLF copies still on disk: what the earlier version left."""
+    files = {"a.py": b"x = 1\n", "b.md": b"# Title\n"}
+    repo = _trusted_by_the_stat_cache(_managed_repo(tmp_path, files), files)
     _git(repo, "config", "core.autocrlf", "false")
 
     _normalize_managed_eol(GIT_CMD, repo)
 
-    # Nothing to repair from this function's perspective: autocrlf is not true,
-    # so it must not start restoring files behind the user's back.
+    assert (repo / "a.py").read_bytes() == b"x = 1\n"
+    assert (repo / "b.md").read_bytes() == b"# Title\n"
+    assert _autocrlf(repo) == "false"
+    assert _status(repo) == ""
+    _touch_all(repo, files)
+    assert _status(repo) == ""
+
+
+def test_real_edits_on_a_pinned_checkout_are_left_alone(tmp_path: Path) -> None:
+    repo = _managed_repo(tmp_path, {"a.py": b"x = 1\n"})
+    _git(repo, "config", "core.autocrlf", "false")
+    (repo / "a.py").write_bytes(b"x = 1\r\nx += 1\r\n")
+
+    _normalize_managed_eol(GIT_CMD, repo)
+
+    assert (repo / "a.py").read_bytes() == b"x = 1\r\nx += 1\r\n"
     assert _dirty(repo) == {"a.py"}
+
+
+def test_files_the_repo_keeps_as_crlf_are_left_alone(tmp_path: Path) -> None:
+    repo = _managed_repo(tmp_path, {"a.py": b"x = 1\n", "run.bat": b"@echo off\r\n"})
+    (repo / ".gitattributes").write_bytes(b"*.bat text eol=crlf\n")
+    _git(repo, "-c", "core.autocrlf=false", "add", ".gitattributes")
+    _git(repo, "commit", "-m", "attributes")
+    before = (repo / "run.bat").read_bytes()
+
+    _normalize_managed_eol(GIT_CMD, repo)
+
+    assert (repo / "run.bat").read_bytes() == before
+    assert (repo / "a.py").read_bytes() == b"x = 1\n"
 
 
 def test_autocrlf_input_is_left_alone(tmp_path: Path) -> None:
@@ -203,6 +290,7 @@ def test_churn_across_more_files_than_fit_in_one_argv(tmp_path: Path) -> None:
     _normalize_managed_eol(GIT_CMD, repo)
 
     assert _dirty(repo) == set()
+    assert _status(repo) == ""
     assert _autocrlf(repo) == "false"
 
 

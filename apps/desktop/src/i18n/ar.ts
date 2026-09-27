@@ -1866,6 +1866,8 @@ export const ar = defineLocale({
     moreChanges: count => `+ ${count} تغيير${count === 1 ? '' : 'ات'} إضافي مُضمَّن.`,
     manualTitle: 'التحديث من الطرفية',
     manualBody: 'لقد ثبّتت Robo من سطر الأوامر، لذا تُجرى التحديثات من هناك أيضا. الصق هذا في طرفيتك:',
+    manualBodyWindows:
+      'لقد ثبّتت Robo من سطر الأوامر، لذا تُجرى التحديثات من هناك أيضا. أغلق Robo أولا، لأن Windows يقفل ملفاته أثناء تشغيله، ثم الصق هذا في PowerShell:',
     manualPickedUp: 'سيلتقط Robo الإصدار الجديد في المرة التالية التي تشغّله فيها.',
     guiSkewTitle: 'تحديث تطبيق سطح المكتب',
     guiSkewBody:

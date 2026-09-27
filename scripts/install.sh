@@ -1711,7 +1711,7 @@ setup_path() {
 
     if [ "$USE_VENV" = true ]; then
         ROBO_BIN="$INSTALL_DIR/venv/bin/python"
-        ROBO_ENTRYPOINT="$INSTALL_DIR/robo"
+        ROBO_ENTRYPOINT="$INSTALL_DIR/robo.py"
     else
         ROBO_BIN="$(which robo 2>/dev/null || echo "")"
         if [ -z "$ROBO_BIN" ]; then

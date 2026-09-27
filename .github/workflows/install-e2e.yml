@@ -10,7 +10,9 @@ name: Install & Update E2E
 # The starting versions are chosen at runtime from the repo's release tags
 # (scripts/sandbox/pick-release-tags.sh): newest, oldest, and a spread between.
 # A hardcoded list would stop covering the newest release the day after it
-# ships, and would pin an "oldest" that nobody still runs.
+# ships, and would pin an "oldest" that nobody still runs. Before the first
+# release there are no tags; the release legs are skipped, and a fresh install
+# of main (the fresh-install leg) still proves installing and updating work.
 #
 # Triggers:
 #   * every 12 hours, so upstream drift (a new uv, a Node bump, a PyPI change)
@@ -72,16 +74,30 @@ jobs:
           fetch-tags: true
           sparse-checkout: scripts/sandbox/pick-release-tags.sh
           sparse-checkout-cone-mode: false
+      # --allow-none: before the first release there is nothing to update
+      # from. The update legs are skipped then; the fresh-install leg below
+      # still runs, so install breakage never hides behind a missing tag.
       - id: pick
         run: |
           set -euo pipefail
-          tags="$(scripts/sandbox/pick-release-tags.sh --count '${{ inputs.tag-count || 5 }}')"
+          tags="$(scripts/sandbox/pick-release-tags.sh --allow-none --count '${{ inputs.tag-count || 5 }}')"
           echo "Testing updates from: $tags"
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
 
+  # A fresh install of main, updated to this commit. Needs no release tag, so
+  # it runs on every trigger -- including before the first release exists.
+  fresh-install:
+    if: github.event_name != 'workflow_dispatch' || inputs.route != 'installer'
+    uses: ./.github/workflows/install-e2e-run.yml
+    with:
+      route: update
+      install-ref: refs/heads/main
+
   # `robo update` -- the route most users take.
   update:
-    if: github.event_name != 'workflow_dispatch' || inputs.route != 'installer'
+    if: >-
+      needs.pick-releases.outputs.tags != '[]' &&
+      (github.event_name != 'workflow_dispatch' || inputs.route != 'installer')
     needs: pick-releases
     strategy:
       # One release breaking is worth knowing about even if another already
@@ -97,7 +113,9 @@ jobs:
   # Re-running the curl one-liner over an existing checkout: autostash + pull
   # rather than the updater's own git handling.
   installer:
-    if: github.event_name != 'workflow_dispatch' || inputs.route != 'update'
+    if: >-
+      needs.pick-releases.outputs.tags != '[]' &&
+      (github.event_name != 'workflow_dispatch' || inputs.route != 'update')
     needs: pick-releases
     strategy:
       fail-fast: false

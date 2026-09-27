@@ -5457,6 +5457,35 @@ def _emit_session_info_for_session(sid: str, session: dict) -> None:
         pass
 
 
+# How long sessions may still hear about an update after start-up. A check that
+# has to reach the network finishes within its own 15 s timeouts.
+_UPDATE_ANNOUNCE_WAIT_SECONDS = 60.0
+
+
+def _announce_update_when_known(wait: float = _UPDATE_ANNOUNCE_WAIT_SECONDS) -> None:
+    """Show "N updates behind" in sessions that started before the check answered.
+
+    A session's info carries the update check's answer only when it arrived
+    within half a second of the session starting. A check that has to reach
+    the network usually takes longer, so the session panel stayed silent
+    until a turn had finished. Once the answer is in, refresh every open
+    session's info so the notice shows straight away.
+    """
+    try:
+        from robo_cli.banner import get_update_result
+
+        behind = get_update_result(timeout=wait)
+    except Exception:
+        return
+    if not behind:  # None: unknown or switched off; 0: up to date
+        return
+    for sid, session in list(_sessions.items()):
+        _emit_session_info_for_session(sid, session)
+
+
+threading.Thread(target=_announce_update_when_known, name="robo-update-announce", daemon=True).start()
+
+
 # Tool Args/Result text shipped to the TUI for the verbose trail line. The TUI
 # renders only a small persisted preview (ui-tui VERBOSE_TRAIL_MAX_CHARS), kept
 # all session and expanded by default — so shipping more than that is pure pipe

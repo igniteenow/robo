@@ -252,6 +252,13 @@ def _update_line(result: Any, warn: str, dim: str) -> Optional[str]:
     return f"[bold {warn}]↑ {detail}[/] [{dim}]— run[/] [bold]{_esc(command)}[/]"
 
 
+def update_notice_markup(result: Any) -> Optional[str]:
+    """The banner's "↑ N updates behind — run robo update" line on its own,
+    for when the update check answers after the banner was drawn. ``None``
+    when there is nothing to say."""
+    return _update_line(result, _skin_color("ui_warn", "#F2B441"), _skin_color("banner_dim", "#8C91BD"))
+
+
 def build_welcome_banner(
     console: "Console",
     model: str,
@@ -262,8 +269,9 @@ def build_welcome_banner(
     get_toolset_for_tool=None,
     context_length: int = None,
     provider: str = None,
-) -> None:
-    """Print the start-up banner to ``console``."""
+) -> bool:
+    """Print the start-up banner to ``console``. True when it included the
+    update notice (the update check had answered in time)."""
     from rich.panel import Panel
     from rich.table import Table
 
@@ -397,6 +405,7 @@ def build_welcome_banner(
     welcome = _skin_branding("welcome", "")
     if welcome:
         console.print(f"  [{dim}]{_esc(welcome)}[/]")
+    return notice is not None
 
 
 def _strip_markup(line: str) -> str:

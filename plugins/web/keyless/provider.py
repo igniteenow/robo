@@ -1,7 +1,8 @@
 """Free web search and page reading — the no-key default.
 
 Search rotates across the anonymous free tiers of Exa, Parallel, Firecrawl
-and Keenable (:mod:`plugins.web.keyless.client`). Page reading starts with
+and Keenable (:mod:`plugins.web.keyless.client`), then tries DuckDuckGo when
+all four fail and the DuckDuckGo provider is available. Page reading starts with
 Robo's own reader (:mod:`tools.web_reader`, a direct fetch that sends the URL
 nowhere else) and hands only the pages it could not read — bot checks,
 JavaScript-only pages, refused requests — to the free hosted readers.
@@ -44,6 +45,32 @@ def _interrupted() -> bool:
         return False
 
 
+def _search_duckduckgo_instead(query: str, limit: int, failed: Dict[str, Any]) -> Dict[str, Any]:
+    """Last resort once every free service has failed: DuckDuckGo, when its
+    provider is installed (or can install itself). Without this a search
+    ended in an error even though DuckDuckGo was right there."""
+    try:
+        from agent.web_search_registry import get_provider
+
+        duckduckgo = get_provider("ddgs")
+        available = duckduckgo is not None and duckduckgo.is_available()
+    except Exception as exc:  # noqa: BLE001 — a broken fallback must not hide the real error
+        logger.debug("DuckDuckGo fallback unavailable: %s", exc)
+        return failed
+    if not available:
+        return failed
+
+    logger.info("All free search services failed; trying DuckDuckGo for %r", query)
+    try:
+        fallback = duckduckgo.search(query, limit)
+    except Exception as exc:  # noqa: BLE001
+        fallback = {"success": False, "error": f"{type(exc).__name__}: {exc}"}
+    if fallback.get("success") and (fallback.get("data") or {}).get("web"):
+        return fallback
+    reason = fallback.get("error") or "it found nothing either"
+    return {"success": False, "error": f"{failed.get('error', 'Search failed.')} DuckDuckGo was tried too: {reason}"}
+
+
 class KeylessWebProvider(WebSearchProvider):
     """Search and extract with no API key."""
 
@@ -67,7 +94,10 @@ class KeylessWebProvider(WebSearchProvider):
     def search(self, query: str, limit: int = 5) -> Dict[str, Any]:
         from plugins.web.keyless import client
 
-        return client.search(query, limit, interrupted=_interrupted)
+        result = client.search(query, limit, interrupted=_interrupted)
+        if result.get("success") or _interrupted():
+            return result
+        return _search_duckduckgo_instead(query, limit, result)
 
     async def extract(self, urls: List[str], **kwargs: Any) -> List[Dict[str, Any]]:
         from plugins.web.keyless import client
@@ -97,6 +127,6 @@ class KeylessWebProvider(WebSearchProvider):
         return {
             "name": "Free web search (no key)",
             "badge": "free · no key",
-            "tag": "Rotates across the free tiers of Exa, Parallel, Firecrawl and Keenable; Robo reads pages itself first",
+            "tag": "Rotates across the free tiers of Exa, Parallel, Firecrawl and Keenable, then DuckDuckGo; Robo reads pages itself first",
             "env_vars": [],
         }

@@ -1370,6 +1370,23 @@ def _notify_single_query_session_finalize(cli, *, reason: str = "shutdown") -> N
         _single_query_finalize_attempted_session_ids.add(session_id)
 
 
+def _declare_single_query_channel() -> None:
+    """Mark this thread's session as one that ends after a single reply.
+
+    ``chat -q`` prints one answer and exits, so a background subagent or a
+    notify-on-complete watcher would finish after nobody is left to read it.
+    Declaring the channel stateless makes those tools run inline instead,
+    exactly as ``robo -z`` does. ContextVars are per thread, so this must run
+    on the thread that runs the agent.
+    """
+    try:
+        from gateway.session_context import declare_stateless_channel
+
+        declare_stateless_channel()
+    except Exception:
+        logger.debug("Could not declare the one-shot channel", exc_info=True)
+
+
 def _finalize_single_query(cli) -> None:
     """Close one-shot CLI resources before releasing the active session lease."""
     try:
@@ -3949,6 +3966,61 @@ ROBO_AGENT_LOGO = """[bold #FFD700]██╗  ██╗███████╗�
 [#FFBF00]██╔══██║██╔══╝  ██╔══██╗██║╚██╔╝██║██╔══╝  ╚════██║╚════╝██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║[/]
 [#CD7F32]██║  ██║███████╗██║  ██║██║ ╚═╝ ██║███████╗███████║      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║[/]
 [#CD7F32]╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚══════╝      ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝[/]"""
+
+# How long a late update notice may still turn up after the banner. A check
+# that has to reach the network finishes within its own 15 s timeouts.
+_LATE_UPDATE_NOTICE_WAIT_SECONDS = 60.0
+# One waiting thread at a time: /clear redraws the banner, and two waiters
+# would print the notice twice.
+_late_update_notice_lock = threading.Lock()
+_late_update_notice_waiting = False
+
+
+def _show_update_notice_when_known(*, already_shown: bool, wait: float = _LATE_UPDATE_NOTICE_WAIT_SECONDS) -> None:
+    """Print "↑ N updates behind — run robo update" once the update check answers.
+
+    The banner only includes the notice when the check answered within half a
+    second of start-up; one that has to reach the network usually takes
+    longer, and the compact banner has no room for it at all. So when the
+    banner didn't show it, print it here — at once when the answer is already
+    in, otherwise from a background thread when it arrives.
+    """
+    if already_shown:
+        return
+    try:
+        from robo_cli.banner import get_update_result
+        from robo_cli.welcome_banner import update_notice_markup
+    except Exception:
+        return
+
+    def announce(timeout: float) -> None:
+        try:
+            markup = update_notice_markup(get_update_result(timeout=timeout))
+            if markup:
+                ChatConsole().print(markup)
+        except Exception:
+            logger.debug("late update notice failed", exc_info=True)
+
+    if get_update_result(timeout=0) is not None:
+        announce(0)
+        return
+
+    global _late_update_notice_waiting
+    with _late_update_notice_lock:
+        if _late_update_notice_waiting:
+            return
+        _late_update_notice_waiting = True
+
+    def wait_and_announce() -> None:
+        global _late_update_notice_waiting
+        try:
+            announce(wait)
+        finally:
+            with _late_update_notice_lock:
+                _late_update_notice_waiting = False
+
+    threading.Thread(target=wait_and_announce, name="robo-update-notice", daemon=True).start()
+
 
 def _build_compact_banner() -> str:
     """Build a compact banner that fits the current terminal width."""
@@ -7185,13 +7257,21 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             return
         self._tirith_security_checked = True
         try:
-            from tools.tirith_security import ensure_installed, is_platform_supported
+            from tools.tirith_security import (
+                ensure_installed,
+                install_in_progress,
+                is_platform_supported,
+            )
 
             tirith_path = ensure_installed(log_failures=False)
             if tirith_path is None and is_platform_supported():
                 security_cfg = self.config.get("security", {}) or {}
                 tirith_enabled = security_cfg.get("tirith_enabled", True)
-                if tirith_enabled:
+                # Stay silent while the first-run download is still going
+                # (it is not a failure yet) and in quiet mode, where stdout
+                # carries only the reply for scripts to read.
+                quiet = getattr(self, "tool_progress_mode", "full") == "off"
+                if tirith_enabled and not quiet and not install_in_progress():
                     _cprint(
                         f"  {_DIM}⚠ tirith security scanner enabled but not available "
                         f"— command scanning will use pattern matching only{_RST}"
@@ -7237,6 +7317,10 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         term_width = shutil.get_terminal_size().columns
         use_compact = self.compact or term_width < 80
         
+        notice_shown = False
+        # The full banner ends with the skin's welcome line; the compact one
+        # does not, so run() prints it only after a compact banner.
+        self._banner_shows_welcome = not use_compact
         if use_compact:
             self._console_print(_build_compact_banner())
             self._show_status()
@@ -7248,7 +7332,7 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             cwd = os.getenv("TERMINAL_CWD", os.getcwd())
             
             # Build and display the banner
-            build_welcome_banner(
+            notice_shown = bool(build_welcome_banner(
                 console=self.console,
                 model=self.model,
                 cwd=cwd,
@@ -7257,7 +7341,8 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                 session_id=self.session_id,
                 context_length=ctx_len,
                 provider=self.provider,
-            )
+            ))
+        _show_update_notice_when_known(already_shown=notice_shown)
         
         # Tool discovery is intentionally deferred on the Termux bare prompt
         # path; availability warnings are shown once tools are initialized.
@@ -8345,9 +8430,9 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
 
         if not silent:
             if title:
-                print(f"✓v New session started: {title}")
+                print(f"✓ New session started: {title}")
             else:
-                print("✓v New session started!")
+                print("✓ New session started!")
 
 
     def _consume_pending_resume_selection(self, text: str) -> bool:
@@ -8418,7 +8503,7 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                     "session_start": self.session_start.isoformat(),
                     "messages": self.conversation_history,
                 }, f, indent=2, ensure_ascii=False)
-            print(f"✓v Conversation snapshot saved to: {path}")
+            print(f"✓ Conversation snapshot saved to: {path}")
             if self.session_id:
                 print(f"       Resume the live session with: robo --resume {self.session_id}")
         except Exception as e:
@@ -13251,6 +13336,14 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         """
         import time as _time
 
+        # A one-shot `chat -q` run has no input area, so the question could
+        # never be shown or answered. Let the model decide right away (as
+        # `robo -z` does) instead of stalling for the whole timeout.
+        if getattr(self, "_single_query_mode", False):
+            from robo_cli.oneshot import _oneshot_clarify_callback
+
+            return _oneshot_clarify_callback(question, choices, multi_select)
+
         from tools.clarify_gateway import resolve_clarify_timeout
 
         # Canonical clarify timeout, shared with the gateway/TUI path. `<= 0`
@@ -14024,13 +14117,22 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                         text_queue.put(delta)
 
             # When voice mode is active, prepend a brief instruction so the
-            # model responds concisely. The prefix is API-call-local only —
+            # model leads with a spoken-friendly answer. The reply is also
+            # printed to the terminal, and the spoken audio is separately
+            # stripped of links/markdown (tts_text_normalize), so the note asks
+            # for real URLs and detail on screen when the user wants them rather
+            # than forbidding them outright. The prefix is API-call-local only —
             # run_conversation persists the original clean user message.
             _voice_prefix = ""
             if voice_input and isinstance(message, str):
                 _voice_prefix = (
-                    "[Voice input — respond concisely and conversationally, "
-                    "2-3 sentences max. No code blocks or markdown.] "
+                    "[Voice input — your reply is read aloud AND shown on "
+                    "screen. Lead with a warm, direct answer in two to four "
+                    "spoken sentences. When they ask for links, URLs, a list, "
+                    "prices or a comparison, include the real ones in full for "
+                    "the screen — the spoken version drops them automatically, "
+                    "so never spell a URL out or leave it off. Use your tools "
+                    "to look things up when asked.] "
                 )
 
             def run_agent():
@@ -14063,6 +14165,10 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
                 except Exception:
                     reset_current_session_key = None  # type: ignore[assignment]
                     _approval_session_token = None
+                # This thread starts with a fresh context, so the one-shot
+                # declaration made on the main thread does not reach it.
+                if getattr(self, "_single_query_mode", False):
+                    _declare_single_query_channel()
                 agent_message = _voice_prefix + message if _voice_prefix else message
                 # Prepend pending notes via _prepend_note_to_message, which
                 # handles both plain-string and multimodal content-parts list
@@ -15084,7 +15190,8 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         except Exception:
             _welcome_text = "Welcome to Robo Agent! Type your message or /help for commands."
             _welcome_color = "#FFF8DC"
-        self._console_print(f"[{_welcome_color}]{_welcome_text}[/]")
+        if not getattr(self, "_banner_shows_welcome", False):
+            self._console_print(f"[{_welcome_color}]{_welcome_text}[/]")
 
         # Warm the /model picker's provider-models cache off-thread during this
         # idle window (banner shown, user about to type). The no-args picker
@@ -16644,12 +16751,19 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
 
             return []
 
+        def _squeezable(rows):
+            # The agent thread can switch these rows on between prompt_toolkit
+            # measuring the layout and drawing it. A zero minimum lets that one
+            # frame drop the row instead of drawing a "Window too small" box;
+            # the next frame is measured again and shows it.
+            return Dimension(min=0, max=rows, preferred=rows)
+
         def get_hint_height():
             if cli_ref._sudo_state or cli_ref._secret_state or cli_ref._approval_state or cli_ref._slash_confirm_state or cli_ref._clarify_state or cli_ref._command_running:
-                return 1
+                return _squeezable(1)
             # Keep a spacer while the agent runs on roomy terminals, but reclaim
             # the row on narrow/mobile screens where every line matters.
-            return cli_ref._agent_spacer_height()
+            return _squeezable(cli_ref._agent_spacer_height())
 
         def get_spinner_text():
             spinner_line = cli_ref._render_spinner_text()
@@ -16658,7 +16772,7 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
             return [('class:hint', spinner_line)]
 
         def get_spinner_height():
-            return cli_ref._spinner_widget_height()
+            return _squeezable(cli_ref._spinner_widget_height())
 
         spinner_widget = Window(
             content=FormattedTextControl(get_spinner_text),
@@ -17957,7 +18071,7 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         # the worker thread on Windows).
         if getattr(self, '_pending_relaunch', None):
             from robo_cli.relaunch import relaunch
-            relaunch(self._pending_relaunch, preserve_inherited=False)
+            relaunch(self._pending_relaunch, preserve_inherited=False, same_install=True)
 
 
 # ============================================================================
@@ -18353,6 +18467,7 @@ def main(
         # agent must wait the full MCP cold-start bound before its first
         # (and only) tool snapshot. See #51316.
         cli._single_query_mode = True
+        _declare_single_query_channel()
         if not cli._claim_active_session("cli", stderr=bool(quiet)):
             sys.exit(1)
         try:

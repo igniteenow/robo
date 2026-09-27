@@ -26,7 +26,7 @@ import { Box, Text, useStdout } from '@robo/ink'
 import { useEffect, useState } from 'react'
 import unicodeSpinners from 'unicode-animations'
 
-import { CLI_NAME, WAKE_PHRASE } from '../brand.js'
+import { CLI_NAME, PRODUCT_NAME, WAKE_PHRASE } from '../brand.js'
 import { mix } from '../lib/color.js'
 import { flat } from '../lib/text.js'
 import type { Theme } from '../theme.js'
@@ -160,7 +160,27 @@ function homeShort(path: string): string {
   return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path
 }
 
+/**
+ * The session panel's update line, or null when there is nothing to say.
+ *
+ * `update_behind` is the backend's commit count: 0 when current, a positive
+ * count when behind, and -1 when behind by an amount it can't count (the
+ * installers make shallow clones, where this is the usual answer).
+ */
+export function updateNotice(behind: number | null | undefined): string | null {
+  if (typeof behind !== 'number' || behind === 0 || Number.isNaN(behind)) {
+    return null
+  }
+
+  if (behind < 0) {
+    return `\u2191 A newer ${PRODUCT_NAME} is available`
+  }
+
+  return `\u2191 ${behind} ${behind === 1 ? 'update' : 'updates'} behind`
+}
+
 export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
+  const updateLine = updateNotice(info.update_behind)
   const term = useStdout().stdout?.columns ?? 100
   const cols = Math.max(20, Math.min(term, maxWidth ?? term))
   const w = Math.max(20, cols - 4)
@@ -366,10 +386,10 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
 
       <Text />
 
-      {typeof info.update_behind === 'number' && info.update_behind > 0 && (
+      {updateLine && (
         <Text wrap="truncate-end">
           <Text bold color={t.color.warn}>
-            {`\u2191 ${info.update_behind} ${info.update_behind === 1 ? 'update' : 'updates'} behind`}
+            {updateLine}
           </Text>
           <Text color={t.color.muted}>{' \u2014 run '}</Text>
           <Text bold color={t.color.text}>

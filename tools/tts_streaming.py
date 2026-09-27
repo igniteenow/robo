@@ -72,12 +72,19 @@ SPEECH_INTERRUPTED_NOTE = (
 # clean transcript. Shapes the reply for the ear: lead with the answer, short,
 # plain sentences, no markup; still do the work when asked.
 SPOKEN_TURN_NOTE = (
-    "[Voice chat: the user is speaking with you and will hear your reply read "
-    "aloud. Answer the way you would out loud — warm, direct and precise. Lead "
-    "with the answer; two to four short sentences unless they ask for detail. "
-    "Plain spoken sentences only: no markdown, lists, headings, code or URLs. "
-    "If they ask you to do something, do it with your tools, then tell them "
-    "what you did in a sentence or two.]"
+    "[Voice chat: the user is speaking with you. Your reply is BOTH read aloud "
+    "AND shown on their screen. Lead with the answer, spoken naturally — warm, "
+    "direct and precise, two to four short sentences — so what they hear is a "
+    "clean summary. Then, when they ask for links, URLs, a list, a table, "
+    "prices, or a full comparison, put the real ones in your reply for the "
+    "screen: give complete, accurate URLs and details exactly as normal, and "
+    "never spell a URL out in words or omit it. The spoken version drops "
+    "links, tables and code automatically, so the details are for reading, not "
+    "hearing — you do not have to choose between a good spoken answer and "
+    "complete on-screen detail. Do real research with your tools when they ask "
+    "you to look something up, then tell them what you found in a sentence or "
+    "two and let the specifics sit on screen. If they ask you to do something, "
+    "do it with your tools, then say what you did.]"
 )
 _INTERRUPT_TTL_S = 120.0
 _interrupted_at: Optional[float] = None

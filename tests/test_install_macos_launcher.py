@@ -47,7 +47,9 @@ def test_venv_launcher_bypasses_uv_console_script_that_requires_realpath(tmp_pat
         venv_bin / "python",
         '#!/bin/sh\nprintf "%s\\n" "$@" > "$LAUNCH_RESULT"\n',
     )
-    (install_dir / "robo").write_text("# source entrypoint\n", encoding="utf-8")
+    # The launcher runs the checkout's Python entrypoint (the sibling `robo`
+    # file is a POSIX shell wrapper, which python cannot run).
+    (install_dir / "robo.py").write_text("# source entrypoint\n", encoding="utf-8")
     _make_executable(
         venv_bin / "robo",
         "#!/bin/sh\n"
@@ -84,6 +86,6 @@ def test_venv_launcher_bypasses_uv_console_script_that_requires_realpath(tmp_pat
 
     assert completed.returncode == 0, completed.stderr
     assert result.read_text(encoding="utf-8").splitlines() == [
-        str(install_dir / "robo"),
+        str(install_dir / "robo.py"),
         "--version",
     ]

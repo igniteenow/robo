@@ -43,6 +43,22 @@ describe('resolveVenvPython', () => {
     }
   })
 
+  it('finds a .venv install (install-robo.ps1) when there is no venv', () => {
+    const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'robo-vt-'))
+
+    try {
+      const scriptsDir = process.platform === 'win32' ? 'Scripts' : 'bin'
+      const pythonName = process.platform === 'win32' ? 'python.exe' : 'python3'
+      const dir = path.join(sandbox, '.venv', scriptsDir)
+      fs.mkdirSync(dir, { recursive: true })
+      const pyPath = path.join(dir, pythonName)
+      fs.writeFileSync(pyPath, '', { mode: 0o755 })
+      assert.equal(resolveVenvPython(sandbox), pyPath)
+    } finally {
+      fs.rmSync(sandbox, { recursive: true, force: true })
+    }
+  })
+
   it('returns null for non-existent venv', () => {
     assert.equal(resolveVenvPython('/nonexistent'), null)
   })

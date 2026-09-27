@@ -1041,6 +1041,15 @@ def _default_live_venv(root: Path) -> Path:
     return primary
 
 
+def project_venv_dir(project_root: Path | None = None) -> Path:
+    """Return the virtualenv a checkout runs from: ``venv`` or ``.venv``.
+
+    Public name for :func:`_default_live_venv`, so the updater, install
+    recovery and runtime repair all act on the same venv.
+    """
+    return _default_live_venv(Path(project_root) if project_root is not None else _PROJECT_ROOT)
+
+
 def _sweep_stale_runtime_backups(
     live: Path,
     *,

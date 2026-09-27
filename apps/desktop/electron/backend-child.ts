@@ -53,3 +53,57 @@ export function stopBackendChild(child: KillableChild | null | undefined, deps: 
     // Already gone.
   }
 }
+
+export interface ReleaseBackendsDeps {
+  /** Pids of every backend the app runs right now (primary + pool). Re-read on each pass. */
+  backendPids: () => number[]
+  /** Stop and forget the pool backends (profiles other than the window's). */
+  stopPoolBackends: () => void
+  /** Windows tree-kill (real: taskkill /T /F). */
+  forceKillProcessTree: (pid: number) => void
+  /** True while a live process still holds the venv's robo.exe. */
+  isShimLocked: () => boolean
+  sleep: (ms: number) => Promise<void>
+  now: () => number
+  timeoutMs?: number
+  pollMs?: number
+}
+
+/**
+ * Stop every backend the app owns and wait until the venv's robo.exe is free,
+ * so an update can replace it. Resolves to whether it came free in time.
+ *
+ * Each backend's whole process tree is killed while the backend itself is
+ * still alive: `taskkill /T` finds descendants through their parent, so the
+ * parent has to be there. A SIGTERM first (on Windows that is TerminateProcess
+ * of the direct child only, not a graceful stop) killed just the wrapper -- for
+ * a backend started through `robo.cmd`, cmd.exe -- and orphaned robo.exe and
+ * its python, which then held the shim until the update gave up.
+ */
+export async function releaseBackendsForUpdate(deps: ReleaseBackendsDeps): Promise<boolean> {
+  const timeoutMs = deps.timeoutMs ?? 15_000
+  const pollMs = deps.pollMs ?? 300
+
+  for (const pid of deps.backendPids()) {
+    deps.forceKillProcessTree(pid)
+  }
+
+  deps.stopPoolBackends()
+  const deadline = deps.now() + timeoutMs
+
+  while (deps.now() < deadline) {
+    if (!deps.isShimLocked()) {
+      return true
+    }
+
+    // A backend registered mid-teardown (a pool entry, a respawn) is killed
+    // on the next pass instead of trusting the first sweep.
+    for (const pid of deps.backendPids()) {
+      deps.forceKillProcessTree(pid)
+    }
+
+    await deps.sleep(pollMs)
+  }
+
+  return !deps.isShimLocked()
+}
