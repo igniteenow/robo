@@ -43,7 +43,7 @@ or a local model through Ollama or any OpenAI-compatible server.
 **Windows (PowerShell)**
 
 ```powershell
-git clone https://github.com/igniteenow/robo
+git clone https://github.com/igniteenow/robo.git
 cd robo
 Set-ExecutionPolicy -Scope Process Bypass
 .\install-robo.ps1
@@ -52,7 +52,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 **macOS · Linux · WSL**
 
 ```bash
-git clone https://github.com/igniteenow/robo
+git clone https://github.com/igniteenow/robo.git
 cd robo
 bash install-robo.sh
 ```
