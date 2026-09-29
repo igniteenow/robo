@@ -117,6 +117,57 @@ def _capture_head_sha(git_cmd, cwd) -> str | None:
     except (subprocess.CalledProcessError, OSError):
         return None
 
+def _backup_local_commits(git_cmd, cwd, branch: str) -> str | None:
+    """Save the commits the reset would drop on a ``robo-update-backup-*`` branch.
+
+    Called right before ``robo update`` resets a diverged checkout to
+    ``origin/<branch>``: commits reachable from HEAD but not from the remote
+    branch (the user's own, or old upstream history after a force-push).
+    Returns the backup branch name, or None when there is nothing to keep or
+    the branch could not be created. Never raises: a failed backup must not
+    stop the update (the reflog still has the commits, and the message says
+    so).
+    """
+    try:
+        count = subprocess.run(
+            git_cmd + ["rev-list", "--count", f"origin/{branch}..HEAD"],
+            cwd=cwd,
+            capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
+        )
+        local_commits = int((count.stdout or "0").strip() or "0") if count.returncode == 0 else 0
+    except Exception:
+        return None
+    if local_commits <= 0:
+        return None
+    name = f"robo-update-backup-{_time.strftime('%Y%m%d-%H%M%S')}"
+    try:
+        created = subprocess.run(
+            git_cmd + ["branch", name, "HEAD"],
+            cwd=cwd,
+            capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
+        )
+    except Exception:
+        created = None
+    if created is not None and created.returncode == 0:
+        print(
+            f"  ✓ Saved {local_commits} commit(s) that are not on origin/{branch} "
+            f"to branch {name}"
+        )
+        return name
+    try:
+        head = _capture_head_sha(git_cmd, cwd)
+        head_label = str(head)[:12] if head else "unknown"
+    except Exception:
+        head_label = "unknown"
+    print(
+        f"  ⚠ Could not save {local_commits} local commit(s) to a branch; "
+        f"recover them with: git reflog  (previous HEAD {head_label})"
+    )
+    return None
+
+
 def _validate_critical_files_syntax(root) -> tuple[bool, str | None, str | None]:
     """Compile each file in ``_UPDATE_CRITICAL_FILES`` to catch SyntaxErrors.
 
@@ -4169,6 +4220,10 @@ def _cmd_update_impl(args, gateway_mode: bool):
                 print(
                     "  ⚠ Fast-forward not possible (history diverged), resetting to match remote..."
                 )
+                # The reset below drops commits that exist only in this
+                # checkout. Keep them on a backup branch first so nothing
+                # committed locally is lost.
+                _backup_local_commits(git_cmd, _m().PROJECT_ROOT, branch)
                 reset_result = subprocess.run(
                     git_cmd + ["reset", "--hard", f"origin/{branch}"],
                     cwd=_m().PROJECT_ROOT,

@@ -275,7 +275,12 @@ if [ "$INSTALL_SHORTCUT" = true ]; then
   fi
   set -- bash -c '
     set +e
-    git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+    set -o pipefail
+    # The install shortcut runs the installer served at the canonical URL
+    # above (scripts/install.sh from the chosen ref), exactly like the user
+    # one-liner; it clones from the fake remote and takes the installer
+    # arguments passed after `--`.
+    curl -fsSL https://robo.igniteenow.com/install.sh | bash -s -- "$@"
     install_status=$?
     if [ "$install_status" -eq 0 ] && [ -f /work/promote-main ]; then
       next_main=$(cat /work/promote-main)

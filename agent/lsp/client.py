@@ -289,7 +289,13 @@ class LSPClient:
         return cmd
 
     async def _spawn(self) -> None:
-        env = dict(os.environ)
+        # Robo's own Node dirs at the END of PATH: npm-installed servers are
+        # node scripts (`#!/usr/bin/env node` / a .cmd shim that runs `node`)
+        # and the Windows installer does not put <ROBO_HOME>\node on PATH.
+        # Appended, so a Node already on PATH keeps being the one used.
+        from robo_constants import with_robo_node_path
+
+        env = with_robo_node_path(dict(os.environ), append=True)
         if self._env:
             env.update(self._env)
 

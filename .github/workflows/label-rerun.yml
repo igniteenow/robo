@@ -38,7 +38,7 @@ jobs:
           set -uo pipefail
 
           # Find the latest CI run for this PR's head SHA.
-          RUN_ID=$(gh run list \
+          RUN_INFO=$(gh run list \
             --repo "$REPO" \
             --commit "$HEAD_SHA" \
             --workflow ci.yml \
@@ -46,14 +46,15 @@ jobs:
             --json databaseId,status \
             --jq '.[0] | "\(.databaseId) \(.status)"' 2>/dev/null || true)
 
-          if [ -z "$RUN_ID" ]; then
+          if [ -z "$RUN_INFO" ]; then
             echo "No CI run found for this PR — nothing to rerun."
             exit 0
           fi
 
-          # Split "RUN_ID STATUS" into two vars.
-          RUN_ID="${RUN_ID%% *}"
-          STATUS="${RUN_ID##* }"
+          # Split "RUN_ID STATUS" into two vars (both from RUN_INFO, so the
+          # status is not read from the already-trimmed id).
+          RUN_ID="${RUN_INFO%% *}"
+          STATUS="${RUN_INFO##* }"
 
           echo "Latest CI run: $RUN_ID (status: $STATUS)"
 

@@ -31,7 +31,7 @@ description: "配置、扩展或贡献 Robo Agent"
 
 # Robo Agent
 
-Robo Agent 是一个开源 AI agent 框架，可在终端、消息平台和 IDE 中运行。它与 Claude Code（Anthropic）、Codex（OpenAI）同属一类——使用工具调用（tool calling）与系统交互的自主编码和任务执行 agent。Robo 支持任意 LLM 提供商（OpenRouter、Anthropic、OpenAI、DeepSeek、本地模型及 15+ 其他提供商），可在 Linux、macOS 和 WSL 上运行。
+Robo Agent 是一个 AI agent 框架，可在终端、消息平台和 IDE 中运行。它与 Claude Code（Anthropic）、Codex（OpenAI）同属一类——使用工具调用（tool calling）与系统交互的自主编码和任务执行 agent。Robo 支持任意 LLM 提供商（OpenRouter、Anthropic、OpenAI、DeepSeek、本地模型及 15+ 其他提供商），可在 Linux、macOS 和 WSL 上运行。
 
 Robo 的差异化特性：
 

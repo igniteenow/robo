@@ -2,7 +2,10 @@
 
 ## Before you begin
 
-- Use Python 3.11, 3.12, or 3.13.
+- Use Python 3.11, 3.12, or 3.13 (3.14 is not supported yet). Windows:
+  `winget install -e --id Python.Python.3.13`. macOS: `brew install python@3.13`.
+- Debian/Ubuntu also need the venv module and the tools the Node download uses:
+  `sudo apt install python3-venv curl xz-utils`.
 - Clone Robo into a **new directory**. Do not copy it over an older install;
   update an existing one with `robo update`.
 - Keep secrets in `~/.robo/.env` (Windows: `%USERPROFILE%\.robo\.env`).
@@ -45,7 +48,7 @@ Optional installer arguments:
 ```powershell
 git clone https://github.com/igniteenow/robo robo
 cd .\robo
-Set-ExecutionPolicy -Scope Process Bypass
+Set-ExecutionPolicy -Scope Process Bypass -Force
 .\install-robo.ps1
 ```
 
@@ -59,6 +62,14 @@ robo
 
 The PowerShell installer supports `-RoboHome`, `-Python`, `-Node`, `-BinDir`,
 `-SkipNode`, and `-NoPathUpdate`.
+
+It adds `robo` to your user PATH and, when no other Robo data folder exists,
+records `ROBO_HOME` for your user so the desktop app and the `robo` command use
+the same folder. `-NoPathUpdate` skips both.
+
+On Windows Server, and wherever PowerShell opens in the classic console window,
+run Robo in **Windows Terminal** (search "Terminal" in Start): the classic
+window's default font cannot draw some of Robo's symbols.
 
 ## Configure a model
 
@@ -136,8 +147,10 @@ robo update
 
 In the desktop app, click **Update now** when Robo says an update is ready: on
 Windows Robo closes, shows a progress window, and reopens when it is done.
-Your settings, memory, and skills in `.robo` are never overwritten, and local
-changes to the checkout are kept.
+Your settings, memory, and skills in `.robo` are never overwritten. Uncommitted
+changes to the checkout are set aside and put back; if you made your own commits
+and the history no longer lines up, they are kept on a `robo-update-backup-<date>`
+branch before the checkout is moved to the new version.
 
 ## Troubleshooting
 
@@ -148,6 +161,18 @@ as text. Run any Robo command, for example `robo --robo-version`; every Robo
 command resets the terminal on its way in. (If Robo is not installed yet:
 `printf '\033[?1003l\033[?1006l\033[?1000l'`.) Press Enter once to clear the
 line that was already typed.
+
+**The Windows install looks stuck.** If the window title starts with "Select",
+a click started a text selection and Windows paused the installer; press Esc.
+(The installer now turns click-to-select off while it runs.)
+
+**Symbols show as `?` in the Windows console.** The classic console window's
+font cannot draw them. Use Windows Terminal, or pick Consolas in the window's
+Properties > Font.
+
+**`'node' is not recognized` right after installing.** Open a new PowerShell
+window: the installer updates your user PATH, and windows that were already
+open do not see the change.
 
 **Red text during installation.** pip prints its errors in red. The installer
 puts the optional voice extras' output in `~/.robo/logs/install-extras.log` and

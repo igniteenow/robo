@@ -51,6 +51,8 @@ import Link from "@docusaurus/Link";
 
 ## 安装
 
+需要预先安装 `git` 和 Python 3.11、3.12 或 3.13。安装程序会自动准备 Node.js。
+
 **Linux / macOS / WSL2**
 
 ```bash
@@ -60,7 +62,10 @@ git clone https://github.com/igniteenow/robo robo && cd robo && bash install-rob
 **Windows（原生，PowerShell）** — _早期测试版，[详情 →](/user-guide/windows-native)_
 
 ```powershell
-iex (irm https://github.com/igniteenow/robo)
+git clone https://github.com/igniteenow/robo robo
+cd robo
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\install-robo.ps1
 ```
 
 **Android（Termux）** — 与 Linux 相同的 curl 一行命令；安装程序会自动检测 Termux。

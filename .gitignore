@@ -19,6 +19,13 @@ act/
 .env.production.local
 .env.development
 .env.test
+.env.production
+.env.staging
+.env.prod
+# Private settings files (MCP client configs with tokens, etc.)
+*.private.json
+# Stray pytest cache written with a relative cache dir
+/v/
 .robo-docker/
 .notebooklm-home/
 .notebooklm-cli-venv/

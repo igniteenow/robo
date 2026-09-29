@@ -400,7 +400,7 @@ def _format_browser_timeout_error(
         hints.append(
             "Chromium sandbox launch failed. Set AGENT_BROWSER_ARGS="
             "'--no-sandbox,--disable-dev-shm-usage' in your environment, "
-            "or run: npx agent-browser install --with-deps"
+            f"or run: npx agent-browser install{_deps_flag_hint()}"
         )
     elif command == "open" and _is_local_mode():
         if _running_in_docker():
@@ -413,8 +413,7 @@ def _format_browser_timeout_error(
             hints.append(
                 "The browser daemon may still be starting, or Chromium may be "
                 "missing system libraries. Install/repair with: "
-                "npx agent-browser install --with-deps "
-                "(or: npx playwright install --with-deps chromium)"
+                f"{_chromium_install_hint()}"
             )
     if hints:
         parts.extend(hints)
@@ -843,7 +842,22 @@ from robo_constants import is_termux as _is_termux_environment
 def _browser_install_hint() -> str:
     if _is_termux_environment():
         return "npm install -g agent-browser && agent-browser install"
-    return "npm install -g agent-browser && agent-browser install --with-deps"
+    return f"npm install -g agent-browser && agent-browser install{_deps_flag_hint()}"
+
+
+def _deps_flag_hint() -> str:
+    """`` --with-deps`` for install hints, except on Windows.
+
+    ``--with-deps`` installs Linux system libraries (apt); on Windows the
+    plain ``agent-browser install`` is the right command.
+    """
+    return "" if sys.platform == "win32" else " --with-deps"
+
+
+def _chromium_install_hint() -> str:
+    """Command line(s) to (re)install the Chromium build agent-browser drives."""
+    flag = _deps_flag_hint()
+    return f"npx agent-browser install{flag} (or: npx playwright install{flag} chromium)"
 
 
 def _requires_real_termux_browser_install(browser_cmd: str) -> bool:
@@ -1146,8 +1160,7 @@ def _run_chrome_fallback_command(
         else:
             hint = (
                 "Chrome fallback requires Chromium, but it is missing. Install it with: "
-                "npx agent-browser install --with-deps "
-                "(or: npx playwright install --with-deps chromium)"
+                f"{_chromium_install_hint()}"
             )
         return {"success": False, "error": hint}
 
@@ -1157,7 +1170,7 @@ def _run_chrome_fallback_command(
     # bare container), fall back to the bare name and let Popen raise with
     # a readable "FileNotFoundError: 'npx'" rather than WinError 193.
     if browser_cmd == "npx agent-browser":
-        _npx_bin = shutil.which("npx") or "npx"
+        _npx_bin = _npx_command()
         cmd_prefix = [_npx_bin, "agent-browser"]
     else:
         cmd_prefix = [browser_cmd]
@@ -2291,6 +2304,35 @@ def _agent_browser_candidate_present(path: str | None) -> bool:
     return os.path.exists(path) and (os.name == "nt" or os.access(path, os.X_OK))
 
 
+def _npx_command() -> str:
+    """npx for the ``npx agent-browser`` fallback.
+
+    PATH first, then the browser fallback dirs (Robo's own Node, which the
+    Windows installer does not put on PATH) - the same places
+    :func:`_find_agent_browser` accepted npx from. On Windows this resolves
+    ``npx.cmd`` so CreateProcess can run it; the bare name is the last resort
+    so a miss raises a readable FileNotFoundError.
+    """
+    return shutil.which("npx") or shutil.which("npx", path=_merge_browser_path("")) or "npx"
+
+
+def agent_browser_installed() -> bool:
+    """True when the agent-browser CLI is on disk where the browser tools look.
+
+    Same places as :func:`_find_agent_browser` - PATH, Robo's own Node
+    (``<ROBO_HOME>/node``, which the Windows installer does not put on PATH),
+    common bin dirs, and the repo's ``node_modules/.bin`` - minus the npx
+    on-demand fallback. Presence only: starts no process.
+    """
+    if shutil.which("agent-browser"):
+        return True
+    extended_path = _merge_browser_path("")
+    if extended_path and shutil.which("agent-browser", path=extended_path):
+        return True
+    local_bin_dir = Path(__file__).parent.parent / "node_modules" / ".bin"
+    return local_bin_dir.is_dir() and bool(shutil.which("agent-browser", path=str(local_bin_dir)))
+
+
 def _find_agent_browser(*, validate: bool = True) -> str:
     """
     Find the agent-browser CLI executable.
@@ -2494,8 +2536,7 @@ def _run_browser_command(
         else:
             hint = (
                 "Chromium browser is missing. Install it with: "
-                "npx agent-browser install --with-deps "
-                "(or: npx playwright install --with-deps chromium)"
+                f"{_chromium_install_hint()}"
             )
         logger.warning("browser command blocked: %s", hint)
         return {"success": False, "error": hint}
@@ -2538,7 +2579,7 @@ def _run_browser_command(
     # Only the synthetic npx fallback needs to expand into multiple argv items.
     # shutil.which resolves npx → npx.cmd on Windows; bare "npx" stays on POSIX.
     if browser_cmd == "npx agent-browser":
-        _npx_bin = shutil.which("npx") or "npx"
+        _npx_bin = _npx_command()
         cmd_prefix = [_npx_bin, "agent-browser"]
     else:
         cmd_prefix = [browser_cmd]
@@ -4725,6 +4766,64 @@ def _chromium_search_roots() -> List[str]:
     return roots
 
 
+def _agent_browser_downloaded_chrome() -> Optional[str]:
+    """Chrome that ``agent-browser install`` downloaded, if any.
+
+    agent-browser 0.26+ unpacks Chrome for Testing into
+    ``~/.agent-browser/browsers/chrome-<version>/`` and launches it from there
+    before looking anywhere else. Same layouts agent-browser itself accepts.
+    """
+    root = os.path.join(os.path.expanduser("~"), ".agent-browser", "browsers")
+    try:
+        entries = sorted(os.listdir(root), reverse=True)
+    except OSError:
+        return None
+    if sys.platform == "win32":
+        layouts = ("chrome.exe", os.path.join("chrome-win64", "chrome.exe"))
+    elif sys.platform == "darwin":
+        app = os.path.join(
+            "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"
+        )
+        layouts = (app, os.path.join("chrome-mac-arm64", app), os.path.join("chrome-mac-x64", app))
+    else:
+        layouts = ("chrome", os.path.join("chrome-linux64", "chrome"))
+    for entry in entries:
+        if not entry.startswith("chrome-"):
+            continue
+        for layout in layouts:
+            candidate = os.path.join(root, entry, layout)
+            if os.path.isfile(candidate):
+                return candidate
+    return None
+
+
+def _system_chrome_install_paths() -> List[str]:
+    """Installed Chrome/Brave locations agent-browser launches on Windows/macOS.
+
+    These installers do not put the browser on PATH, so a PATH lookup misses
+    them. (Linux browsers are found by name on PATH.)
+    """
+    if sys.platform == "win32":
+        paths: List[str] = []
+        local = os.environ.get("LOCALAPPDATA", "").strip()
+        if local:
+            paths.append(os.path.join(local, "Google", "Chrome", "Application", "chrome.exe"))
+            paths.append(
+                os.path.join(local, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")
+            )
+        paths.append(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+        paths.append(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe")
+        return paths
+    if sys.platform == "darwin":
+        return [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        ]
+    return []
+
+
 def _chromium_installed() -> bool:
     """Return True when a usable Chromium (or headless-shell) build is on disk.
 
@@ -4732,9 +4831,12 @@ def _chromium_installed() -> bool:
 
     1. ``AGENT_BROWSER_EXECUTABLE_PATH`` env var — the official way to point
        agent-browser at a pre-installed Chrome/Chromium.
-    2. System Chrome/Chromium in PATH (``google-chrome``, ``chromium``,
-       ``chromium-browser``, ``chrome``).
-    3. Playwright's browser cache (current logic) — directories containing
+    2. The Chrome that ``agent-browser install`` downloaded
+       (``~/.agent-browser/browsers``), which agent-browser launches first.
+    3. System Chrome/Chromium in PATH (``google-chrome``, ``chromium``,
+       ``chromium-browser``, ``chrome``), and on Windows/macOS the standard
+       Chrome/Brave install folders.
+    4. Playwright's browser cache (current logic) — directories containing
        ``chromium-*`` or ``chromium_headless_shell-*``.
 
     agent-browser (0.26+) downloads Playwright's chromium / headless-shell
@@ -4755,18 +4857,25 @@ def _chromium_installed() -> bool:
             _cached_chromium_installed = True
             return True
 
-    # 2. System Chrome/Chromium in PATH (common names)
+    # 2. Chrome downloaded by `agent-browser install` (what "Run setup" and the
+    #    lazy install fetch); agent-browser launches this one first.
+    if _agent_browser_downloaded_chrome():
+        _cached_chromium_installed = True
+        return True
+
+    # 3. System Chrome/Chromium in PATH (common names), then the standard
+    #    install folders agent-browser also launches from.
     system_chrome = (
         shutil.which("google-chrome")
         or shutil.which("chromium")
         or shutil.which("chromium-browser")
         or shutil.which("chrome")
     )
-    if system_chrome:
+    if system_chrome or any(os.path.isfile(p) for p in _system_chrome_install_paths()):
         _cached_chromium_installed = True
         return True
 
-    # 3. Playwright browser cache (legacy — chromium-* / chromium_headless_shell-* dirs)
+    # 4. Playwright browser cache (legacy — chromium-* / chromium_headless_shell-* dirs)
     for root in _chromium_search_roots():
         if not root or not os.path.isdir(root):
             continue
@@ -4826,7 +4935,7 @@ def _maybe_autoinstall_chromium() -> bool:
         return False
 
     if browser_cmd == "npx agent-browser":
-        install_cmd = [shutil.which("npx") or "npx", "-y", "agent-browser", "install"]
+        install_cmd = [_npx_command(), "-y", "agent-browser", "install"]
     else:
         install_cmd = [browser_cmd, "install"]
 
@@ -4834,13 +4943,17 @@ def _maybe_autoinstall_chromium() -> bool:
         "browser: Chromium missing — auto-installing the browser binary "
         "(one-time ~170MB; disable via security.allow_lazy_installs)"
     )
+    install_env = _build_browser_env()
+    # Same PATH the browser commands get: agent-browser's .cmd/.js shims call
+    # `node`, which may only exist in Robo's own Node dir.
+    install_env["PATH"] = _merge_browser_path(install_env.get("PATH", ""))
     try:
         proc = subprocess.run(
             install_cmd,
             capture_output=True,
             text=True, encoding='utf-8', errors='replace',
             timeout=600,
-            env=_build_browser_env(),
+            env=install_env,
         )
     except (OSError, subprocess.SubprocessError) as e:
         logger.warning("browser: Chromium auto-install failed to start: %s", e)
@@ -4988,8 +5101,8 @@ if __name__ == "__main__":
                     print("       docker pull ghcr.io/igniteenow/robo:latest")
                 else:
                     print("     Install it with:")
-                    print("       npx agent-browser install --with-deps")
-                    print("     Or:  npx playwright install --with-deps chromium")
+                    print(f"       npx agent-browser install{_deps_flag_hint()}")
+                    print(f"     Or:  npx playwright install{_deps_flag_hint()} chromium")
         except FileNotFoundError:
             print("   - agent-browser CLI not found")
             print(f"     Install: {_browser_install_hint()}")

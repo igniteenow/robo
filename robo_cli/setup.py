@@ -450,8 +450,8 @@ def _print_setup_summary(config: dict, robo_home):
         tool_status.append(("Web Search & Extract", False, "EXA_API_KEY, PARALLEL_API_KEY, FIRECRAWL_API_KEY/FIRECRAWL_API_URL, TAVILY_API_KEY, or SEARXNG_URL"))
 
     # Browser tools (local Chromium, Camofox, Browserbase, Browser Use, or Firecrawl)
-    import shutil as _shutil_browser_check
-    _agent_browser_installed = _shutil_browser_check.which("agent-browser") is not None
+    from robo_cli.igniteenow_subscription import _local_browser_runnable
+    _agent_browser_installed = _local_browser_runnable()
     _local_browser_ready = False
     if _agent_browser_installed:
         try:
@@ -470,8 +470,9 @@ def _print_setup_summary(config: dict, robo_home):
     else:
         tool_status.append(
             ("Browser Automation", False,
-             "npm install -g agent-browser && agent-browser install --with-deps, "
-             "or set CAMOFOX_URL / BROWSER_USE_API_KEY / BROWSERBASE_API_KEY+BROWSERBASE_PROJECT_ID")
+             "npm install -g agent-browser && agent-browser install"
+             + ("" if sys.platform == "win32" else " --with-deps")
+             + ", or set CAMOFOX_URL / BROWSER_USE_API_KEY / BROWSERBASE_API_KEY+BROWSERBASE_PROJECT_ID")
         )
 
     # Image generation — FAL, or any plugin-registered provider (OpenAI, etc.)

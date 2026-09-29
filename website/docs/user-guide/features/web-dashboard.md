@@ -902,7 +902,7 @@ ROBO_DASHBOARD_OIDC_CLIENT_ID=robo-dashboard \
 robo dashboard --host 0.0.0.0
 
 # No IdP? The username/password provider gates the same way:
-ROBO_DASHBOARD_BASIC_AUTH_USERNAME=ahmad ROBO_DASHBOARD_BASIC_AUTH_PASSWORD=… \
+ROBO_DASHBOARD_BASIC_AUTH_USERNAME=alice ROBO_DASHBOARD_BASIC_AUTH_PASSWORD=… \
   robo dashboard --host 0.0.0.0
 
 # Hit /api/status to see the gate state:

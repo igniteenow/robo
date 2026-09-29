@@ -44,7 +44,7 @@
 ```powershell
 git clone https://github.com/igniteenow/robo
 cd robo
-Set-ExecutionPolicy -Scope Process Bypass
+Set-ExecutionPolicy -Scope Process Bypass -Force
 .\install-robo.ps1
 ```
 
@@ -62,7 +62,8 @@ bash install-robo.sh
 
 <div dir="rtl">
 
-پھر **نیا ٹرمینل کھولیں** (انسٹالر `robo` کو آپ کے PATH میں شامل کرتا ہے) اور اپنا ماڈل منتخب کریں:
+پھر **نیا ٹرمینل کھولیں** اور اپنا ماڈل منتخب کریں۔ Windows پر انسٹالر `robo` کو آپ کے PATH میں شامل کرتا ہے؛
+macOS اور Linux پر اگر `~/.local/bin` ابھی PATH میں نہیں ہے تو انسٹالر وہ لائن بتا دیتا ہے جو شامل کرنی ہے۔
 
 </div>
 
@@ -73,7 +74,7 @@ robo              # start chatting
 
 <div dir="rtl">
 
-صرف `git` پہلے سے ہونا ضروری ہے۔ انسٹالر Python اور Node خود سیٹ اپ کرتا ہے اور آپ کی کنفیگریشن، میموری یا اسکلز کو کبھی اوور رائٹ نہیں کرتا۔
+پہلے سے `git` اور Python 3.11، 3.12 یا 3.13 ہونا ضروری ہے (3.14 ابھی سپورٹڈ نہیں)۔ انسٹالر Node خود سیٹ اپ کرتا ہے اور آپ کی کنفیگریشن، میموری یا اسکلز کو کبھی اوور رائٹ نہیں کرتا۔
 Debian/Ubuntu پر آواز کے لیے یہ بھی چاہیے: `sudo apt install libportaudio2`۔
 اگر کچھ ٹھیک نہ لگے تو `robo doctor` چلائیں۔
 

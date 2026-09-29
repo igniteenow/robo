@@ -128,6 +128,20 @@ def _node_available() -> bool:
         return False
 
 
+def _npm_for_audit() -> str | None:
+    """npm on PATH, else the one in Robo's own Node dir (not on PATH on
+    Windows installs). File check only - doctor must not download anything."""
+    found = _safe_which("npm")
+    if found:
+        return found
+    try:
+        from robo_constants import find_robo_node_file
+
+        return find_robo_node_file("npm")
+    except Exception:
+        return None
+
+
 def _termux_browser_setup_steps(node_installed: bool) -> list[str]:
     steps: list[str] = []
     step = 1
@@ -2064,10 +2078,10 @@ def run_doctor(args):
                             "(browser_* tools will be hidden from the agent)",
                         )
                         if sys.platform == "win32":
-                            check_info(
-                                f"Install with: cd {PROJECT_ROOT} && "
-                                "npx playwright install chromium"
-                            )
+                            # agent-browser's own installer puts Chrome where
+                            # agent-browser looks (and `&&` is not valid in
+                            # Windows PowerShell 5.1).
+                            check_info("Install with: robo tools post-setup agent_browser")
                         else:
                             check_info(
                                 f"Install with: cd {PROJECT_ROOT} && "
@@ -2083,7 +2097,7 @@ def run_doctor(args):
         check_warn("Node.js not found", "(optional, needed for browser tools)")
     
     # npm audit for all Node.js packages
-    _npm_bin = _safe_which("npm")
+    _npm_bin = _npm_for_audit()
     if _npm_bin:
         # Each entry: (cwd, label, extra_audit_args)
         # PROJECT_ROOT is audited with --workspaces=false so that the apps/*
@@ -2115,10 +2129,15 @@ def run_doctor(args):
             try:
                 # Use resolved absolute path so Windows can execute
                 # npm.cmd (CreateProcessW can't run bare .cmd names).
+                from robo_constants import with_robo_node_path
+
                 audit_result = subprocess.run(
                     [_npm_bin, "audit", "--json", *audit_extra],
                     cwd=str(npm_dir),
                     capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30,
+                    # npm is a node script; Robo's Node goes last on PATH so
+                    # a Node already on PATH keeps being the one used.
+                    env=with_robo_node_path(append=True),
                 )
                 import json as _json
                 audit_data = _json.loads(audit_result.stdout) if audit_result.stdout.strip() else {}

@@ -88,7 +88,7 @@ Robo auto-detects local endpoints and relaxes streaming timeouts (read timeout r
 
 ### How much does it cost?
 
-Robo Agent itself is **free and open-source** (MIT license). You pay only for the LLM API usage from your chosen provider. Local models are completely free to run.
+Robo Agent is distributed under the MIT license. Model usage is billed by the LLM provider you choose; running a local model has no API cost.
 
 ### Can multiple people use one instance?
 

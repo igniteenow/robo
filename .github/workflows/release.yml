@@ -84,7 +84,7 @@ jobs:
           ```powershell
           git clone https://github.com/igniteenow/robo
           cd robo
-          Set-ExecutionPolicy -Scope Process Bypass
+          Set-ExecutionPolicy -Scope Process Bypass -Force
           .\install-robo.ps1
           ```
 

@@ -49,7 +49,13 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 if [ -z "$PYTHON_BIN" ] || ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if (3,11) <= sys.version_info[:2] < (3,14) else 1)' 2>/dev/null; then
-    printf '%s\n' 'Robo requires Python 3.11, 3.12, or 3.13.' >&2
+    printf '%s\n' \
+        'Robo requires Python 3.11, 3.12, or 3.13 (3.14 is not supported yet).' \
+        'Install one, then run this installer again:' \
+        '  macOS:          brew install python@3.13' \
+        '  Debian/Ubuntu:  sudo apt install python3 python3-venv' \
+        '  Fedora:         sudo dnf install python3.13' \
+        'Or point the installer at one:  bash install-robo.sh --python /path/to/python3.13' >&2
     exit 1
 fi
 
@@ -81,9 +87,23 @@ if [ -f "$ROOT/.env" ] && [ ! -f "$ROBO_HOME/.env" ]; then
 fi
 
 VENV="$ROOT/.venv"
+
+create_venv() {
+    if ! "$PYTHON_BIN" -m venv "$VENV"; then
+        # Debian/Ubuntu split venv/ensurepip into a separate package; the
+        # failed attempt leaves a half-made environment behind, so remove it.
+        rm -rf "$VENV"
+        printf '%s\n' \
+            'Could not create the Python environment.' \
+            'On Debian/Ubuntu install the venv module, then run this installer again:' \
+            '  sudo apt install python3-venv' >&2
+        exit 1
+    fi
+}
+
 if [ ! -x "$VENV/bin/python" ]; then
     printf 'Creating Robo Python environment...\n'
-    "$PYTHON_BIN" -m venv "$VENV"
+    create_venv
 fi
 
 # A .venv created by uv (developers running the test suite) ships without
@@ -94,7 +114,7 @@ if ! "$VENV/bin/python" -m pip --version >/dev/null 2>&1; then
     if ! "$VENV/bin/python" -m ensurepip --upgrade >/dev/null 2>&1; then
         printf 'Recreating the Robo Python environment...\n'
         rm -rf "$VENV"
-        "$PYTHON_BIN" -m venv "$VENV"
+        create_venv
     fi
 fi
 
@@ -134,11 +154,18 @@ fi
 if [ "$SKIP_NODE" = false ]; then
     # Upstream's audited dependency helper installs a managed Node runtime
     # only when the machine does not already have a compatible one.
-    bash "$ROOT/scripts/install.sh" \
+    if ! bash "$ROOT/scripts/install.sh" \
         --ensure node \
         --robo-home "$ROBO_HOME" \
         --dir "$ROOT" \
-        --non-interactive
+        --non-interactive; then
+        printf '%s\n' \
+            'Could not install Node.js (the terminal UI and browser tools need it).' \
+            'On Debian/Ubuntu the download needs curl and xz-utils:' \
+            '  sudo apt install curl xz-utils' \
+            'Then run this installer again, or pass an existing Node 22.22+:  --node /path/to/node' >&2
+        exit 1
+    fi
 fi
 
 BIN_DIR="${ROBO_BIN_DIR:-$HOME/.local/bin}"
@@ -160,5 +187,15 @@ fi
 "$VENV/bin/robo" --robo-version
 printf '\nRobo installed. Start it with:\n  robo\n\n'
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
-    printf 'Add this directory to PATH, then open a new terminal:\n  %s\n' "$BIN_DIR"
+    case "${SHELL:-}" in
+        */zsh) RC_FILE="$HOME/.zshrc" ;;
+        */fish) RC_FILE="" ;;
+        *) RC_FILE="$HOME/.bashrc" ;;
+    esac
+    printf '%s is not on your PATH yet. Add it, then open a new terminal:\n' "$BIN_DIR"
+    if [ -n "$RC_FILE" ]; then
+        printf "  echo 'export PATH=\"%s:\$PATH\"' >> %s\n" "$BIN_DIR" "$RC_FILE"
+    else
+        printf '  fish_add_path %s\n' "$BIN_DIR"
+    fi
 fi

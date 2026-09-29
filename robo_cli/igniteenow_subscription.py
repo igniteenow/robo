@@ -109,9 +109,20 @@ def ensure_igniteenow_portal_access(*_args, **_kwargs) -> bool:
 
 def _local_browser_runnable() -> bool:
     """Genuinely generic check (not Ignitee Now-specific) — is the agent-browser
-    CLI actually installed and runnable."""
-    import shutil
-    return shutil.which("agent-browser") is not None
+    CLI actually installed and runnable.
+
+    Looks where the browser tools look (PATH, Robo's own Node dir, the repo's
+    node_modules/.bin), not PATH alone: the Windows installer and the
+    "Run setup" hook put agent-browser in places that are not on PATH.
+    """
+    try:
+        from tools.browser_tool import agent_browser_installed
+
+        return agent_browser_installed()
+    except Exception:
+        import shutil
+
+        return shutil.which("agent-browser") is not None
 
 
 def _has_agent_browser() -> bool:

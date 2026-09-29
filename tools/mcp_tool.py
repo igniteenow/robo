@@ -688,9 +688,9 @@ def _resolve_stdio_command(command: str, env: dict) -> tuple[str, dict]:
                 os.path.join(os.sep, "usr", "local", "bin", resolved_command),
             ]
             if sys.platform == "win32":
-                # install-robo.ps1 unpacks portable Node straight into
-                # <ROBO_HOME>\node (node.exe, npm.cmd, npx.cmd) and does not
-                # add that folder to PATH.
+                # The Windows installer unpacks portable Node straight into
+                # <ROBO_HOME>\node (node.exe, npm.cmd, npx.cmd); a filtered
+                # MCP PATH or a window opened before the install lacks it.
                 win_name = {"npx": "npx.cmd", "npm": "npm.cmd", "node": "node.exe"}[
                     resolved_command
                 ]

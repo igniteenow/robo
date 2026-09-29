@@ -6,6 +6,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -21,15 +22,29 @@ from tools.environments.file_sync import (
 logger = logging.getLogger(__name__)
 
 
+def _openssh_install_hint() -> str:
+    if sys.platform == "win32":
+        return (
+            "Add the Windows 'OpenSSH Client' optional feature "
+            "(Settings > System > Optional features), or run as admin: "
+            "Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0"
+        )
+    if sys.platform == "darwin":
+        return "OpenSSH ships with macOS; check that /usr/bin is on PATH"
+    return "apt install openssh-client"
+
+
 def _ensure_ssh_available() -> None:
     """Fail fast with a clear error when the SSH client is unavailable."""
     if not shutil.which("ssh"):
         raise RuntimeError(
-            "SSH is not installed or not in PATH. Install OpenSSH client: apt install openssh-client"
+            "SSH is not installed or not in PATH. Install OpenSSH client: "
+            + _openssh_install_hint()
         )
     if not shutil.which("scp"):
         raise RuntimeError(
-            "SCP is not installed or not in PATH. Install OpenSSH client: apt install openssh-client"
+            "SCP is not installed or not in PATH. Install OpenSSH client: "
+            + _openssh_install_hint()
         )
 
 
