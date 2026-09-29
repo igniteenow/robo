@@ -337,3 +337,25 @@ def test_update_autostash_survives_undeletable_untracked_dir(tmp_path):
         assert (pkg / "robo-engineer.rb").read_text() == "formula\n"
     finally:
         os.chmod(pkg, 0o755)
+
+
+# ---------------------------------------------------------------------------
+# Diverged history: local commits are kept on a backup branch before reset
+# ---------------------------------------------------------------------------
+
+def test_cmd_update_backs_up_local_commits_before_reset(monkeypatch, tmp_path, capsys):
+    _setup_update_mocks(monkeypatch, tmp_path)
+    # reset_fails stops the update right after the reset, which is all this
+    # test needs to see.
+    side_effect, recorded = _make_update_side_effect(ff_only_fails=True, reset_fails=True)
+    monkeypatch.setattr(robo_main.subprocess, "run", side_effect)
+
+    with pytest.raises(SystemExit):
+        robo_main.cmd_update(SimpleNamespace())
+
+    joined = [" ".join(str(c) for c in cmd) for cmd in recorded]
+    backup = [i for i, c in enumerate(joined) if " branch robo-update-backup-" in c and c.endswith(" HEAD")]
+    reset = [i for i, c in enumerate(joined) if "reset" in c and "--hard" in c]
+    assert backup and reset
+    assert backup[0] < reset[0]
+    assert "to branch robo-update-backup-" in capsys.readouterr().out

@@ -385,6 +385,18 @@ def _augment_path_with_known_tools() -> None:
         os.path.join(local_appdata, "Microsoft", "WinGet", "Links"),
     ]
 
+    # scripts/install.ps1 installs PortableGit into $RoboHome\git; with a
+    # custom ROBO_HOME that is not under %LOCALAPPDATA%\robo, so check it first.
+    robo_home = os.environ.get("ROBO_HOME", "").strip()
+    if robo_home:
+        home_git = [
+            os.path.join(robo_home, "git", "cmd"),
+            os.path.join(robo_home, "git", "bin"),
+            os.path.join(robo_home, "git", "usr", "bin"),
+        ]
+        known = {d.lower() for d in candidate_dirs}
+        candidate_dirs = [d for d in home_git if d.lower() not in known] + candidate_dirs
+
     existing = os.environ.get("PATH", "")
     existing_lower = {p.lower() for p in existing.split(os.pathsep) if p}
     prepend = []

@@ -120,6 +120,32 @@ def _default_input_samplerate(sd) -> int:
 from robo_constants import is_termux as _is_termux_environment
 
 
+def _pip_available() -> bool:
+    try:
+        import importlib.util
+
+        return importlib.util.find_spec("pip") is not None
+    except Exception:
+        return True
+
+
+def _windows_pip_install_command(args: str) -> str:
+    """Install command for the Python Robo runs on, for Windows hints.
+
+    Uses the running interpreter's own pip, never whichever ``pip`` is first
+    on PATH. A path without spaces is left unquoted so the command works in
+    PowerShell and cmd alike; one with spaces gets PowerShell's call
+    operator. A venv made by ``uv venv`` (the scripted installer) has no pip
+    until ``ensurepip`` runs.
+    """
+    exe = sys.executable
+    py = f'& "{exe}"' if " " in exe else exe
+    install = f"{py} -m pip install {args}"
+    if not _pip_available():
+        return f"{py} -m ensurepip --upgrade, then {install}"
+    return install
+
+
 def _voice_capture_install_hint() -> str:
     if _is_termux_environment():
         return "pkg install python-numpy portaudio && python -m pip install sounddevice"
@@ -131,6 +157,9 @@ def _voice_capture_install_hint() -> str:
     # index. Point them at the actual interpreter pip is sitting next to.
     try:
         if sys.prefix != getattr(sys, "base_prefix", sys.prefix):
+            if sys.platform == "win32":
+                # Windows venvs keep pip in Scripts\, not bin/.
+                return _windows_pip_install_command("sounddevice numpy")
             pip_in_venv = Path(sys.prefix) / "bin" / "pip"
             if pip_in_venv.exists():
                 return f"{pip_in_venv} install sounddevice numpy"
@@ -404,6 +433,13 @@ def detect_audio_environment() -> dict:
             warnings.append(
                 "PortAudio system library not found -- install it first:\n"
                 "  Termux: pkg install portaudio\n"
+                "Then retry /voice on."
+            )
+        elif sys.platform == "win32":
+            warnings.append(
+                "PortAudio library not found -- it ships inside the sounddevice "
+                "package on Windows; reinstall it:\n"
+                f"  {_windows_pip_install_command('--force-reinstall sounddevice')}\n"
                 "Then retry /voice on."
             )
         else:
@@ -1273,6 +1309,12 @@ class AudioRecorder:
             # instead of misreporting missing Python packages (#18432).
             if _is_termux_environment():
                 portaudio_hint = "  Termux: pkg install portaudio"
+            elif sys.platform == "win32":
+                # The Windows sounddevice wheel bundles the PortAudio DLL.
+                portaudio_hint = (
+                    "  Windows: "
+                    + _windows_pip_install_command("--force-reinstall sounddevice")
+                )
             else:
                 portaudio_hint = (
                     "  Linux:  sudo apt-get install libportaudio2\n"

@@ -916,7 +916,7 @@ def _perform_uninstall(
         print()
         print("To reinstall later with your existing settings:")
         if _is_windows():
-            print(color("  iex (irm https://github.com/igniteenow/robo)", Colors.DIM))
+            print(color("  git clone https://github.com/igniteenow/robo robo; cd robo; powershell -ExecutionPolicy Bypass -File .\\install-robo.ps1", Colors.DIM))
         else:
             print(color("  git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh", Colors.DIM))
         print()
@@ -957,6 +957,16 @@ def main(argv=None) -> int:
     system Python with no site-packages from the venv.
     """
     import argparse
+
+    # Run by hand in the classic Windows console, colored output would print
+    # as raw escape codes unless VT processing is on. robo_cli.stdio is
+    # stdlib-only; a failure here must never block the uninstall.
+    try:
+        from robo_cli.stdio import enable_windows_vt_mode
+
+        enable_windows_vt_mode()
+    except Exception:
+        pass
 
     parser = argparse.ArgumentParser(prog="python -m robo_cli.uninstall")
     parser.add_argument(

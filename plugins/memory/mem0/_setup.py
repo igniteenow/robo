@@ -618,6 +618,13 @@ def _ensure_ollama(models: list[str]) -> bool:
     """
     url = "http://localhost:11434"
     ollama_bin = shutil.which("ollama")
+    if not ollama_bin and sys.platform == "win32":
+        # The Windows installer adds this folder to the *User* PATH only, which
+        # a terminal opened before the install does not have yet.
+        local_appdata = os.environ.get("LOCALAPPDATA", "")
+        candidate = os.path.join(local_appdata, "Programs", "Ollama", "ollama.exe")
+        if local_appdata and os.path.isfile(candidate):
+            ollama_bin = candidate
     ok, _ = _check_ollama(url)
 
     if not ok:
@@ -636,8 +643,11 @@ def _ensure_ollama(models: list[str]) -> bool:
                 print(f"  Could not start Ollama: {e}")
         else:
             print("  Ollama not found. Install it:")
-            print("    curl -fsSL https://ollama.com/install.sh | sh")
-            print("  Or on macOS: brew install ollama")
+            if sys.platform == "win32":
+                print("    winget install Ollama.Ollama   (or download from https://ollama.com/download)")
+            else:
+                print("    curl -fsSL https://ollama.com/install.sh | sh")
+                print("  Or on macOS: brew install ollama")
             return False
 
     if not ok:

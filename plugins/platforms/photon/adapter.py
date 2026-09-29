@@ -401,12 +401,54 @@ def _is_timeout_error(exc: BaseException) -> bool:
     return "timeout" in type(exc).__name__.lower()
 
 
+def _resolve_node_tool(name: str) -> Optional[str]:
+    """Find ``node``/``npm`` for the sidecar: PATH first, then Robo's own Node.
+
+    The Windows installer keeps Robo's Node in ``<ROBO_HOME>\\node`` without
+    putting it on PATH, so a PATH-only lookup reports it missing. File check
+    only: check_requirements() runs on status probes, so this must not start
+    processes or repair a Node install.
+    """
+    found = shutil.which(name)
+    if found:
+        return found
+    try:
+        from robo_constants import find_robo_node_file
+
+        return find_robo_node_file(name)
+    except Exception:
+        return None
+
+
+def _node_tool_env(env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    """``env`` (default: this process) with Robo's Node dirs at the end of PATH.
+
+    npm install scripts and the sidecar call ``node`` by name. Appended, so a
+    Node already on PATH keeps being the one used.
+    """
+    base = dict(os.environ if env is None else env)
+    try:
+        from robo_constants import with_robo_node_path
+
+        return with_robo_node_path(base, append=True)
+    except Exception:
+        return base
+
+
+def _node_bin_for_sidecar() -> Optional[str]:
+    """``PHOTON_NODE_BIN`` when set (unchanged semantics), else the resolved node."""
+    override = os.getenv("PHOTON_NODE_BIN")
+    if override:
+        return shutil.which(override)
+    return _resolve_node_tool("node")
+
+
 def check_requirements() -> bool:
     """Return True when both Python deps and the Node sidecar are available."""
     if not HTTPX_AVAILABLE:
         logger.warning("photon: httpx not installed — pip install httpx")
         return False
-    if not shutil.which(os.getenv("PHOTON_NODE_BIN") or "node"):
+    if not _node_bin_for_sidecar():
         logger.warning(
             "photon: node binary '%s' not found on PATH",
             os.getenv("PHOTON_NODE_BIN") or "node",
@@ -427,7 +469,7 @@ def check_requirements() -> bool:
         # user has no CLI to run `robo photon setup`, so the connect path
         # must self-heal). Otherwise keep returning False so
         # `robo setup` / status surface the missing-deps state.
-        if bool(shutil.which("npm")) and _dir_writable(_sidecar_dir()):
+        if bool(_resolve_node_tool("npm")) and _dir_writable(_sidecar_dir()):
             return True
         # DEBUG (not WARNING): this is the normal pre-setup state.
         # check_fn() is called from multiple hot paths in the core
@@ -482,7 +524,7 @@ def _reinstall_sidecar_deps() -> None:
     Best-effort — a failure here just leaves the (stale) deps in place and the
     normal ``_start_sidecar`` readiness check reports the real error.
     """
-    npm = shutil.which("npm")
+    npm = _resolve_node_tool("npm")
     if not npm:
         logger.warning("[photon] cannot reinstall stale sidecar deps: npm not on PATH")
         return
@@ -499,6 +541,7 @@ def _reinstall_sidecar_deps() -> None:
             check=False,
             timeout=_NPM_REINSTALL_TIMEOUT,
             creationflags=windows_hide_flags(),
+            env=_node_tool_env(),
         )
         if result.returncode != 0:
             logger.warning(
@@ -512,6 +555,7 @@ def _reinstall_sidecar_deps() -> None:
                 check=False,
                 timeout=_NPM_REINSTALL_TIMEOUT,
                 creationflags=windows_hide_flags(),
+                env=_node_tool_env(),
             )
     except subprocess.TimeoutExpired:
         # A wedged npm (dead registry, network blackhole) must not stall the
@@ -736,7 +780,7 @@ class PhotonAdapter(BasePlatformAdapter):
         self._autostart_sidecar = str(
             os.getenv("PHOTON_SIDECAR_AUTOSTART", "true")
         ).lower() not in ("0", "false", "no")
-        self._node_bin = os.getenv("PHOTON_NODE_BIN") or shutil.which("node") or "node"
+        self._node_bin = os.getenv("PHOTON_NODE_BIN") or _resolve_node_tool("node") or "node"
 
         # Presence watchdog. spectrum-ts only reconnects when its inbound
         # iterator throws or ends; a half-open ("zombie") gRPC socket makes the

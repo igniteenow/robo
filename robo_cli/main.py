@@ -1826,6 +1826,19 @@ def _ensure_tui_node() -> None:
         return
     if os.environ.get("ROBO_SKIP_NODE_BOOTSTRAP"):
         return
+    if sys.platform == "win32":
+        # The Windows installer keeps Robo's own Node in <ROBO_HOME>\node,
+        # which a window opened before the install does not have on PATH.
+        # The TUI resolves it through find_node_executable(), so the POSIX
+        # bash bootstrap below is not needed - it cannot install Node on
+        # Windows, and when WSL is installed `bash` runs inside Linux.
+        try:
+            from robo_constants import find_node_executable
+
+            if find_node_executable("node") and find_node_executable("npm"):
+                return
+        except Exception:
+            pass
 
     helper = PROJECT_ROOT / "scripts" / "lib" / "node-bootstrap.sh"
     if not helper.is_file():
@@ -2146,6 +2159,10 @@ def _make_tui_argv(
             sys.exit(1)
 
         tsx = tui_dir / "node_modules" / ".bin" / "tsx"
+        if sys.platform == "win32" and tsx.with_suffix(".cmd").exists():
+            # npm also drops an extensionless POSIX shim here, which Windows
+            # cannot execute (WinError 193); the .cmd shim is the runnable one.
+            tsx = tsx.with_suffix(".cmd")
         if tsx.exists():
             return [str(tsx), "src/entry.tsx"], tui_dir
         return [npm, "start"], tui_dir

@@ -507,8 +507,12 @@ class CopilotACPClient:
             # (#56747). Hide-only — stdio pipes stay intact for the ACP wire.
             from robo_cli._subprocess_compat import windows_hide_flags
 
+            from robo_constants import resolve_cli_command
+
             proc = subprocess.Popen(
-                [self._acp_command] + self._acp_args,
+                # resolve_cli_command: on Windows `copilot` is an npm .cmd
+                # shim, which CreateProcess cannot find from the bare name.
+                [resolve_cli_command(self._acp_command)] + self._acp_args,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

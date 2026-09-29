@@ -757,10 +757,16 @@ def _find_bash() -> str:
     #   MinGit:      %LOCALAPPDATA%\robo\git\usr\bin\bash.exe (legacy/32-bit fallback)
     _local_appdata = os.environ.get("LOCALAPPDATA", "")
     _robo_portable_git = os.path.join(_local_appdata, "robo", "git") if _local_appdata else ""
-    if _robo_portable_git:
+    # install.ps1 puts PortableGit in $RoboHome\git; a custom ROBO_HOME is not
+    # under %LOCALAPPDATA%\robo, so look there first.
+    _robo_home = os.environ.get("ROBO_HOME", "").strip()
+    _robo_home_git = os.path.join(_robo_home, "git") if _robo_home else ""
+    for _git_root in (_robo_home_git, _robo_portable_git):
+        if not _git_root:
+            continue
         for candidate in (
-            os.path.join(_robo_portable_git, "bin", "bash.exe"),        # PortableGit (primary)
-            os.path.join(_robo_portable_git, "usr", "bin", "bash.exe"), # MinGit fallback
+            os.path.join(_git_root, "bin", "bash.exe"),        # PortableGit (primary)
+            os.path.join(_git_root, "usr", "bin", "bash.exe"), # MinGit fallback
         ):
             if os.path.isfile(candidate) and candidate not in candidates:
                 candidates.append(candidate)

@@ -1595,6 +1595,8 @@ def _run_post_setup(post_setup_key: str):
             # execute npm.cmd on Windows (CreateProcessW otherwise rejects
             # batch shims).  On POSIX npm_bin is the plain path — same
             # behaviour as before.
+            from robo_constants import with_robo_node_path
+
             result = subprocess.run(
                 # --workspaces=false restricts the install to the repo root
                 # only, avoiding the apps/* glob which would pull in
@@ -1602,6 +1604,9 @@ def _run_post_setup(post_setup_key: str):
                 [npm_bin, "install", "--silent", "--workspaces=false"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(PROJECT_ROOT),
                 creationflags=_post_setup_no_window_flags(),
+                # Package install scripts call `node` by name; Robo's own Node
+                # (<ROBO_HOME>/node) may not be on PATH.
+                env=with_robo_node_path(),
             )
             if result.returncode == 0:
                 _print_success("    Node.js dependencies installed")
@@ -1658,7 +1663,8 @@ def _run_post_setup(post_setup_key: str):
 
         if not npx_bin:
             _print_warning(
-                "    npx not found - install Chromium manually: npx agent-browser install --with-deps"
+                "    npx not found - install Chromium manually: npx agent-browser install"
+                + ("" if sys.platform == "win32" else " --with-deps")
             )
             return
 
@@ -1672,16 +1678,23 @@ def _run_post_setup(post_setup_key: str):
             local_ab_win = local_ab.with_suffix(".cmd")
             if local_ab_win.exists():
                 local_ab = local_ab_win
+        # --with-deps installs Linux system libraries (apt); the Windows
+        # installer runs a plain `agent-browser install`.
+        deps_flag = [] if sys.platform == "win32" else ["--with-deps"]
         install_cmd = (
-            [str(local_ab), "install", "--with-deps"]
+            [str(local_ab), "install", *deps_flag]
             if local_ab.exists()
-            else [npx_bin, "-y", "agent-browser", "install", "--with-deps"]
+            else [npx_bin, "-y", "agent-browser", "install", *deps_flag]
         )
+        manual_cmd = "npx agent-browser install" + (" --with-deps" if deps_flag else "")
+        from robo_constants import with_robo_node_path
+
         try:
             result = subprocess.run(
                 install_cmd,
                 capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(PROJECT_ROOT), timeout=600,
                 creationflags=_post_setup_no_window_flags(),
+                env=with_robo_node_path(),
             )
             if result.returncode == 0:
                 _print_success("    Chromium installed")
@@ -1694,13 +1707,13 @@ def _run_post_setup(post_setup_key: str):
                 tail = (result.stderr or result.stdout or "").strip().splitlines()[-3:]
                 for line in tail:
                     _print_info(f"      {line[:200]}")
-                _print_info("    Run manually: npx agent-browser install --with-deps")
+                _print_info(f"    Run manually: {manual_cmd}")
         except subprocess.TimeoutExpired:
             _print_warning("    Chromium install timed out (>10min)")
-            _print_info("    Run manually: npx agent-browser install --with-deps")
+            _print_info(f"    Run manually: {manual_cmd}")
         except Exception as exc:
             _print_warning(f"    Chromium install failed: {exc}")
-            _print_info("    Run manually: npx agent-browser install --with-deps")
+            _print_info(f"    Run manually: {manual_cmd}")
 
     elif post_setup_key == "camofox":
         camofox_dir = PROJECT_ROOT / "node_modules" / "@askjo" / "camofox-browser"
@@ -1711,11 +1724,14 @@ def _run_post_setup(post_setup_key: str):
             _print_info("    Installing Camofox browser server...")
             import subprocess
             # Absolute npm path so .cmd shim executes on Windows.
+            from robo_constants import with_robo_node_path
+
             result = subprocess.run(
                 # --workspaces=false avoids resolving apps/desktop. See #38772.
                 [_npm_bin, "install", "--silent", "--workspaces=false"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(PROJECT_ROOT),
                 creationflags=_post_setup_no_window_flags(),
+                env=with_robo_node_path(),
             )
             if result.returncode == 0:
                 _print_success("    Camofox installed")

@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from robo_cli._subprocess_compat import windows_hide_flags
-from robo_constants import find_node_executable
+from robo_constants import find_node_executable, with_robo_node_path
 
 logger = logging.getLogger("agent.lsp.install")
 
@@ -132,17 +132,22 @@ def robo_lsp_bin_dir() -> Path:
 
 
 def _native_binary_candidates(base: Path) -> list[Path]:
-    """Return platform-native executable candidates for a staged binary."""
-    candidates = [base]
-    if _is_windows():
-        existing = {str(base).lower()}
-        for suffix in _WINDOWS_WRAPPER_SUFFIXES:
-            candidate = Path(str(base) + suffix)
-            key = str(candidate).lower()
-            if key not in existing:
-                candidates.append(candidate)
-                existing.add(key)
-    return candidates
+    """Return platform-native executable candidates for a staged binary.
+
+    On Windows only the runnable forms (``.cmd``/``.exe``/``.bat``) are
+    returned: npm also drops an extensionless POSIX shell shim next to its
+    ``.cmd`` shim, and CreateProcess cannot execute it (WinError 193).
+    """
+    if not _is_windows():
+        return [base]
+    if base.suffix.lower() in _WINDOWS_WRAPPER_SUFFIXES:
+        return [base]
+    return [Path(str(base) + suffix) for suffix in _WINDOWS_WRAPPER_SUFFIXES]
+
+
+def _npm_bin_dir() -> Path:
+    """Where ``npm install --prefix <ROBO_HOME>/lsp`` puts its bin shims."""
+    return robo_lsp_bin_dir().parent / "node_modules" / ".bin"
 
 
 def _existing_binary(name: str) -> Optional[str]:
@@ -150,6 +155,12 @@ def _existing_binary(name: str) -> Optional[str]:
     for staged in _native_binary_candidates(robo_lsp_bin_dir() / name):
         if staged.exists() and os.access(staged, os.X_OK):
             return str(staged)
+    # npm-installed servers on Windows are run from node_modules/.bin
+    # directly (see _install_npm), so look there too.
+    if _is_windows():
+        for staged in _native_binary_candidates(_npm_bin_dir() / name):
+            if staged.exists() and os.access(staged, os.X_OK):
+                return str(staged)
     on_path = shutil.which(name)
     if on_path:
         return on_path
@@ -268,6 +279,9 @@ def _install_npm(
         proc = subprocess.run(
             [npm, "install", "--prefix", str(staging), "--silent", "--no-fund", "--no-audit", *install_targets],
             check=False,
+            # Install scripts call `node` by name; Robo's own Node may not be
+            # on PATH (the Windows installer keeps it in <ROBO_HOME>\node).
+            env=with_robo_node_path(),
             capture_output=True,
             text=True, encoding="utf-8", errors="replace",
             timeout=300,
@@ -287,6 +301,11 @@ def _install_npm(
     nm_bin = staging / "node_modules" / ".bin" / bin_name
     for c in _native_binary_candidates(nm_bin):
         if c.exists():
+            if _is_windows():
+                # npm's .cmd shim locates the package relative to its own
+                # folder (%~dp0), so a copy in lsp/bin would point nowhere.
+                # Run it where npm put it.
+                return str(c)
             # Symlink into our `lsp/bin/` for stable PATH access.
             link = robo_lsp_bin_dir() / c.name
             if not link.exists():

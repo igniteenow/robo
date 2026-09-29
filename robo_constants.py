@@ -666,15 +666,83 @@ def find_node_executable(command: str) -> str | None:
     return find_node_executable_on_path(command)
 
 
-def with_robo_node_path(env: dict[str, str] | None = None) -> dict[str, str]:
-    """Return *env* with Robo-managed Node directories prepended to PATH."""
+def find_robo_node_file(command: str) -> str | None:
+    """Robo-managed ``node``/``npm``/``npx`` by file presence alone.
+
+    For status checks on hot paths: unlike :func:`find_node_executable` it
+    starts no process and never heals or downloads a managed tree. On Windows
+    only launchable forms (``.exe``/``.cmd``) are returned.
+    """
+    names = _candidate_node_command_names(command)
+    if sys.platform == "win32":
+        names = [name for name in names if "." in name] or names
+    try:
+        directories = iter_robo_node_dirs()
+    except Exception:
+        return None
+    for directory in directories:
+        for name in names:
+            candidate = directory / name
+            if candidate.is_file() and (sys.platform == "win32" or os.access(candidate, os.X_OK)):
+                return str(candidate)
+    return None
+
+
+def resolve_cli_command(command: str) -> str:
+    """Return a launchable path for a CLI given by bare name (``codex``, ``copilot``).
+
+    Windows CreateProcess only appends ``.exe`` to a bare name, so an
+    npm-installed CLI (``codex.cmd``) fails with FileNotFoundError even when
+    it is on PATH. ``shutil.which`` honours PATHEXT and finds the shim. PATH
+    first; on Windows also Robo's own Node dir, where ``npm i -g`` puts shims
+    on a Robo-managed Node (those .cmd shims run the node.exe next to them).
+    Elsewhere the result is exactly what exec would find on PATH. A command
+    that already has a directory part, or that is not found, is returned
+    unchanged.
+    """
+    command_str = str(command)
+    if not command_str or any(sep and sep in command_str for sep in (os.sep, os.altsep, "/")):
+        return command_str
+    found = shutil.which(command_str)
+    if found:
+        return found
+    if sys.platform != "win32":
+        # A POSIX npm shim is `#!/usr/bin/env node`; outside PATH it would
+        # fail with "node: not found" instead of the caller's clear
+        # "not installed" message.
+        return command_str
+    try:
+        extra = os.pathsep.join(str(d) for d in iter_robo_node_dirs() if d.is_dir())
+    except Exception:
+        extra = ""
+    if extra:
+        found = shutil.which(command_str, path=extra)
+        if found:
+            return found
+    return command_str
+
+
+def with_robo_node_path(
+    env: dict[str, str] | None = None, *, append: bool = False
+) -> dict[str, str]:
+    """Return *env* with Robo-managed Node directories on PATH.
+
+    Prepended by default, so Robo's own Node wins. ``append=True`` adds them
+    at the end instead: a Node already on PATH keeps winning, and the managed
+    one is only the fallback for a machine that has no other Node.
+    """
     merged = dict(os.environ if env is None else env)
     existing = merged.get("PATH", "")
     parts = [p for p in existing.split(os.pathsep) if p]
     managed = [str(path) for path in iter_robo_node_dirs() if path.is_dir()]
-    for entry in reversed(managed):
-        if entry not in parts:
-            parts.insert(0, entry)
+    if append:
+        for entry in managed:
+            if entry not in parts:
+                parts.append(entry)
+    else:
+        for entry in reversed(managed):
+            if entry not in parts:
+                parts.insert(0, entry)
     merged["PATH"] = os.pathsep.join(parts)
     return merged
 

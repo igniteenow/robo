@@ -123,7 +123,11 @@ class CodexAppServerClient:
                 ]
             )
 
-        cmd = [codex_bin, "app-server"] + app_server_args
+        # resolve_cli_command: on Windows `codex` is an npm .cmd shim, which
+        # CreateProcess cannot find from the bare name.
+        from robo_constants import resolve_cli_command
+
+        cmd = [resolve_cli_command(codex_bin), "app-server"] + app_server_args
         # Codex emits tracing to stderr; default WARN keeps it quiet for users.
         spawn_env.setdefault("RUST_LOG", "warn")
 
@@ -390,9 +394,11 @@ def check_codex_binary(
     """Verify codex CLI is installed and meets minimum version.
 
     Returns (ok, message). Used by setup wizard and runtime startup."""
+    from robo_constants import resolve_cli_command
+
     try:
         proc = subprocess.run(
-            [codex_bin, "--version"],
+            [resolve_cli_command(codex_bin), "--version"],
             capture_output=True,
             text=True, encoding='utf-8', errors='replace',
             timeout=10,
