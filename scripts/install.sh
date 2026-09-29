@@ -6,10 +6,12 @@
 # Uses uv for desktop/server installs and Python's stdlib venv + pip on Termux.
 #
 # Usage:
-#   git clone https://github.com/igniteenow/robo.git robo && cd robo && bash install-robo.sh
+#   curl -fsSL https://raw.githubusercontent.com/igniteenow/robo/main/scripts/install.sh | bash
 #
 # Or with options:
-#   curl -fsSL ... | bash -s -- --no-venv --skip-setup
+#   curl -fsSL https://raw.githubusercontent.com/igniteenow/robo/main/scripts/install.sh | bash -s -- --no-venv --skip-setup
+#
+# (Most people install from a clone instead: git clone ... && bash install-robo.sh)
 #
 # ============================================================================
 
@@ -529,7 +531,7 @@ detect_os() {
             OS="windows"
             DISTRO="windows"
             log_error "Windows detected. Please use the PowerShell installer:"
-            log_info "  iex (irm https://github.com/igniteenow/robo)"
+            log_info "  iex (irm https://raw.githubusercontent.com/igniteenow/robo/main/scripts/install.ps1)"
             exit 1
             ;;
         *)
@@ -850,7 +852,7 @@ check_node() {
     fi
 
     if command -v node &> /dev/null; then
-        log_warn "Node.js $(node --version) is too old (Robo requires Node >=26) — installing Robo-managed Node $NODE_VERSION..."
+        log_warn "Node.js $(node --version) is too old (Robo requires Node >=22.22) — installing Robo-managed Node $NODE_VERSION..."
     elif [ "$DISTRO" = "termux" ]; then
         log_info "Node.js not found — installing Node.js via pkg..."
     else
@@ -2970,7 +2972,7 @@ install_desktop() {
     # with no app and a confusing "couldn't find a built desktop" at launch.
     # Always re-resolve Node here. Stages run in separate processes, so we can't
     # trust an earlier check; more importantly check_node now enforces the build
-    # floor (Node >=26) and prepends the Robo-managed Node to PATH, so
+    # floor (Node >=22.22) and prepends the Robo-managed Node to PATH, so
     # the build never runs on a too-old system Node — the cause of the opaque
     # "Build desktop app … exit code 1" failure (Vite crashes on old Node).
     check_node

@@ -42,7 +42,7 @@ Robo 会规划任务，用真实工具（终端、文件、浏览器、代码）
 ```powershell
 git clone https://github.com/igniteenow/robo
 cd robo
-Set-ExecutionPolicy -Scope Process Bypass
+Set-ExecutionPolicy -Scope Process Bypass -Force
 .\install-robo.ps1
 ```
 
@@ -54,14 +54,15 @@ cd robo
 bash install-robo.sh
 ```
 
-然后**打开一个新的终端**（安装程序会把 `robo` 加入 PATH），选择你的模型：
+然后**打开一个新的终端**，选择你的模型。在 Windows 上安装程序会把 `robo` 加入 PATH；
+在 macOS 和 Linux 上，如果 `~/.local/bin` 还不在 PATH 中，安装程序会给出需要添加的那一行。
 
 ```bash
 robo model        # 选择服务商并粘贴 API 密钥
 robo              # 开始对话
 ```
 
-只需要预先安装 `git`。安装程序会自动准备 Python 和 Node，并且不会覆盖你的配置、记忆或技能。
+需要预先安装 `git` 和 Python 3.11、3.12 或 3.13（暂不支持 3.14）。安装程序会自动准备 Node，并且不会覆盖你的配置、记忆或技能。
 在 Debian/Ubuntu 上，语音输入还需要 `sudo apt install libportaudio2`。
 遇到问题时运行 `robo doctor`。
 

@@ -63,13 +63,7 @@ The self-improving AI agent. The only agent with a built-in learning loop — it
 
 ## Install
 
-### Windows or macOS
-
-To easily install the command-line and desktop applications, [download the Robo Desktop installer](https://github.com/igniteenow/robo/tree/main/website/docs) from our website and run it.
-
-### Without Robo Desktop:
-
-For a command-line only install without Robo Desktop, run:
+You need `git` and Python 3.11, 3.12, or 3.13. The installer sets up Node.js itself.
 
 #### Linux / macOS / WSL2 / Android (Termux)
 
@@ -79,11 +73,16 @@ git clone https://github.com/igniteenow/robo robo && cd robo && bash install-rob
 
 #### Windows (native)
 
-Run in powershell:
+Run in PowerShell:
 
 ```powershell
-iex (irm https://github.com/igniteenow/robo)
+git clone https://github.com/igniteenow/robo robo
+cd robo
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\install-robo.ps1
 ```
+
+Then open a new terminal and run `robo` for the terminal UI, or `robo desktop` to build and open the desktop app.
 
 See the full **[Installation Guide](/getting-started/installation)** for what the installer does, the per-user vs root layout, and Windows-specific notes. For the complete platform support matrix, see **[Platform Support](/getting-started/platform-support)**.
 

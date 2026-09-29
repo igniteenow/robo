@@ -42,7 +42,7 @@ o un modelo local con Ollama o cualquier servidor compatible con OpenAI.
 ```powershell
 git clone https://github.com/igniteenow/robo
 cd robo
-Set-ExecutionPolicy -Scope Process Bypass
+Set-ExecutionPolicy -Scope Process Bypass -Force
 .\install-robo.ps1
 ```
 
@@ -54,15 +54,16 @@ cd robo
 bash install-robo.sh
 ```
 
-Después **abre una terminal nueva** (el instalador añade `robo` a tu PATH) y elige tu modelo:
+Después **abre una terminal nueva** y elige tu modelo. En Windows el instalador añade `robo` a tu PATH;
+en macOS y Linux te indica la línea que debes añadir si `~/.local/bin` aún no está en tu PATH.
 
 ```bash
 robo model        # elige un proveedor y pega su clave de API
 robo              # empieza a chatear
 ```
 
-Solo necesitas `git`. El instalador prepara Python y Node y nunca sobrescribe tu
-configuración, memoria ni habilidades. En Debian/Ubuntu, la voz necesita además `sudo apt install libportaudio2`.
+Necesitas `git` y Python 3.11, 3.12 o 3.13 (3.14 aún no es compatible). El instalador prepara Node
+por sí mismo y nunca sobrescribe tu configuración, memoria ni habilidades. En Debian/Ubuntu, la voz necesita además `sudo apt install libportaudio2`.
 Si algo no va bien, ejecuta `robo doctor`.
 
 ## Ejecutarlo

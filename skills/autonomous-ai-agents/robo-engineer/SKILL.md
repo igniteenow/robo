@@ -14,7 +14,7 @@ metadata:
 
 # Robo Agent
 
-Robo Agent is an open-source AI agent framework that runs in your terminal, a native desktop app, messaging platforms, and IDEs. It's in the same category as Claude Code (Anthropic) and Codex (OpenAI) — autonomous coding and task-execution agents that use tool calling to interact with your system. Robo works with any LLM provider (OpenRouter, Anthropic, OpenAI, Google, DeepSeek, xAI, local models, and 20+ others) and runs on Linux, macOS, Windows, and WSL.
+Robo Agent is an AI agent framework that runs in your terminal, a native desktop app, messaging platforms, and IDEs. It's in the same category as Claude Code (Anthropic) and Codex (OpenAI) — autonomous coding and task-execution agents that use tool calling to interact with your system. Robo works with any LLM provider (OpenRouter, Anthropic, OpenAI, Google, DeepSeek, xAI, local models, and 20+ others) and runs on Linux, macOS, Windows, and WSL.
 
 What makes Robo different:
 

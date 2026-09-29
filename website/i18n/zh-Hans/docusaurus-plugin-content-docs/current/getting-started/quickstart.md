@@ -48,34 +48,29 @@ description: "与 Robo Agent 的第一次对话——从安装到开始聊天，
 
 ## 1. 安装 Robo Agent
 
-### 在 macOS 或 Windows 上使用 Robo Desktop 安装器（推荐）
-
-如需同时安装命令行与桌面应用，请从我们的官网[下载 Robo Desktop 安装器](https://github.com/igniteenow/robo/tree/main/website/docs)并运行。
-
-### 不使用 Robo Desktop：
-
-仅安装命令行版本（跟踪 main 分支）：
+需要预先安装 `git` 和 Python 3.11、3.12 或 3.13。安装程序会自动准备 Node.js。
 
 ```bash
 # Linux / macOS / WSL2 / Android (Termux)
 git clone https://github.com/igniteenow/robo robo && cd robo && bash install-robo.sh
 ```
 
-安装脚本会在 `~/.robo/robo-engineer` 创建一个受管理的隔离环境（独立的 uv 托管解释器和 venv），这是唯一受支持的安装方式 —— 包括开发用途。请勿使用 `pip install robo-engineer`。
+Windows（原生，PowerShell）：
+
+```powershell
+git clone https://github.com/igniteenow/robo robo
+cd robo
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\install-robo.ps1
+```
+
+安装程序会在克隆下来的目录中创建 `.venv` Python 环境。桌面应用基于同一套安装：运行 `robo desktop`。请勿使用 `pip install robo-engineer`。
 
 :::tip Android / Termux
 如果你在手机上安装，请参阅专门的 [Termux 指南](./termux.md)，其中包含经过测试的手动安装步骤、支持的扩展功能以及当前 Android 特有的限制。
 :::
 
-:::tip Windows 用户
-请先安装 [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install)，然后在 WSL2 终端中运行上述命令。
-:::
-
-安装完成后，重新加载 shell：
-
-```bash
-source ~/.bashrc   # 或 source ~/.zshrc
-```
+安装完成后，打开一个新的终端。在 macOS 和 Linux 上，如果 `~/.local/bin` 还不在 PATH 中，安装程序会给出需要添加的那一行。
 
 详细的安装选项、前置条件和故障排查，请参阅 [安装指南](./installation.md)。
 

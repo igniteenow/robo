@@ -5,7 +5,7 @@
 # Uses uv for fast Python provisioning and package management.
 #
 # Usage:
-#   iex (irm https://github.com/igniteenow/robo)
+#   iex (irm https://raw.githubusercontent.com/igniteenow/robo/main/scripts/install.ps1)
 #
 # Or download and run with options:
 #   .\install.ps1 -NoVenv -SkipSetup
@@ -785,19 +785,53 @@ function Ensure-NodeExeOnPath {
 # PowerShell's -ne is case-insensitive for strings, which is the right
 # comparison on Windows.  Persists only when the resulting string differs, so
 # an already-correct PATH costs one registry read and no write.
+# The user PATH exactly as stored in the registry: %VAR% references stay
+# unexpanded and the value type (REG_EXPAND_SZ / REG_SZ) is reported, so a
+# rewrite does not flatten entries like %USERPROFILE%\AppData\... into plain
+# text the way [Environment]::Get/SetEnvironmentVariable("Path", ..., "User")
+# does.
+function Get-UserPathRaw {
+    $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment", $false)
+    if (-not $key) { return @{ Value = ""; Kind = $kind } }
+    try {
+        $value = [string]$key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        if ($key.GetValueNames() -contains "Path") { $kind = $key.GetValueKind("Path") }
+        return @{ Value = $value; Kind = $kind }
+    } finally {
+        $key.Close()
+    }
+}
+
+# Write the user PATH back with its original value type, then broadcast the
+# change (a set+clear of a scratch variable through SetEnvironmentVariable
+# sends WM_SETTINGCHANGE) so windows opened afterwards see the new PATH.
+function Set-UserPathRaw {
+    param([string]$Value, [Microsoft.Win32.RegistryValueKind]$Kind)
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Environment")
+    try {
+        $key.SetValue("Path", $Value, $Kind)
+    } finally {
+        $key.Close()
+    }
+    [Environment]::SetEnvironmentVariable("ROBO_INSTALL_PATH_REFRESH", "1", "User")
+    [Environment]::SetEnvironmentVariable("ROBO_INSTALL_PATH_REFRESH", $null, "User")
+}
+
 function Set-ManagedNodeFirstOnUserPath {
     param([string]$NodeDir)
 
     if (-not $NodeDir) { return }
 
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $current = Get-UserPathRaw
+    $userPath = $current.Value
     $items = if ($userPath) { @($userPath -split ";") } else { @() }
 
-    $rest = @($items | Where-Object { $_ -ne $NodeDir })
+    $rest = @($items | Where-Object { [Environment]::ExpandEnvironmentVariables($_) -ne $NodeDir })
     $updated = (@($NodeDir) + $rest) -join ";"
 
     if ($updated -ne $userPath) {
-        [Environment]::SetEnvironmentVariable("Path", $updated, "User")
+        Set-UserPathRaw -Value $updated -Kind $current.Kind
     }
 }
 
@@ -1323,17 +1357,20 @@ function Install-Git {
             "$gitDir\bin",
             "$gitDir\usr\bin"
         )
-        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        $userPathItems = if ($userPath) { $userPath -split ";" } else { @() }
+        $currentUserPath = Get-UserPathRaw
+        $userPath = $currentUserPath.Value
+        $userPathItems = if ($userPath) { @($userPath -split ";") } else { @() }
+        $expandedItems = @($userPathItems | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) })
         $changed = $false
         foreach ($entry in $newPathEntries) {
-            if ($userPathItems -notcontains $entry) {
+            if ($expandedItems -notcontains $entry) {
                 $userPathItems += $entry
+                $expandedItems += $entry
                 $changed = $true
             }
         }
         if ($changed) {
-            [Environment]::SetEnvironmentVariable("Path", ($userPathItems -join ";"), "User")
+            Set-UserPathRaw -Value ($userPathItems -join ";") -Kind $currentUserPath.Kind
         }
 
         $version = & $gitExe --version
@@ -1448,7 +1485,7 @@ function Test-Node {
             $script:HasNode = $true
             return $true
         }
-        Write-Warn "Node.js $version is too old (Robo requires Node >=26)"
+        Write-Warn "Node.js $version is too old (Robo requires Node >=22.22)"
     }
 
     # Prefer a Robo-managed Node from a previous run over a too-old system one.
@@ -3260,7 +3297,7 @@ function Install-Desktop {
 
     # Always re-resolve Node here. Stages run in separate PowerShell processes,
     # so $script:HasNode from Stage-Node isn't visible; more importantly Test-Node
-    # enforces the build floor (Node >=26) and prepends the Robo-managed
+    # enforces the build floor (Node >=22.22) and prepends the Robo-managed
     # Node to PATH, so the build never runs on a too-old system Node -- the cause
     # of the opaque "Build desktop app ... exit code 1" failure (Vite crashes on
     # old Node).
@@ -4256,7 +4293,7 @@ try {
     Write-Err "Installation failed: $_"
     Write-Host ""
     Write-Info "If the error is unclear, try downloading and running the script directly:"
-    Write-Host "  Invoke-WebRequest -Uri 'https://github.com/igniteenow/robo' -OutFile install.ps1" -ForegroundColor Yellow
+    Write-Host "  Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/igniteenow/robo/main/scripts/install.ps1' -OutFile install.ps1" -ForegroundColor Yellow
     Write-Host "  .\install.ps1" -ForegroundColor Yellow
     Write-Host ""
 }

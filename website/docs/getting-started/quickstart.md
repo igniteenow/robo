@@ -47,11 +47,8 @@ Pick the row that matches your goal:
 ---
 
 ## 1. Install Robo Agent
-### With the Robo Desktop installer on macOS or Windows (recommended)
-To easily install the command-line and desktop applications, [download the Robo Desktop installer](https://github.com/igniteenow/robo/tree/main/website/docs) from our website and run it.
 
-### Without Robo Desktop:
-For a command-line only install without Robo Desktop, run:
+You need `git` and Python 3.11, 3.12, or 3.13. The installer sets up Node.js itself.
 
 #### Linux / macOS / WSL2 / Android (Termux)
 ```bash
@@ -60,20 +57,22 @@ git clone https://github.com/igniteenow/robo robo && cd robo && bash install-rob
 
 #### Windows (native)
 
-Run in powershell:
+Run in PowerShell:
 ```powershell
-iex (irm https://github.com/igniteenow/robo) 
+git clone https://github.com/igniteenow/robo robo
+cd robo
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\install-robo.ps1
 ```
+
+The desktop app is built from the same install: run `robo desktop`.
 
 :::tip Android / Termux
 If you're installing on a phone, see the dedicated [Termux guide](./termux.md) for the tested manual path, supported extras, and current Android-specific limitations.
 :::
 
-After it finishes, reload your shell:
-
-```bash
-source ~/.bashrc   # or source ~/.zshrc
-```
+After it finishes, open a new terminal. On macOS and Linux, if `~/.local/bin` is not on
+your PATH yet, the installer prints the one line to add.
 
 For detailed installation options, prerequisites, and troubleshooting, see the [Installation guide](./installation.md).
 
