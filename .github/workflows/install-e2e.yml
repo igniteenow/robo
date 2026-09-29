@@ -39,9 +39,13 @@ on:
         required: false
         type: string
         default: '5'
-  schedule:
-    # Every 12 hours, off the hour to avoid the top-of-hour runner crunch.
-    - cron: '20 7,19 * * *'
+  # The 12-hour schedule is off until the first release tag exists: with no
+  # tags only the fresh-install leg runs, and on a scheduled run of main it
+  # installs main and then "updates" to that same commit, which the test
+  # rejects by design (base and target must differ). Run it from the Actions
+  # tab on a branch that has new commits, or it runs when a release is tagged.
+  # schedule:
+  #   - cron: '20 7,19 * * *'
   push:
     tags:
       # Release tags only: the repo also carries backup/* and one-off tags.

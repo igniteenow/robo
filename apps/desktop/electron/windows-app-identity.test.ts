@@ -21,7 +21,7 @@ import {
 const EXE = 'C:\\robo\\apps\\desktop\\node_modules\\electron\\dist\\electron.exe'
 const APP = 'C:\\robo\\apps\\desktop'
 const ICON = 'C:\\robo\\apps\\desktop\\assets\\icon.ico'
-const PROGRAMS = 'C:\\Users\\ahmad\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+const PROGRAMS = 'C:\\Users\\alice\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
 
 test('packaged: the build appId and no shortcut of our own (the installer wrote it)', () => {
   const plan = planWindowsAppIdentity({
@@ -104,7 +104,7 @@ test('`robo desktop --source` runs the production bundle, which bakes packaged=t
   // non-dev bundle so `electron .` loads dist/. The executable is the truth.
   assert.equal(isElectronBinary(EXE), true)
   assert.equal(isElectronBinary('C:/robo/node_modules/electron/dist/ELECTRON.EXE'), true)
-  assert.equal(isElectronBinary('/home/ahmad/robo/node_modules/electron/dist/electron'), true)
+  assert.equal(isElectronBinary('/home/alice/robo/node_modules/electron/dist/electron'), true)
   assert.equal(isElectronBinary('C:\\Program Files\\Robo\\Robo.exe'), false)
   assert.equal(isElectronBinary('C:\\robo\\release\\win-unpacked\\Robo.exe'), false)
 
@@ -145,8 +145,8 @@ test('shortcutMatches: rewrite only when target, icon, args or id changed', () =
 
 test('windowsStartMenuProgramsDir: under %APPDATA%, or unknown', () => {
   assert.equal(
-    windowsStartMenuProgramsDir({ APPDATA: 'C:\\Users\\ahmad\\AppData\\Roaming' }),
-    'C:\\Users\\ahmad\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+    windowsStartMenuProgramsDir({ APPDATA: 'C:\\Users\\alice\\AppData\\Roaming' }),
+    'C:\\Users\\alice\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
   )
   assert.equal(windowsStartMenuProgramsDir({}), null)
   assert.equal(windowsStartMenuProgramsDir({ APPDATA: '  ' }), null)

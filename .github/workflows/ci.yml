@@ -4,6 +4,10 @@ on:
   push: { branches: [main] }
   pull_request:
 
+# Nothing here writes to the repository; keep the token read-only.
+permissions:
+  contents: read
+
 # The Python suite (~26,000 tests) is run the way upstream designed it: every
 # test file in its own subprocess (scripts/run_tests.sh), sliced across
 # parallel runners. A single-process `pytest` run leaks module state, mocks
@@ -18,7 +22,7 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - id: matrix
         run: |
           MATRIX=$(python3 scripts/run_tests_parallel.py --generate-slices 8)
@@ -33,13 +37,13 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.slices.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install ripgrep (the search tool tests need rg on PATH)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ripgrep
           rg --version
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
         with:
           enable-cache: true
           cache-dependency-glob: |
@@ -48,10 +52,13 @@ jobs:
       - run: uv python install 3.11
       - run: uv sync --python 3.11 --all-extras --dev
       - name: Run tests (slice ${{ matrix.slice.index }}/8)
+        # The file list comes in through the environment, not pasted into the
+        # script text, so no file name can change what the shell runs.
         run: |
           source .venv/bin/activate
-          bash scripts/run_tests.sh --files '${{ matrix.slice.files }}'
+          bash scripts/run_tests.sh --files "$SLICE_FILES"
         env:
+          SLICE_FILES: ${{ matrix.slice.files }}
           OPENROUTER_API_KEY: ""
           OPENAI_API_KEY: ""
           ANTHROPIC_API_KEY: ""
@@ -70,8 +77,64 @@ jobs:
   node:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run check
+
+  # Blocking lint gate: the rules selected in pyproject's [tool.ruff.lint]
+  # (currently PLW1514, open() without an explicit encoding).
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+        with:
+          version: "0.12.20"
+      - run: uvx ruff@0.15.10 check .
+
+  # uv.lock must match pyproject.toml: the scripted installers and the Docker
+  # image install with `uv sync --locked` / `--frozen`. Same uv version the
+  # lock was written with.
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+        with:
+          version: "0.12.20"
+      - run: uv lock --check
+
+  # The Windows installers run under Windows PowerShell 5.1 as well as
+  # PowerShell 7, and 5.1 reads a BOM-less .ps1 in the ANSI code page: parse
+  # both with both, and keep them pure ASCII.
+  powershell-installers:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Parse with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($file in 'install-robo.ps1', 'scripts\install.ps1') {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { $failed = $true; $errors | ForEach-Object { Write-Host "${file}:$($_.Extent.StartLineNumber): $($_.Message)" } }
+            $bytes = [System.IO.File]::ReadAllBytes((Resolve-Path $file).Path)
+            if (@($bytes | Where-Object { $_ -gt 127 }).Count) { $failed = $true; Write-Host "$file contains non-ASCII bytes" }
+          }
+          if ($failed) { exit 1 }
+      - name: Parse with PowerShell 7
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($file in 'install-robo.ps1', 'scripts/install.ps1') {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { $failed = $true; $errors | ForEach-Object { Write-Host "${file}:$($_.Extent.StartLineNumber): $($_.Message)" } }
+          }
+          if ($failed) { exit 1 }
