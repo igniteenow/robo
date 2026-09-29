@@ -636,3 +636,42 @@ class TestShippedCatalog:
                     )
 
         assert not problems, "unpinned catalog entries:\n" + "\n".join(problems)
+
+
+class TestWindowsVenvLayout:
+    """Catalog manifests are POSIX-style; on Windows the installer must use the
+    venv's ``Scripts\\*.exe`` layout and Robo's own Python, or git-bootstrapped
+    MCPs (n8n) fail to install / never start. Other platforms are untouched."""
+
+    def test_bootstrap_uses_robo_python_and_scripts_dir_on_windows(self):
+        from robo_cli import mcp_catalog as m
+
+        venv = m._platform_bootstrap_command("python3 -m venv .venv", platform="win32")
+        assert venv.endswith(" -m venv .venv")
+        assert not venv.startswith("python3")
+        pip = m._platform_bootstrap_command(
+            ".venv/bin/pip install -r requirements.txt", platform="win32"
+        )
+        assert pip == ".venv\\Scripts\\pip.exe install -r requirements.txt"
+
+    def test_launch_command_points_at_scripts_python_exe_on_windows(self):
+        from robo_cli import mcp_catalog as m
+
+        cmd = m._platform_launch_value(
+            "C:\\Users\\a\\.robo\\mcp-installs\\n8n/.venv/bin/python", platform="win32"
+        )
+        assert cmd == "C:\\Users\\a\\.robo\\mcp-installs\\n8n\\.venv\\Scripts\\python.exe"
+        arg = m._platform_launch_value(
+            "C:\\Users\\a\\.robo\\mcp-installs\\n8n/server.py", platform="win32"
+        )
+        assert arg == "C:\\Users\\a\\.robo\\mcp-installs\\n8n\\server.py"
+        assert m._platform_launch_value("uvx", platform="win32") == "uvx"
+
+    def test_posix_manifests_run_exactly_as_written(self):
+        from robo_cli import mcp_catalog as m
+
+        for cmd in ("python3 -m venv .venv", ".venv/bin/pip install -r requirements.txt"):
+            assert m._platform_bootstrap_command(cmd, platform="linux") == cmd
+            assert m._platform_bootstrap_command(cmd, platform="darwin") == cmd
+        path = "/home/a/.robo/mcp-installs/n8n/.venv/bin/python"
+        assert m._platform_launch_value(path, platform="linux") == path

@@ -23,6 +23,7 @@ from robo_cli.web_models import (
     MCPCatalogInstall,
     MCPEnabledToggle,
     MCPServerCreate,
+    MCPServersImport,
     MCPServersReplace,
 )
 
@@ -86,10 +87,16 @@ async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
     if name in existing:
         raise HTTPException(status_code=409, detail=f"Server '{name}' already exists")
 
+    from robo_cli.mcp_import import secure_mcp_headers
+
     try:
         with _profile_scope(body.profile or profile):
             if bearer_token is not None:
-                server_config["headers"] = _save_bearer_auth_token(name, bearer_token)
+                server_config["headers"] = {
+                    **(server_config.get("headers") or {}),
+                    **_save_bearer_auth_token(name, bearer_token),
+                }
+            server_config = secure_mcp_headers(name, server_config, save_env_value)
             if not _save_mcp_server(name, server_config):
                 raise HTTPException(
                     status_code=400,
@@ -102,6 +109,62 @@ async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return _mcp_server_summary(name, server_config)
+
+
+@router.post("/api/mcp/servers/import")
+async def import_mcp_servers(body: MCPServersImport, profile: Optional[str] = None):
+    """Add servers from a pasted MCP config (any client's JSON, or Robo YAML).
+
+    Accepts ``{"mcpServers": {...}}`` (Claude Desktop / Claude Code / Cursor),
+    ``{"servers": {...}}`` (VS Code), ``context_servers`` (Zed), a bare
+    ``{"name": {...}}`` map, or one entry with a ``name``. Each server is
+    converted to Robo's ``mcp_servers`` shape, security-checked like the Add
+    form, and saved; secret header values go to ``.env``. Servers that already
+    exist are skipped unless ``overwrite`` is set. Per-server results let the
+    page say exactly what was added and why anything wasn't.
+    """
+    from robo_cli.mcp_config import _get_mcp_servers, _save_mcp_server
+    from robo_cli.mcp_import import (
+        McpImportError,
+        normalize_mcp_entry,
+        parse_mcp_import,
+        secure_mcp_headers,
+    )
+
+    try:
+        entries = parse_mcp_import(body.config)
+    except McpImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    added: list = []
+    skipped: list = []
+    errors: list = []
+    with _profile_scope(body.profile or profile):
+        existing = _get_mcp_servers()
+        for raw_name, entry in entries.items():
+            name = str(raw_name or "").strip()
+            try:
+                server_config = normalize_mcp_entry(name, entry)
+            except McpImportError as exc:
+                errors.append({"name": name, "error": str(exc)})
+                continue
+            if name in existing and not body.overwrite:
+                skipped.append({"name": name, "reason": "already exists"})
+                continue
+            try:
+                server_config = secure_mcp_headers(name, server_config, save_env_value)
+                if not _save_mcp_server(name, server_config):
+                    errors.append({
+                        "name": name,
+                        "error": "rejected: suspicious command/args configuration",
+                    })
+                    continue
+            except Exception as exc:
+                _log.exception("POST /api/mcp/servers/import failed for %s", name)
+                errors.append({"name": name, "error": str(exc)})
+                continue
+            added.append(_mcp_server_summary(name, server_config))
+    return {"ok": not errors, "added": added, "skipped": skipped, "errors": errors}
 
 
 @router.put("/api/mcp/servers")

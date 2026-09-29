@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { Copy, PanelRight, RotateCcw, X } from "lucide-react";
 
 import { VoiceInputButton } from "@/components/VoiceInputButton";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router";
 
@@ -38,8 +38,26 @@ import { usePageHeader } from "@/contexts/usePageHeader";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { latchChatActivation } from "@/lib/chat-activation";
+import { bottomAnchorOffsetRows } from "@/lib/terminal-bottom-anchor";
+import {
+  WheelLines,
+  cellAtPoint,
+  sgrWheelReports,
+  wheelDeltaToLines,
+} from "@/lib/pty-wheel";
+import {
+  initialChatResumeScope,
+  nextChatResumeScope,
+  resumeIdToRestoreInUrl,
+  startFreshChatResumeScope,
+} from "@/lib/chat-resume-scope";
 import { normalizeSessionTitle } from "@/lib/chat-title";
 import { PtyResumeSanitizer } from "@/lib/pty-resume-sanitizer";
+import {
+  FreshChatHotkeyWatch,
+  countFreshChatNotices,
+  isIdleExitKey,
+} from "@/lib/fresh-chat-hotkey";
 import {
   PTY_CONNECTING_TIMEOUT_MS,
   PTY_RECONNECT_INPUT_MESSAGE,
@@ -184,6 +202,26 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     setHasActivated((prev) => latchChatActivation(prev, isActive));
   }, [isActive]);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Resume target of the persistent chat (part of the PTY identity — see the
+  // channel below). It is sticky (see chat-resume-scope.ts): other routes'
+  // URLs have no `resume`, and reading it raw tore the terminal down and
+  // booted a new agent every time the person left the chat — the chat
+  // "vanished" and came back as a different conversation.
+  const urlResumeParam = searchParams.get("resume");
+  const [resumeScopeState, setResumeScopeState] = useState(() =>
+    initialChatResumeScope(isActive, urlResumeParam),
+  );
+  const resumeScope = nextChatResumeScope(
+    resumeScopeState,
+    isActive,
+    urlResumeParam,
+  );
+  if (resumeScope !== resumeScopeState) {
+    // Derived-state update during render (React's documented pattern);
+    // nextChatResumeScope returns the same object once settled.
+    setResumeScopeState(resumeScope);
+  }
+  const resumeParam = resumeScope.resume;
   // Lazy-init: the missing-token check happens at construction so the effect
   // body doesn't have to setState (React 19's set-state-in-effect rule).
   // In gated (OAuth) mode the server intentionally omits the session token —
@@ -210,6 +248,10 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   const connectingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ptyInputLineRef = useRef("");
   const mobileReplacementInputUntilRef = useRef(0);
+  // When the last fresh chat started, so the TUI's idle Ctrl+C / Ctrl+D
+  // request (seen on screen, or as a sidebar event) starts only one.
+  const freshChatStartedAtRef = useRef(0);
+  const requestFreshChatRef = useRef<() => void>(() => {});
   const [ptyState, setPtyState] =
     useState<PtyConnectionState>("connecting");
   const ptyStateRef = useRef<PtyConnectionState>("connecting");
@@ -262,6 +304,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   const startFreshDashboardChat = useCallback(() => {
     const next = new URLSearchParams(searchParams);
 
+    freshChatStartedAtRef.current = Date.now();
     next.delete("resume");
     forceFreshPtyRef.current = true;
     reconnectAttemptRef.current = 0;
@@ -269,12 +312,25 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     blockedInputNoticeRef.current = false;
     ptyInputLineRef.current = "";
     mobileReplacementInputUntilRef.current = 0;
+    setResumeScopeState((scope) =>
+      startFreshChatResumeScope(scope, urlResumeParam),
+    );
     setSearchParams(next, { replace: true });
     setBanner(null);
     setLastCloseCode(null);
     setPtyState("connecting");
     setReconnectNonce((n) => n + 1);
-  }, [clearReconnectTimer, searchParams, setSearchParams]);
+  }, [clearReconnectTimer, searchParams, setSearchParams, urlResumeParam]);
+  // The TUI asked for a fresh chat (idle Ctrl+C / Ctrl+D). Both signals for
+  // one press — the notice on screen and the sidebar event — land here, so
+  // only the first within a few seconds acts.
+  const requestFreshDashboardChat = useCallback(() => {
+    if (Date.now() - freshChatStartedAtRef.current < 3000) return;
+    startFreshDashboardChat();
+  }, [startFreshDashboardChat]);
+  useEffect(() => {
+    requestFreshChatRef.current = requestFreshDashboardChat;
+  }, [requestFreshDashboardChat]);
   // Raw state for the mobile side-sheet + a derived value that force-
   // closes whenever the chat tab isn't active.  The *derived* value is
   // what side-effects (body-scroll lock, keydown listener, portal render)
@@ -318,8 +374,8 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // param changes do NOT remount the component. Resume-in-chat from the
   // Sessions page relies on `/chat?resume=<id>` changing at runtime, so we must
   // treat the current resume target as part of the PTY identity and rebuild the
-  // terminal session when it changes.
-  const resumeParam = searchParams.get("resume");
+  // terminal session when it changes (`resumeParam` is the sticky target
+  // resolved near the top of this component).
   // Profile-scoped chat: spawn the PTY under the globally selected
   // management profile. Changing it remounts the terminal (key below /
   // effect dep) so the user explicitly starts a fresh scoped session.
@@ -366,30 +422,69 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     };
   }, [resumeParam, scopedProfile, handleSessionTitleChange]);
 
+  // Bare /chat while attached to a session: put `?resume=` back in the URL so
+  // a browser refresh reattaches to the same conversation.
+  const resumeToRestore = resumeIdToRestoreInUrl(
+    resumeScope,
+    isActive,
+    urlResumeParam,
+  );
+  useEffect(() => {
+    if (!resumeToRestore) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (next.get("resume") === null) next.set("resume", resumeToRestore);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [resumeToRestore, setSearchParams]);
+
+  // Opening an old session jumps to its latest continuation (compression
+  // forks a child session). Checked once per resume target: re-running it on
+  // every navigation would swap the live PTY mid-conversation.
+  const descendantCheckedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!resumeParam) return;
+    const checkKey = `${resumeParam}\0${scopedProfile}`;
+    if (descendantCheckedRef.current === checkKey) return;
+    descendantCheckedRef.current = checkKey;
 
     let cancelled = false;
+    let settled = false;
 
     api
       .getSessionLatestDescendant(resumeParam, scopedProfile)
       .then((res) => {
+        settled = true;
         if (cancelled || !res.session_id || res.session_id === resumeParam) {
           return;
         }
 
-        const next = new URLSearchParams(searchParams);
-        next.set("resume", res.session_id);
-        setSearchParams(next, { replace: true });
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("resume", res.session_id);
+            return next;
+          },
+          { replace: true },
+        );
       })
       .catch(() => {
+        settled = true;
         // Best-effort: old servers or missing sessions should not block chat.
       });
 
     return () => {
       cancelled = true;
+      if (!settled && descendantCheckedRef.current === checkKey) {
+        // Interrupted before an answer (StrictMode double-run, quick
+        // switch): allow the next run to check again.
+        descendantCheckedRef.current = null;
+      }
     };
-  }, [resumeParam, scopedProfile, searchParams, setSearchParams]);
+  }, [resumeParam, scopedProfile, setSearchParams]);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 1023px)");
@@ -422,36 +517,6 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     return () => mql.removeEventListener("change", onChange);
   }, []);
 
-  useLayoutEffect(() => {
-    // When hidden (non-chat tab) another page owns the header's end slot.
-    // Don't touch it AT ALL — the persistent chat host mounts (plugin
-    // manifests resolving) and updates AFTER the routed page's layout
-    // effect has already filled the slot, so even a "defensive"
-    // setEnd(null) here wipes that page's header buttons (Cron "Create",
-    // Profiles "Build", …). Ownership rule: only write to the slot while
-    // /chat is the active route AND the narrow layout needs the button;
-    // the effect cleanup handles removal on every transition out.
-    if (!isActive || !narrow) return;
-    setEnd(
-      <Button
-        ghost
-        onClick={() => setMobilePanelOpenRaw(true)}
-        aria-expanded={mobilePanelOpen}
-        aria-controls="chat-side-panel"
-        className={cn(
-          "shrink-0 rounded border border-current/20",
-          "px-2 py-1 text-xs font-medium tracking-wide",
-          "text-text-secondary hover:text-midground hover:bg-midground/5",
-        )}
-      >
-        <span className="inline-flex items-center gap-1.5">
-          <PanelRight className="h-3 w-3 shrink-0" />
-          {modelToolsLabel}
-        </span>
-      </Button>,
-    );
-    return () => setEnd(null);
-  }, [isActive, narrow, mobilePanelOpen, modelToolsLabel, setEnd]);
 
   // Voice: the transcript is typed into the TUI's input line (not sent), so
   // it can be checked before Enter. Same path as pasting text.
@@ -463,7 +528,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     term.focus();
   }, []);
 
-  const handleCopyLast = () => {
+  const handleCopyLast = useCallback(() => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     // Send the slash as a burst, wait long enough for Ink's tokenizer to
@@ -480,7 +545,75 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     if (copyResetRef.current) clearTimeout(copyResetRef.current);
     copyResetRef.current = setTimeout(() => setCopyState("idle"), 1500);
     termRef.current?.focus();
-  };
+  }, []);
+
+  // Chat actions live in the page header, next to the "Chat" title — never
+  // on top of the terminal, where they covered the TUI's input box and its
+  // status text. Narrow screens also get the Model/Tools sheet toggle here.
+  //
+  // Ownership: another page owns the header's end slot while chat is hidden,
+  // so we only write while /chat is active. This runs as a passive effect
+  // (after PageHeaderProvider's per-route layout-effect reset, which used to
+  // wipe the chat's buttons when coming back to /chat), and the cleanup only
+  // clears the slot if it still holds OUR node, so it can't erase the
+  // buttons the next page has already put there.
+  useEffect(() => {
+    if (!isActive) return;
+    const headerButton = cn(
+      "h-7 shrink-0 rounded border border-current/20 bg-transparent px-2 py-0",
+      "text-xs font-medium normal-case tracking-wide opacity-100",
+      "text-text-secondary hover:border-current/40 hover:bg-midground/5 hover:text-midground",
+    );
+    const actions = (
+      <div className="flex shrink-0 items-center gap-2">
+        <VoiceInputButton
+          compact={narrow}
+          onTranscript={handleVoiceTranscript}
+          className={headerButton}
+        />
+        <Button
+          ghost
+          onClick={handleCopyLast}
+          title="Copy the last assistant response as raw markdown"
+          aria-label="Copy last assistant response"
+          className={headerButton}
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Copy className="h-3 w-3 shrink-0" />
+            {!narrow && (
+              <span>{copyState === "copied" ? "Copied" : "Copy last response"}</span>
+            )}
+          </span>
+        </Button>
+        {narrow && (
+          <Button
+            ghost
+            onClick={() => setMobilePanelOpenRaw(true)}
+            aria-expanded={mobilePanelOpen}
+            aria-controls="chat-side-panel"
+            aria-label={modelToolsLabel}
+            className={headerButton}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <PanelRight className="h-3 w-3 shrink-0" />
+              <span className="hidden min-[420px]:inline">{modelToolsLabel}</span>
+            </span>
+          </Button>
+        )}
+      </div>
+    );
+    setEnd(actions);
+    return () => setEnd((current) => (current === actions ? null : current));
+  }, [
+    copyState,
+    handleCopyLast,
+    handleVoiceTranscript,
+    isActive,
+    mobilePanelOpen,
+    modelToolsLabel,
+    narrow,
+    setEnd,
+  ]);
 
   useEffect(() => {
     // Don't spawn the chat PTY (and the TUI/agent bootstrap it triggers)
@@ -729,21 +862,82 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     fitRef.current = fit;
     term.loadAddon(fit);
 
-    // Dashboard chat should scroll the browser-side transcript, not send
-    // mouse-wheel protocol bytes through the PTY.
+    // The dashboard runs the TUI full screen (alternate buffer): the
+    // transcript scrolls inside the TUI, so wheel and touch-swipe movement is
+    // sent to it as SGR wheel reports (pty-wheel.ts). TUI mouse capture stays
+    // off, so text selection keeps working. If the TUI is running inline
+    // (an operator override), the wheel scrolls xterm's own scrollback.
+    const inFullScreen = () => term.buffer.active.type === "alternate";
+    const screenBox = () =>
+      term.element?.querySelector<HTMLElement>(".xterm-screen")?.getBoundingClientRect() ?? null;
+    const lineHeightPx = (box: DOMRect | null) =>
+      box && term.rows > 0 ? box.height / term.rows : 0;
+    // One report per whole line moved, sent together (see pty-wheel.ts), so
+    // a notch scrolls the transcript as far as it scrolls a web page.
+    const sendWheel = (lines: number, clientX: number, clientY: number, box: DOMRect | null) => {
+      const socket = wsRef.current;
+      if (!lines || !socket || socket.readyState !== WebSocket.OPEN) return;
+      const { col, row } = box
+        ? cellAtPoint(clientX, clientY, box, term.cols, term.rows)
+        : { col: Math.ceil(term.cols / 2), row: Math.ceil(term.rows / 2) };
+      socket.send(sgrWheelReports(lines, col, row, term.rows));
+    };
+    const wheelLines = new WheelLines();
     term.attachCustomWheelEventHandler((ev) => {
       const delta = ev.deltaY;
       if (!delta) {
         return false;
       }
 
-      const step = Math.max(1, Math.round(Math.abs(delta) / 50));
-      term.scrollLines(delta > 0 ? step : -step);
+      if (inFullScreen()) {
+        const box = screenBox();
+        const lines = wheelLines.add(
+          wheelDeltaToLines(delta, ev.deltaMode, lineHeightPx(box), term.rows),
+        );
+        sendWheel(lines, ev.clientX, ev.clientY, box);
+      } else {
+        const step = Math.max(1, Math.round(Math.abs(delta) / 50));
+        term.scrollLines(delta > 0 ? step : -step);
+      }
 
       ev.preventDefault();
       ev.stopPropagation();
       return false;
     });
+
+    // Phones and tablets (remote use): a vertical swipe scrolls the
+    // full-screen transcript the same way. Finger moving up = newer output.
+    const swipeLines = new WheelLines();
+    let swipeLastY: number | null = null;
+    let swipeX = 0;
+    const onTouchStart = (ev: TouchEvent) => {
+      const touch = ev.touches.length === 1 ? ev.touches[0] : null;
+      if (!touch || !inFullScreen()) {
+        swipeLastY = null;
+        return;
+      }
+      swipeLastY = touch.clientY;
+      swipeX = touch.clientX;
+      swipeLines.reset();
+    };
+    const onTouchMove = (ev: TouchEvent) => {
+      const touch = ev.touches.length === 1 ? ev.touches[0] : null;
+      if (swipeLastY === null || !touch) return;
+      const box = screenBox();
+      const lines = swipeLines.add(
+        wheelDeltaToLines(swipeLastY - touch.clientY, 0, lineHeightPx(box), term.rows),
+      );
+      swipeLastY = touch.clientY;
+      sendWheel(lines, swipeX, touch.clientY, box);
+      if (ev.cancelable) ev.preventDefault();
+    };
+    const onTouchEnd = () => {
+      swipeLastY = null;
+    };
+    host.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+    host.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+    host.addEventListener("touchend", onTouchEnd, true);
+    host.addEventListener("touchcancel", onTouchEnd, true);
 
     const unicode11 = new Unicode11Addon();
     term.loadAddon(unicode11);
@@ -797,8 +991,35 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     if (useWebgl) {
       try {
         const webgl = new WebglAddon();
-        webgl.onContextLoss(() => webgl.dispose());
+        // Browsers drop WebGL contexts of background tabs under GPU/memory
+        // pressure. The addon then waits ~3s for a restore before firing
+        // onContextLoss — and the chat pane is blank that whole time (the
+        // "chat disappears for a while when I come back" report). Fall back
+        // to the DOM renderer the moment the context is lost and repaint.
+        let webglDropped = false;
+        const dropWebgl = () => {
+          if (webglDropped) return;
+          webglDropped = true;
+          try {
+            webgl.dispose();
+          } catch {
+            /* already gone */
+          }
+          try {
+            if (term.rows > 0) term.refresh(0, term.rows - 1);
+          } catch {
+            /* terminal disposed meanwhile */
+          }
+        };
+        webgl.onContextLoss(dropWebgl);
         term.loadAddon(webgl);
+        // webglcontextlost doesn't bubble, but capture listeners on an
+        // ancestor still see it — whichever canvas the addon created.
+        term.element?.addEventListener(
+          "webglcontextlost",
+          () => void setTimeout(dropWebgl, 0),
+          true,
+        );
       } catch (err) {
         console.warn(
           "[robo-chat] WebGL renderer unavailable; falling back to default",
@@ -806,6 +1027,88 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         );
       }
     }
+
+    // Bottom-anchor the inline TUI (terminal-bottom-anchor.ts): shift the
+    // terminal down by the empty rows under its content so the input box
+    // sits at the bottom of the pane instead of floating mid-page. Skipped
+    // while the pane is hidden (display:none measures 0) so returning to
+    // the chat never flashes an un-anchored frame.
+    let anchorRaf = 0;
+    let anchorPx = 0;
+    const applyBottomAnchor = () => {
+      anchorRaf = 0;
+      if (term.buffer.active.type === "alternate") {
+        // Full screen fills the pane itself; skip all per-frame measuring.
+        if (anchorPx !== 0 && term.element) {
+          anchorPx = 0;
+          term.element.style.transform = "";
+        }
+        return;
+      }
+      const el = term.element;
+      const screenEl = el?.querySelector<HTMLElement>(".xterm-screen");
+      if (!el || !screenEl || term.rows <= 0) return;
+      const screenHeight = screenEl.offsetHeight;
+      if (screenHeight <= 0) return;
+      const buf = term.buffer.active;
+      const cell = buf.getNullCell();
+      const offsetRows = bottomAnchorOffsetRows({
+        rows: term.rows,
+        baseY: buf.baseY,
+        cursorY: buf.cursorY,
+        lineIsBlank: (y) => {
+          const line = buf.getLine(buf.baseY + y);
+          if (!line) return true;
+          if (line.translateToString(true).length > 0) return false;
+          for (let x = 0; x < line.length; x++) {
+            const c = line.getCell(x, cell);
+            if (c && !c.isBgDefault()) return false;
+          }
+          return true;
+        },
+      });
+      const px = Math.round((offsetRows * screenHeight) / term.rows);
+      if (px === anchorPx) return;
+      anchorPx = px;
+      el.style.transform = px > 0 ? `translateY(${px}px)` : "";
+    };
+    const scheduleBottomAnchor = () => {
+      if (anchorRaf || (anchorPx === 0 && term.buffer.active.type === "alternate")) return;
+      anchorRaf = requestAnimationFrame(applyBottomAnchor);
+    };
+    const anchorWriteDisposable = term.onWriteParsed(scheduleBottomAnchor);
+    // Idle Ctrl+C / Ctrl+D: the TUI prints its "starting a fresh dashboard
+    // chat" notice; seeing a new one right after the key starts the chat.
+    // Only armed for FRESH_CHAT_WATCH_MS after the key, so writes are free
+    // otherwise. See lib/fresh-chat-hotkey.ts.
+    const freshChatWatch = new FreshChatHotkeyWatch();
+    const freshChatNoticesOnScreen = () => {
+      const buf = term.buffer.active;
+      const rows: string[] = [];
+      for (let y = 0; y < term.rows; y++) {
+        rows.push(buf.getLine(buf.baseY + y)?.translateToString(true) ?? "");
+      }
+      return countFreshChatNotices(rows);
+    };
+    const freshChatWriteDisposable = term.onWriteParsed(() => {
+      if (
+        freshChatWatch.armed &&
+        freshChatWatch.seen(freshChatNoticesOnScreen(), Date.now())
+      ) {
+        requestFreshChatRef.current();
+      }
+    });
+    const anchorResizeDisposable = term.onResize(scheduleBottomAnchor);
+    // The empty space above an anchored chat belongs to the host, not to
+    // xterm: a click there should still put the cursor in the chat.
+    const focusFromHost = (ev: MouseEvent) => {
+      const el = term.element;
+      if (el && ev.target instanceof Node && !el.contains(ev.target)) {
+        ev.preventDefault();
+        term.focus();
+      }
+    };
+    host.addEventListener("mousedown", focusFromHost);
 
     // Initial fit + resize observer.  fit.fit() reads the container's
     // current bounding box and resizes the terminal grid to match.
@@ -856,6 +1159,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       } catch {
         return;
       }
+      scheduleBottomAnchor();
       if (fontChanged && term.rows > 0) {
         try {
           term.refresh(0, term.rows - 1);
@@ -912,9 +1216,24 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     // ``return cleanup`` stays at the top level; handlers + disposables
     // are hoisted to ``let`` bindings the cleanup closes over.
     let unmounting = false;
+    // This effect's own socket. Closing a socket fires its onclose later —
+    // often after the NEXT chat's socket is already in wsRef — so every
+    // handler below only touches the shared refs while its socket is still
+    // the current one, and cleanup closes this socket, not whatever wsRef
+    // holds by then. Clearing wsRef from a stale onclose used to cut the
+    // wheel off from every other chat opened (and the next window focus
+    // then tore the chat down to "loading" and reconnected).
+    let ownSocket: WebSocket | null = null;
     let onDataDisposable: { dispose(): void } | null = null;
     let onResizeDisposable: { dispose(): void } | null = null;
     let eraseSuppressionTimer: ReturnType<typeof setTimeout> | null = null;
+    let redrawTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearRedrawTimer = () => {
+      if (redrawTimer) {
+        clearTimeout(redrawTimer);
+        redrawTimer = null;
+      }
+    };
     let resumeMaxTimer: ReturnType<typeof setTimeout> | null = null;
     const clearEraseSuppressionTimer = () => {
       if (eraseSuppressionTimer) {
@@ -992,8 +1311,13 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       // skills, memory, and sessions (see web_server._resolve_chat_argv).
       if (scopedProfile) params.profile = scopedProfile;
       const url = await api.buildWsUrl("/api/pty", params);
+      // The chat may have switched (or unmounted) while the URL/ticket was
+      // being fetched: this terminal is already disposed. Opening its socket
+      // anyway made a second connection race the live one for the same PTY.
+      if (unmounting) return;
       const ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
+      ownSocket = ws;
       wsRef.current = ws;
       // W2 (NS-591): a mobile socket can wedge in CONNECTING after a radio
       // handoff and never fire onclose, so neither the resume predicate nor
@@ -1012,6 +1336,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       }, PTY_CONNECTING_TIMEOUT_MS);
 
     ws.onopen = () => {
+      if (unmounting || wsRef.current !== ws) return;
       clearReconnectTimer();
       clearConnectingTimer();
       connectInFlightRef.current = false;
@@ -1030,6 +1355,29 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       // follow up with the authoritative measurement — at worst Ink
       // reflows once after the PTY boots, which is imperceptible.
       ws.send(`\x1b[RESIZE:${term.cols};${term.rows}]`);
+      // Reattaching to a running full-screen TUI replays its recent output,
+      // which may start mid-screen. Nudge the size (one row less, then back)
+      // so the TUI repaints the whole screen from scratch.
+      clearRedrawTimer();
+      redrawTimer = setTimeout(() => {
+        redrawTimer = null;
+        if (
+          unmounting ||
+          wsRef.current !== ws ||
+          ws.readyState !== WebSocket.OPEN ||
+          !inFullScreen() ||
+          term.rows < 3
+        ) {
+          return;
+        }
+        ws.send(`\x1b[RESIZE:${term.cols};${term.rows - 1}]`);
+        redrawTimer = setTimeout(() => {
+          redrawTimer = null;
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(`\x1b[RESIZE:${term.cols};${term.rows}]`);
+          }
+        }, 80);
+      }, 500);
       // One-shot: a ?learn=<text> param (set by the Skills page "Learn a
       // skill" panel) is typed into the composer as a /learn command once the
       // PTY is up. /learn resolves via command.dispatch → a normal agent turn,
@@ -1057,6 +1405,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     // in-place redraws through untouched. See pty-resume-sanitizer.ts.
     const decoder = new TextDecoder();
     const sanitizer = new PtyResumeSanitizer();
+    let sanitizeResume = Boolean(resumeParam);
     if (resumeParam) {
       eraseSuppressionTimer = setTimeout(() => {
         eraseSuppressionTimer = null;
@@ -1065,6 +1414,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     }
 
     ws.onmessage = (ev) => {
+      if (unmounting) return; // a chat we already left: its terminal is gone
       const text =
         typeof ev.data === "string"
           ? ev.data
@@ -1075,7 +1425,15 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       // sanitizer can turn a nonempty erase-only / all-newline / partial-CSI
       // resume frame into "" (pty-resume-sanitizer.ts); keying off raw `text`
       // would hide the wait notice while the terminal is still blank.
-      const rendered = resumeParam ? sanitizer.next(text) : text;
+      // The resume sanitizer targets the inline TUI's replay floods; in full
+      // screen, stripping erase codes would leave stale characters behind.
+      let released = "";
+      if (sanitizeResume && inFullScreen()) {
+        sanitizeResume = false;
+        clearEraseSuppressionTimer();
+        released = sanitizer.flush();
+      }
+      const rendered = sanitizeResume ? sanitizer.next(text) : released + text;
       term.write(rendered);
       noteResumePtyChunk(rendered);
     };
@@ -1084,7 +1442,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       // Drain buffered sanitizer state. A buffered partial escape is dropped
       // (writing an unterminated CSI would wedge xterm's parser); a buffered
       // newline run is emitted collapsed.
-      if (resumeParam) {
+      if (sanitizeResume && !unmounting) {
         clearEraseSuppressionTimer();
         try {
           term.write(sanitizer.flush());
@@ -1092,9 +1450,11 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
           /* ignore */
         }
       }
-      wsRef.current = null;
-      connectInFlightRef.current = false;
-      clearConnectingTimer();
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+        connectInFlightRef.current = false;
+        clearConnectingTimer();
+      }
       if (unmounting) {
         return;
       }
@@ -1225,6 +1585,9 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         if (normalized.normalized) {
           mobileReplacementInputUntilRef.current = 0;
         }
+        if (isIdleExitKey(normalized.data)) {
+          freshChatWatch.arm(freshChatNoticesOnScreen(), Date.now());
+        }
         ws.send(normalized.data);
       });
 
@@ -1257,19 +1620,29 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         scheduleSyncTerminalMetrics,
       );
       ro.disconnect();
+      anchorWriteDisposable.dispose();
+      freshChatWriteDisposable.dispose();
+      anchorResizeDisposable.dispose();
+      host.removeEventListener("mousedown", focusFromHost);
+      host.removeEventListener("touchstart", onTouchStart, true);
+      host.removeEventListener("touchmove", onTouchMove, true);
+      host.removeEventListener("touchend", onTouchEnd, true);
+      host.removeEventListener("touchcancel", onTouchEnd, true);
+      clearRedrawTimer();
+      if (anchorRaf) cancelAnimationFrame(anchorRaf);
       if (hostSyncRaf) cancelAnimationFrame(hostSyncRaf);
       if (settleRaf1) cancelAnimationFrame(settleRaf1);
       if (settleRaf2) cancelAnimationFrame(settleRaf2);
       clearReconnectTimer();
       clearConnectingTimer();
       connectInFlightRef.current = false;
-      // Phase 5.3: ``ws`` is local to the IIFE that opens it (the gated-mode
-      // ticket fetch makes the open async). The cleanup runs at the outer
-      // effect's top level so it can't reach into that scope — close via
-      // the ref instead. ``?.`` covers the race where unmount fires before
-      // the ticket fetch resolves and ``wsRef.current`` was never assigned.
-      wsRef.current?.close();
-      wsRef.current = null;
+      // Phase 5.3: the socket is opened inside the async IIFE (the gated-mode
+      // ticket fetch makes the open async); it records it in ``ownSocket`` so
+      // cleanup closes THIS effect's socket. ``?.`` covers unmount before the
+      // ticket fetch resolved (the IIFE then never opens one). Only clear
+      // wsRef if it still points at ours.
+      ownSocket?.close();
+      if (wsRef.current === ownSocket) wsRef.current = null;
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
@@ -1290,6 +1663,16 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     scopedProfile,
     reconnectNonce,
   ]);
+
+  const repaintTerminal = useCallback(() => {
+    const term = termRef.current;
+    if (!term || term.rows <= 0) return;
+    try {
+      term.refresh(0, term.rows - 1);
+    } catch {
+      /* terminal is being disposed */
+    }
+  }, []);
 
   // When the user returns to the chat tab (isActive: false → true), the
   // terminal host just transitioned from display:none to display:flex.
@@ -1316,6 +1699,10 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       raf2 = requestAnimationFrame(() => {
         raf2 = 0;
         syncMetricsRef.current?.();
+        // The grid rarely changes size across a tab switch, so fit() alone
+        // doesn't redraw; repaint explicitly so the transcript is on screen
+        // the moment the chat is shown again.
+        repaintTerminal();
         const host = hostRef.current;
         const active = typeof document !== "undefined"
           ? document.activeElement
@@ -1334,7 +1721,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       if (raf1) cancelAnimationFrame(raf1);
       if (raf2) cancelAnimationFrame(raf2);
     };
-  }, [isActive]);
+  }, [isActive, repaintTerminal]);
 
   const maybeReconnectOnPageResume = useCallback(() => {
     const visibilityState =
@@ -1371,7 +1758,18 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       return;
     }
 
-    const onResume = () => maybeReconnectOnPageResume();
+    const onResume = () => {
+      // Coming back from another browser tab/app: repaint first (the socket
+      // is usually still open, so nothing else would redraw), then reconnect
+      // only if the connection actually dropped.
+      if (
+        typeof document === "undefined" ||
+        document.visibilityState === "visible"
+      ) {
+        requestAnimationFrame(repaintTerminal);
+      }
+      maybeReconnectOnPageResume();
+    };
 
     document.addEventListener("visibilitychange", onResume);
     window.addEventListener("pageshow", onResume);
@@ -1384,7 +1782,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       window.removeEventListener("focus", onResume);
       window.removeEventListener("online", onResume);
     };
-  }, [isActive, maybeReconnectOnPageResume]);
+  }, [isActive, maybeReconnectOnPageResume, repaintTerminal]);
 
   // Keep the live xterm theme in sync when the active theme's terminal
   // colors change (e.g. user switches to a custom YAML theme mid-session).
@@ -1492,7 +1890,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
               <ChatSidebar
                 channel={channel}
                 profile={scopedProfile}
-                onDashboardNewSessionRequest={startFreshDashboardChat}
+                onDashboardNewSessionRequest={requestFreshDashboardChat}
                 onSessionTitleChange={handleSessionTitleChange}
               />
             </div>
@@ -1523,7 +1921,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         <div
           className={cn(
             "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg",
-            "p-2 sm:p-3",
+            "px-2 pb-2 pt-1.5 sm:px-3 sm:pb-2.5 sm:pt-2",
           )}
           style={{
             backgroundColor: terminalBg,
@@ -1532,7 +1930,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         >
           <div
             ref={hostRef}
-            className="robo-chat-xterm-host min-h-0 min-w-0 flex-1"
+            className="robo-chat-xterm-host min-h-0 min-w-0 flex-1 overflow-hidden"
           />
 
           {showReconnectOverlay && (
@@ -1587,39 +1985,6 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
             </div>
           )}
 
-          <Button
-            ghost
-            onClick={handleCopyLast}
-            title="Copy last assistant response as raw markdown"
-            aria-label="Copy last assistant response"
-            className={cn(
-              "absolute z-10",
-              "normal-case tracking-normal font-normal",
-              "rounded border border-current/30",
-              "bg-black/20",
-              "opacity-70 hover:opacity-100 hover:border-current/60",
-              "transition-opacity duration-150",
-              "bottom-2 right-2 px-2 py-1 text-xs sm:bottom-3 sm:right-3 sm:px-2.5 sm:py-1.5",
-              "lg:bottom-4 lg:right-4",
-            )}
-            style={{ color: terminalFg }}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Copy className="h-3 w-3 shrink-0" />
-              <span className="hidden min-[400px]:inline tracking-wide">
-                {copyState === "copied" ? "copied" : "copy last response"}
-              </span>
-            </span>
-          </Button>
-          <VoiceInputButton
-            className={cn(
-              "absolute z-10",
-              "bottom-10 right-2 px-2 py-1 text-xs sm:bottom-12 sm:right-3 sm:px-2.5 sm:py-1.5",
-              "lg:bottom-14 lg:right-4",
-            )}
-            onTranscript={handleVoiceTranscript}
-            style={{ color: terminalFg }}
-          />
         </div>
 
         {!narrow && (
@@ -1634,7 +1999,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
               <ChatSidebar
                 channel={channel}
                 profile={scopedProfile}
-                onDashboardNewSessionRequest={startFreshDashboardChat}
+                onDashboardNewSessionRequest={requestFreshDashboardChat}
                 onSessionTitleChange={handleSessionTitleChange}
               />
             </div>

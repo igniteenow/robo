@@ -248,3 +248,117 @@ class TestWinPtyBridgeEnv:
         finally:
             bridge.close()
 
+
+
+# ---------------------------------------------------------------------------
+# Screen updates arrive whole (cross-platform: fake pywinpty over a socket)
+# ---------------------------------------------------------------------------
+
+
+class _SocketPtyProcess:
+    """pywinpty's ``PtyProcess`` read path: ``read`` recv()s from ``fileobj``,
+    the socket its reader thread feeds ConPTY output into."""
+
+    def __init__(self):
+        import socket
+
+        self.fileobj, self.feed = socket.socketpair()
+
+    def read(self, size=1024):
+        data = self.fileobj.recv(size)
+        if not data:
+            raise EOFError("Pty is closed")
+        return data.decode("utf-8")
+
+    def close(self):
+        self.feed.close()
+        self.fileobj.close()
+
+
+class TestScreenUpdatesArriveWhole:
+    def test_pieces_of_one_update_come_back_as_one_read(self):
+        import threading
+
+        proc = _SocketPtyProcess()
+        bridge = WinPtyBridge(proc)
+        frame = [f"row{i:02d}-".encode() * 400 for i in range(5)]  # 5 pieces
+
+        def feed():
+            for piece in frame:
+                proc.feed.sendall(piece)
+                time.sleep(0.001)  # pywinpty's reader-thread cadence
+
+        t = threading.Thread(target=feed)
+        t.start()
+        try:
+            got = bridge.read(timeout=0.2)
+            t.join()
+            assert got == b"".join(frame)
+        finally:
+            proc.close()
+
+    def test_separate_updates_are_not_merged(self):
+        proc = _SocketPtyProcess()
+        bridge = WinPtyBridge(proc)
+        try:
+            proc.feed.sendall(b"first")
+            assert bridge.read(timeout=0.2) == b"first"
+            time.sleep(0.05)
+            proc.feed.sendall(b"second")
+            assert bridge.read(timeout=0.2) == b"second"
+        finally:
+            proc.close()
+
+    def test_nonstop_output_is_still_delivered_promptly(self):
+        import threading
+
+        proc = _SocketPtyProcess()
+        bridge = WinPtyBridge(proc)
+        stop = threading.Event()
+
+        def flood():
+            while not stop.is_set():
+                try:
+                    proc.feed.sendall(b"x" * 4096)
+                except OSError:
+                    return
+                time.sleep(0.001)
+
+        t = threading.Thread(target=flood, daemon=True)
+        t.start()
+        try:
+            start = time.monotonic()
+            got = bridge.read(timeout=0.2)
+            assert got and time.monotonic() - start < 0.5
+        finally:
+            stop.set()
+            proc.close()
+
+    def test_eof_after_the_update_is_reported_on_the_next_read(self):
+        proc = _SocketPtyProcess()
+        bridge = WinPtyBridge(proc)
+        proc.feed.sendall(b"bye")
+        proc.feed.close()
+        try:
+            assert bridge.read(timeout=0.2) == b"bye"
+            assert bridge.read(timeout=0.2) is None
+        finally:
+            proc.fileobj.close()
+
+    def test_without_the_socket_reads_are_unchanged(self):
+        class NoSocket:
+            def read(self, size=1024):
+                return "plain"
+
+        assert WinPtyBridge(NoSocket()).read(timeout=0.2) == b"plain"
+
+
+class TestSlowPywinptyWarning:
+    def test_pywinpty_2_is_flagged_and_3_is_not(self, monkeypatch):
+        import robo_cli.win_pty_bridge as bridge
+
+        monkeypatch.setattr(bridge, "_slow_pywinpty_warned", False)
+        assert bridge._warn_if_slow_pywinpty("2.0.15") is True
+        assert bridge._warn_if_slow_pywinpty("3.0.5") is False
+        assert bridge._warn_if_slow_pywinpty("4.1.0") is False
+        assert bridge._warn_if_slow_pywinpty("not-a-version") is False

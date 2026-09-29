@@ -1496,12 +1496,16 @@ Launch the web dashboard — a browser-based UI for managing configuration, API 
 | `--insecure` | off | **Deprecated / no-op.** Formerly bypassed auth on a non-loopback bind. Since the June 2026 hardening a public bind *always* requires an auth provider (password or OAuth). Bind `127.0.0.1` and tunnel to keep it local. |
 | `--skip-build` | off | Skip the web UI build step and serve the existing `dist` directly. Useful for non-interactive contexts (Windows Scheduled Tasks, CI) where npm isn't available. Pre-build with `cd web && npm run build`. |
 | `--isolated` | off | When launched from a named profile (`worker dashboard`), run a dedicated per-profile server instead of routing to the machine dashboard. |
+| `--foreground` | off | Keep the dashboard attached to this terminal. By default an interactive launch runs in the background and keeps serving after the terminal closes (output goes to `~/.robo/logs/dashboard-stdio.log`). Services, containers, pipes and the desktop app always run in the foreground. |
 | `--stop` | — | Stop running `robo dashboard` processes and exit. |
 | `--status` | — | List running `robo dashboard` processes and exit. |
 
 ```bash
-# Default — opens browser to http://127.0.0.1:9119
+# Default — runs in the background and opens http://127.0.0.1:9119
 robo dashboard
+
+# Stop the background dashboard
+robo dashboard --stop
 
 # Custom port, no browser
 robo dashboard --port 8080 --no-open

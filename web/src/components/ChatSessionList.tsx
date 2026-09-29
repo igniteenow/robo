@@ -30,6 +30,7 @@ import { api, type SessionInfo } from "@/lib/api";
 import { cn, timeAgo } from "@/lib/utils";
 
 const SESSION_LIMIT = 30;
+const SESSION_POLL_MS = 15_000;
 interface ChatSessionListProps {
   /** Active resume target (the session currently shown in the terminal). */
   activeSessionId: string | null;
@@ -79,11 +80,18 @@ export function ChatSessionList({
   // commit state, so a fast profile switch (or Refresh spam) can't land a
   // stale list out of order.
   const reqRef = useRef(0);
+  const inFlightRef = useRef(false);
 
-  const load = useCallback(() => {
+  // ``silent`` = background refresh: no spinner, keeps the current list on
+  // error, and never stacks on top of a fetch that is still running.
+  const load = useCallback((silent = false) => {
+    if (silent && inFlightRef.current) return;
     const myReq = ++reqRef.current;
-    setLoading(true);
-    setError(null);
+    inFlightRef.current = true;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     api
       .getSessions(SESSION_LIMIT, 0, scopeKey, "recent")
       .then((res) => {
@@ -91,13 +99,25 @@ export function ChatSessionList({
         setSessions(res.sessions);
       })
       .catch((e: Error) => {
-        if (reqRef.current !== myReq) return;
+        if (reqRef.current !== myReq || silent) return;
         setError(e.message || "failed to load sessions");
       })
       .finally(() => {
-        if (reqRef.current === myReq) setLoading(false);
+        if (reqRef.current !== myReq) return;
+        inFlightRef.current = false;
+        setLoading(false);
       });
   }, [scopeKey]);
+
+  // Sessions started elsewhere (desktop app, a terminal, Telegram, cron)
+  // share this session store but have no push channel here — poll quietly
+  // so they show up without pressing Refresh.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") load(true);
+    }, SESSION_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [load]);
 
   useEffect(() => {
     // Dashboard data surfaces fetch from an effect on mount + scope change;

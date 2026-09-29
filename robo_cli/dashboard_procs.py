@@ -25,6 +25,30 @@ def _m():
     return main
 
 
+def _scan_with_psutil(patterns: list[str], self_pid: int) -> list[tuple[int, str]]:
+    """Process-table scan through psutil (a hard dependency); [] on any error."""
+    try:
+        import psutil
+    except Exception:
+        return []
+    found: list[tuple[int, str]] = []
+    try:
+        for proc in psutil.process_iter(["pid", "cmdline"]):
+            try:
+                pid = int(proc.info.get("pid") or 0)
+                cmdline = proc.info.get("cmdline") or []
+            except Exception:
+                continue
+            if not pid or pid == self_pid or not cmdline:
+                continue
+            command = " ".join(str(part) for part in cmdline)
+            if any(p in command for p in patterns):
+                found.append((pid, command))
+    except Exception:
+        return []
+    return found
+
+
 def _scan_dashboard_processes(
     *,
     exclude_pids: set[int] | None = None,
@@ -81,17 +105,32 @@ def _scan_dashboard_processes(
             # update, where a bare wmic spawn would pop a console window.
             from robo_cli._subprocess_compat import windows_hide_flags
 
-            result = subprocess.run(
-                ["wmic", "process", "get", "ProcessId,CommandLine", "/FORMAT:LIST"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                encoding="utf-8",
-                errors="ignore",
-                creationflags=windows_hide_flags(),
-            )
-            if result.returncode != 0 or result.stdout is None:
-                return []
+            try:
+                result = subprocess.run(
+                    ["wmic", "process", "get", "ProcessId,CommandLine", "/FORMAT:LIST"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    encoding="utf-8",
+                    errors="ignore",
+                    creationflags=windows_hide_flags(),
+                )
+            except (FileNotFoundError, OSError):
+                result = None
+            if result is None or result.returncode != 0 or result.stdout is None:
+                # wmic is gone from current Windows 11 builds. Without this
+                # fallback `robo dashboard --stop/--status` could not see a
+                # dashboard running in the background.
+                ancestors = _ancestor_pids()
+                dashboard_processes = [
+                    proc for proc in _scan_with_psutil(patterns, self_pid)
+                    if proc[0] not in ancestors
+                ]
+                if exclude_pids:
+                    dashboard_processes = [
+                        proc for proc in dashboard_processes if proc[0] not in exclude_pids
+                    ]
+                return dashboard_processes
             current_cmd = ""
             for line in result.stdout.split("\n"):
                 line = line.strip()
@@ -138,11 +177,30 @@ def _scan_dashboard_processes(
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         return []
 
+    # Never report our own ancestors. On Windows a venv's python.exe is a
+    # launcher that re-spawns the real interpreter with the same command line,
+    # so `python -m robo_cli.main dashboard --stop` would otherwise find (and
+    # kill) its own launcher and cut its own output short.
+    ancestors = _ancestor_pids()
+    if ancestors:
+        dashboard_processes = [
+            proc for proc in dashboard_processes if proc[0] not in ancestors
+        ]
     if exclude_pids:
         dashboard_processes = [
             proc for proc in dashboard_processes if proc[0] not in exclude_pids
         ]
     return dashboard_processes
+
+
+def _ancestor_pids() -> set[int]:
+    """PIDs of this process's parents (best effort; empty on any error)."""
+    try:
+        import psutil
+
+        return {parent.pid for parent in psutil.Process(os.getpid()).parents()}
+    except Exception:
+        return set()
 
 def _kill_stale_dashboard_processes(
     reason: str = "the running backend no longer matches the updated frontend",

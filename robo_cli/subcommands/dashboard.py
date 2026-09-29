@@ -107,6 +107,18 @@ def build_dashboard_parser(
     dashboard_parser.add_argument(
         "--no-open", action="store_true", help="Don't open browser automatically"
     )
+    # From an interactive terminal the dashboard runs in the background so it
+    # keeps serving after the terminal closes (robo_cli/dashboard_background.py).
+    # Services, containers, pipes and the Desktop app are never detached.
+    dashboard_parser.add_argument(
+        "--foreground",
+        action="store_true",
+        help=(
+            "Keep the dashboard attached to this terminal (stops when the "
+            "terminal closes). By default an interactive launch runs in the "
+            "background; stop it with --stop"
+        ),
+    )
     # Backward-compat shim: older Robo desktop app shells (<= 0.15.x) spawn the
     # backend as `robo dashboard --no-open --tui --host ... --port ...`. The
     # `--tui` flag was removed from this subcommand in cae6b5486 (embedded chat is

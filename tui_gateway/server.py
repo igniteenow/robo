@@ -12864,6 +12864,21 @@ _voice_sid_lock = threading.Lock()
 _voice_event_sid: str = ""
 _voice_wake_owner: "Optional[Transport]" = None
 
+# Web dashboard only (set by robo_cli.web_server when it serves the browser
+# UI): every browser chat is its own transport on this ONE in-process gateway,
+# all sharing the host microphone. Each chat's TUI arms the "Hey Robo"
+# listener when it starts, so the first chat owned the mic and push-to-talk in
+# every other chat was refused as busy ("voice: still transcribing") for as
+# long as that chat stayed open. With this on, a capture borrows the mic from
+# the listener's owner and hands it back afterwards. A standalone TUI (one
+# stdio transport) and the desktop backend never set it: unchanged there.
+_shared_gateway_mic_handoff = False
+
+
+def enable_shared_gateway_mic_handoff() -> None:
+    global _shared_gateway_mic_handoff
+    _shared_gateway_mic_handoff = True
+
 
 def _voice_emit(event: str, payload: dict | None = None) -> None:
     """Emit a voice event toward the session that most recently turned the
@@ -13905,8 +13920,22 @@ def _(rid, params: dict) -> dict:
 
     transport = current_transport() or _stdio_transport
     wake_owner, _surface = _wake_owner_snapshot()
+    lend_from = None
     if wake_owner is not None and wake_owner is not transport:
-        return _ok(rid, {"status": "busy", "reason": "wake_owned"})
+        if not _shared_gateway_mic_handoff:
+            return _ok(rid, {"status": "busy", "reason": "wake_owned"})
+        try:
+            from tools.wake_word import owns_listener
+
+            owner_gone = _transport_is_dead(wake_owner) or not owns_listener(wake_owner)
+        except Exception:
+            owner_gone = _transport_is_dead(wake_owner)
+        if owner_gone:
+            # A closed chat (or a reconnected one's old socket) still on the
+            # lease — nothing is listening, so just clear it.
+            _release_wake_for_transport(wake_owner)
+        else:
+            lend_from = wake_owner
 
     try:
         if action == "start":
@@ -13965,12 +13994,14 @@ def _(rid, params: dict) -> dict:
             try:
                 from tools.wake_word import pause_listening
 
-                wake_paused = pause_listening(owner=transport)
+                wake_paused = pause_listening(owner=lend_from or transport)
             except Exception:
                 wake_paused = False
             if wake_paused:
                 with _voice_sid_lock:
-                    _voice_wake_owner = transport
+                    # Resume whoever actually holds the listener (the lender
+                    # when this chat borrowed the mic in the dashboard).
+                    _voice_wake_owner = lend_from or transport
 
             def _on_transcript(t):
                 _stop_transcribing_cue()
@@ -14036,6 +14067,11 @@ def _(rid, params: dict) -> dict:
             )
             if started is False:
                 _resume_voice_wake()
+                if _shared_gateway_mic_handoff:
+                    logger.warning(
+                        "voice.record: refused — the previous recording is "
+                        "still being transcribed"
+                    )
                 return _ok(rid, {"status": "busy"})
             return _ok(rid, {"status": "recording"})
 

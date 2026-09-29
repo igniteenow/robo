@@ -6,7 +6,8 @@ import { Input } from "@igniteenow/ui/ui/components/input";
 import { Label } from "@igniteenow/ui/ui/components/label";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { GatewayClient } from "@/lib/gatewayClient";
-import { Check, RefreshCw, Search, X } from "lucide-react";
+import { api } from "@/lib/api";
+import { Check, Plus, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn, themedBody } from "@/lib/utils";
@@ -41,7 +42,14 @@ interface ModelOptionProvider {
   total_models?: number;
   is_current?: boolean;
   warning?: string;
+  /** false = listed but not set up yet (see auth_type / key_env). */
+  authenticated?: boolean;
+  auth_type?: string;
+  key_env?: string;
 }
+
+/** Pseudo-provider row that opens the custom-endpoint form. */
+const CUSTOM_ENDPOINT_SLUG = "__custom_endpoint__";
 
 interface ModelOptionsResponse {
   model?: string;
@@ -88,6 +96,12 @@ interface Props {
   title?: string;
   /** If true, hides "Persist globally" checkbox — always saves to config.yaml. */
   alwaysGlobal?: boolean;
+  /**
+   * Standalone only: offer "Custom endpoint" (any OpenAI-compatible URL —
+   * LM Studio, Ollama, vLLM, a hosted API). Saving it makes it the main
+   * model, then this is called instead of onApply.
+   */
+  onCustomEndpointSaved?(args: { provider: string; model: string }): void;
 }
 
 export function ModelPickerDialog(props: Props) {
@@ -100,8 +114,10 @@ export function ModelPickerDialog(props: Props) {
     onClose,
     title = "Switch Model",
     alwaysGlobal = false,
+    onCustomEndpointSaved,
   } = props;
   const standalone = !!loader && !!onApply;
+  const allowCustomEndpoint = standalone && !!onCustomEndpointSaved;
 
   const [providers, setProviders] = useState<ModelOptionProvider[]>([]);
   const [currentModel, setCurrentModel] = useState("");
@@ -147,11 +163,14 @@ export function ModelPickerDialog(props: Props) {
           },
         );
 
-  const refreshOptions = () => {
+  // ``bust`` re-fetches every provider's live catalogue ("Refresh Models");
+  // after saving one provider's key a plain reload is enough (its list isn't
+  // cached yet) and much faster.
+  const refreshOptions = (bust = true) => {
     setError(null);
     setRefreshing(true);
 
-    requestOptions(true)
+    requestOptions(bust)
       .then((r) => {
         if (closedRef.current) return;
         applyOptions(r);
@@ -402,30 +421,41 @@ export function ModelPickerDialog(props: Props) {
             total={providers.length}
             selectedSlug={selectedSlug}
             query={trimmedQuery}
+            allowCustomEndpoint={allowCustomEndpoint}
             onSelect={(slug) => {
               setSelectedSlug(slug);
               setSelectedModel("");
             }}
           />
 
-          <ModelColumn
-            provider={selectedProvider}
-            models={filteredModels}
-            allModels={models}
-            selectedModel={selectedModel}
-            currentModel={currentModel}
-            currentProviderSlug={currentProviderSlug}
-            onSelect={setSelectedModel}
-            onConfirm={(m) => {
-              setSelectedModel(m);
-              void applySelection(false, {
-                provider: selectedProvider?.slug ?? "",
-                model: m,
-                persistGlobal,
-                message: "",
-              });
-            }}
-          />
+          {allowCustomEndpoint && selectedSlug === CUSTOM_ENDPOINT_SLUG ? (
+            <CustomEndpointForm
+              onSaved={(args) => {
+                onCustomEndpointSaved?.(args);
+                onClose();
+              }}
+            />
+          ) : (
+            <ModelColumn
+              provider={selectedProvider}
+              models={filteredModels}
+              allModels={models}
+              selectedModel={selectedModel}
+              currentModel={currentModel}
+              currentProviderSlug={currentProviderSlug}
+              onSelect={setSelectedModel}
+              onKeySaved={() => refreshOptions(false)}
+              onConfirm={(m) => {
+                setSelectedModel(m);
+                void applySelection(false, {
+                  provider: selectedProvider?.slug ?? "",
+                  model: m,
+                  persistGlobal,
+                  message: "",
+                });
+              }}
+            />
+          )}
         </div>
 
         <footer className="border-t border-border p-3 flex items-center justify-between gap-3 flex-wrap">
@@ -455,7 +485,7 @@ export function ModelPickerDialog(props: Props) {
           <div className="flex items-center gap-2 ml-auto">
             <Button
               outlined
-              onClick={refreshOptions}
+              onClick={() => refreshOptions()}
               disabled={applying || loading || refreshing}
             >
               {refreshing ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -502,6 +532,7 @@ function ProviderColumn({
   total,
   selectedSlug,
   query,
+  allowCustomEndpoint = false,
   onSelect,
 }: {
   loading: boolean;
@@ -510,6 +541,7 @@ function ProviderColumn({
   total: number;
   selectedSlug: string;
   query: string;
+  allowCustomEndpoint?: boolean;
   onSelect(slug: string): void;
 }) {
   return (
@@ -549,12 +581,35 @@ function ProviderColumn({
                 {p.is_current && <CurrentTag />}
               </div>
               <div className="text-xs text-text-secondary font-mono truncate">
-                {p.slug} · {p.total_models ?? p.models?.length ?? 0} models
+                {p.slug} ·{" "}
+                {p.authenticated === false
+                  ? "not set up"
+                  : `${p.total_models ?? p.models?.length ?? 0} models`}
               </div>
             </div>
           </ListItem>
         );
       })}
+
+      {allowCustomEndpoint && !loading && (
+        <ListItem
+          active={selectedSlug === CUSTOM_ENDPOINT_SLUG}
+          onClick={() => onSelect(CUSTOM_ENDPOINT_SLUG)}
+          className={`items-start text-xs border-l-2 border-t border-t-border ${
+            selectedSlug === CUSTOM_ENDPOINT_SLUG
+              ? "border-l-primary"
+              : "border-l-transparent"
+          }`}
+        >
+          <Plus className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="font-medium">Custom endpoint</div>
+            <div className="text-xs text-text-secondary truncate">
+              any OpenAI-compatible URL
+            </div>
+          </div>
+        </ListItem>
+      )}
     </div>
   );
 }
@@ -572,6 +627,7 @@ function ModelColumn({
   currentProviderSlug,
   onSelect,
   onConfirm,
+  onKeySaved,
 }: {
   provider: ModelOptionProvider | null;
   models: { model: string; positions: number[] }[];
@@ -581,6 +637,7 @@ function ModelColumn({
   currentProviderSlug: string;
   onSelect(model: string): void;
   onConfirm(model: string): void;
+  onKeySaved?(): void;
 }) {
   if (!provider) {
     return (
@@ -592,15 +649,33 @@ function ModelColumn({
     );
   }
 
+  const needsSetup = provider.authenticated === false;
+  const needsKey =
+    needsSetup && provider.auth_type === "api_key" && !!provider.key_env;
+
   return (
     <div className="overflow-y-auto">
-      {provider.warning && (
-        <div className="p-3 text-xs text-destructive border-b border-border">
-          {provider.warning}
+      {needsKey ? (
+        <ProviderKeySetup
+          key={provider.slug}
+          provider={provider}
+          onSaved={() => onKeySaved?.()}
+        />
+      ) : needsSetup ? (
+        <div className="p-3 text-xs text-muted-foreground border-b border-border">
+          {provider.name} signs in with an account instead of an API key.
+          Connect it under <span className="font-medium">Keys → OAuth
+          logins</span> in the sidebar, then press Refresh Models.
         </div>
+      ) : (
+        provider.warning && (
+          <div className="p-3 text-xs text-destructive border-b border-border">
+            {provider.warning}
+          </div>
+        )
       )}
 
-      {models.length === 0 ? (
+      {needsSetup && models.length === 0 ? null : models.length === 0 ? (
         <div className="p-4 text-xs text-muted-foreground italic">
           {allModels.length
             ? "no models match your filter"
@@ -676,5 +751,254 @@ function HighlightedText({
         ),
       )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Provider key setup (unconfigured API-key providers)                */
+/* ------------------------------------------------------------------ */
+
+function ProviderKeySetup({
+  provider,
+  onSaved,
+}: {
+  provider: ModelOptionProvider;
+  onSaved(): void;
+}) {
+  const keyEnv = provider.key_env ?? "";
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      // Reject a key the provider says is wrong; an unreachable check (offline,
+      // no probe for this provider) doesn't block saving.
+      const check = await api
+        .validateProviderCredential(keyEnv, trimmed)
+        .catch(() => null);
+      if (check && !check.ok && check.reachable) {
+        setMessage(check.message || "That API key was rejected.");
+        return;
+      }
+      await api.setEnvVar(keyEnv, trimmed);
+      setValue("");
+      onSaved();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form
+      className="p-3 grid gap-2 border-b border-border"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <Label
+        htmlFor={`provider-key-${provider.slug}`}
+        className="font-display normal-case tracking-normal text-xs"
+      >
+        Paste your {provider.name} API key to use it
+      </Label>
+      <div className="flex items-center gap-2">
+        <Input
+          id={`provider-key-${provider.slug}`}
+          type="password"
+          autoComplete="off"
+          placeholder={keyEnv}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="h-8 text-sm font-mono"
+        />
+        <Button type="submit" size="sm" disabled={!value.trim() || saving}>
+          {saving ? <Spinner /> : "Save key"}
+        </Button>
+      </div>
+      {message ? (
+        <p className="text-xs text-destructive">{message}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Saved as {keyEnv} in this profile&apos;s .env (also editable on the
+          Keys page). The model list loads once the key is saved.
+        </p>
+      )}
+    </form>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Custom OpenAI-compatible endpoint                                  */
+/* ------------------------------------------------------------------ */
+
+function CustomEndpointForm({
+  onSaved,
+}: {
+  onSaved(args: { provider: string; model: string }): void;
+}) {
+  const [name, setName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
+  const [found, setFound] = useState<string[]>([]);
+  const [busy, setBusy] = useState<"find" | "save" | null>(null);
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
+    null,
+  );
+
+  const input = () => ({
+    name: name.trim() || "Custom endpoint",
+    base_url: baseUrl.trim(),
+    model: model.trim(),
+    ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+  });
+
+  const findModels = async () => {
+    if (!baseUrl.trim() || busy) return;
+    setBusy("find");
+    setMessage(null);
+    try {
+      const r = await api.validateCustomEndpoint(input());
+      const ids = r.models ?? [];
+      setFound(ids);
+      if (!r.ok) {
+        setMessage({ ok: false, text: r.message || "Could not reach it." });
+      } else if (ids.length) {
+        if (!model.trim()) setModel(ids[0]);
+        setMessage({ ok: true, text: `Found ${ids.length} model(s).` });
+      } else {
+        setMessage({
+          ok: true,
+          text: "Reachable, but it lists no models — type the model name.",
+        });
+      }
+    } catch (e) {
+      setMessage({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const save = async () => {
+    const body = input();
+    if (!body.base_url || !body.model || busy) return;
+    setBusy("save");
+    setMessage(null);
+    try {
+      const r = await api.saveCustomEndpoint({
+        ...body,
+        models: found.length ? found : [body.model],
+        make_default: true,
+      });
+      onSaved({ provider: r.id, model: body.model });
+    } catch (e) {
+      setMessage({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <form
+      className="overflow-y-auto p-4 grid gap-3 content-start"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <p className="text-xs text-muted-foreground">
+        Use any server that speaks the OpenAI API — LM Studio, Ollama, vLLM,
+        llama.cpp, LiteLLM or a hosted provider. The key (if any) is stored in
+        .env.
+      </p>
+      <div className="grid gap-1.5">
+        <Label htmlFor="custom-ep-name">Name</Label>
+        <Input
+          id="custom-ep-name"
+          placeholder="My local model"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-8 text-sm"
+        />
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="custom-ep-url">Base URL</Label>
+        <Input
+          id="custom-ep-url"
+          placeholder="http://localhost:11434/v1"
+          value={baseUrl}
+          onChange={(e) => {
+            setBaseUrl(e.target.value);
+            setFound([]);
+          }}
+          className="h-8 text-sm font-mono"
+        />
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="custom-ep-key">API key (optional)</Label>
+        <Input
+          id="custom-ep-key"
+          type="password"
+          autoComplete="off"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          className="h-8 text-sm font-mono"
+        />
+      </div>
+      <div className="grid gap-1.5">
+        <Label htmlFor="custom-ep-model">Model</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="custom-ep-model"
+            list="custom-ep-models"
+            placeholder="model id"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="h-8 text-sm font-mono"
+          />
+          <datalist id="custom-ep-models">
+            {found.map((id) => (
+              <option key={id} value={id} />
+            ))}
+          </datalist>
+          <Button
+            type="button"
+            size="sm"
+            outlined
+            onClick={() => void findModels()}
+            disabled={!baseUrl.trim() || busy !== null}
+          >
+            {busy === "find" ? <Spinner /> : "Find models"}
+          </Button>
+        </div>
+      </div>
+      {message && (
+        <p
+          className={cn(
+            "text-xs",
+            message.ok ? "text-muted-foreground" : "text-destructive",
+          )}
+        >
+          {message.text}
+        </p>
+      )}
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!baseUrl.trim() || !model.trim() || busy !== null}
+        >
+          {busy === "save" ? <Spinner /> : "Save & use as main model"}
+        </Button>
+      </div>
+    </form>
   );
 }

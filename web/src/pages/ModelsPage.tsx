@@ -1073,6 +1073,10 @@ function ModelSettingsPanel({
             loader={api.getModelOptions}
             alwaysGlobal
             title="Set Main Model"
+            onCustomEndpointSaved={({ model }) => {
+              onSaved();
+              setPendingReloadModel(model.split("/").slice(-1)[0]);
+            }}
             onApply={async ({ provider, model, confirmExpensiveModel }) => {
               const result = await applyAssignment({
                 confirmExpensiveModel,

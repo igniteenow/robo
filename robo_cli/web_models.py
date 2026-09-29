@@ -400,6 +400,17 @@ class MCPServerCreate(BaseModel):
     auth: Optional[str] = None
     # One-time provisioning input; persisted only to the profile's .env.
     bearer_token: Optional[SecretStr] = None
+    # Extra HTTP headers for remote servers. Credential-looking values are
+    # moved to the profile's .env and referenced as ${VAR} (mcp_import).
+    headers: Dict[str, str] = {}
+    profile: Optional[str] = None
+
+
+class MCPServersImport(BaseModel):
+    # Pasted MCP config text (JSON / YAML, any client's shape) or a parsed object.
+    config: Any
+    # Replace servers that already exist under the same name.
+    overwrite: bool = False
     profile: Optional[str] = None
 
 

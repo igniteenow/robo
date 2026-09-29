@@ -84,6 +84,7 @@ const PROFILE_SCOPED_PREFIXES = [
   "/api/model/auxiliary",
   "/api/model/moa",
   "/api/model/options",
+  "/api/providers/custom-endpoints",
   // A named profile keeps its own pairing whitelist, and its gateway only
   // consults that one — approving into the global store would grant access
   // the running gateway never sees.
@@ -577,6 +578,27 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, value }),
     }),
+  validateProviderCredential: (key: string, value: string, apiKey = "") =>
+    fetchJSON<ProviderCredentialCheck>("/api/providers/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value, api_key: apiKey }),
+    }),
+  validateCustomEndpoint: (body: CustomEndpointInput) =>
+    fetchJSON<ProviderCredentialCheck>(
+      "/api/providers/custom-endpoints/validate",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    ),
+  saveCustomEndpoint: (body: CustomEndpointInput) =>
+    fetchJSON<{ ok: boolean; id: string }>("/api/providers/custom-endpoints", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   deleteEnvVar: (key: string) =>
     fetchJSON<{ ok: boolean }>("/api/env", {
       method: "DELETE",
@@ -1034,6 +1056,12 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+    }),
+  importMcpServers: (config: string, overwrite = false) =>
+    fetchJSON<McpImportResult>("/api/mcp/servers/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config, overwrite }),
     }),
   authMcpServer: (name: string) =>
     fetchJSON<McpOAuthFlow>(
@@ -1504,11 +1532,40 @@ export type McpHttpAuth = "none" | "header" | "oauth";
 export interface McpServerCreate {
   name: string;
   url?: string;
+  /** Remote servers only; omit for Streamable HTTP. */
+  transport?: "sse";
   command?: string;
   args?: string[];
   env?: Record<string, string>;
   auth?: McpHttpAuth;
   bearer_token?: string;
+  /** Extra HTTP headers; secret-looking values are stored in .env. */
+  headers?: Record<string, string>;
+}
+
+export interface ProviderCredentialCheck {
+  ok: boolean;
+  /** False when the check couldn't run (offline, no probe) — not a verdict. */
+  reachable: boolean;
+  message: string;
+  models?: string[];
+}
+
+/** An OpenAI-compatible endpoint (LM Studio, Ollama, vLLM, a hosted API…). */
+export interface CustomEndpointInput {
+  name: string;
+  base_url: string;
+  model: string;
+  api_key?: string;
+  models?: string[];
+  make_default?: boolean;
+}
+
+export interface McpImportResult {
+  ok: boolean;
+  added: McpServer[];
+  skipped: Array<{ name: string; reason: string }>;
+  errors: Array<{ name: string; error: string }>;
 }
 
 export interface McpTestResult {
@@ -1910,6 +1967,9 @@ export interface EnvVarInfo {
   channel_managed?: boolean;
   /** True when this key is set in .env but not in any catalog (user-added custom key). */
   custom?: boolean;
+  /** Provider catalog identity for provider keys (groups the Keys page). */
+  provider?: string;
+  provider_label?: string;
 }
 
 export interface TelegramOnboardingStartResponse {
@@ -2343,6 +2403,10 @@ export interface ModelOptionProvider {
   source?: string;
   warning?: string;
   authenticated?: boolean;
+  /** How an unconfigured provider is activated ("api_key", "oauth_…"). */
+  auth_type?: string;
+  /** The .env variable that activates an "api_key" provider. */
+  key_env?: string;
 }
 
 export interface ModelOptionsResponse {
@@ -2538,6 +2602,14 @@ export interface HubAgentPluginRow {
   description: string;
   source: string;
   runtime_status: "disabled" | "enabled" | "inactive";
+  /** Loader kind: "model-provider" | "backend" | "platform" | "standalone" | "exclusive". */
+  kind?: string;
+  /** Identifier for enable/disable (unique when manifest names collide). */
+  key?: string;
+  /** Ships with Robo and loads without being enabled. */
+  always_on?: boolean;
+  /** False when enable/disable has no effect (LLM provider plugins). */
+  toggleable?: boolean;
   has_dashboard_manifest: boolean;
   dashboard_manifest: PluginManifestResponse | null;
   path: string;

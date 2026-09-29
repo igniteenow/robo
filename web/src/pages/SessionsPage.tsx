@@ -1136,8 +1136,11 @@ export default function SessionsPage() {
           if (!cancelled) setStatus(nextStatus);
         })
         .catch(() => {});
+      // Most recently ACTIVE first, so a long-running chat (desktop, TUI,
+      // a Telegram thread) that is in use right now leads the overview
+      // instead of sinking below newer but idle sessions.
       api
-        .getSessions(50, 0, sessionQueryOptions)
+        .getSessions(50, 0, { ...sessionQueryOptions, order: "recent" })
         .then((r) => {
           if (cancelled) return;
           setOverviewSessions(r.sessions);
@@ -1532,9 +1535,9 @@ export default function SessionsPage() {
   const platformEntries = status
     ? Object.entries(status.gateway_platforms ?? {})
     : [];
-  const recentSessions = overviewSessions
-    .filter((s) => !s.is_active)
-    .slice(0, 5);
+  // Open sessions are included (marked "live") — "recent" should show what is
+  // going on anywhere right now, not only chats that already ended.
+  const recentSessions = overviewSessions.slice(0, 5);
 
   const isSearching = Boolean(search.trim());
   const showOverviewTab =
@@ -2157,13 +2160,17 @@ export default function SessionsPage() {
                       )}
                     </div>
 
-                    <Badge
-                      tone="outline"
-                      className="shrink-0 self-start text-xs sm:self-center"
-                    >
-                      <Database className="mr-1 h-3 w-3" />
-                      {s.source ? sourceLabel(s.source) : "local"}
-                    </Badge>
+                    <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
+                      {s.is_active && (
+                        <Badge tone="success" className="text-xs">
+                          live
+                        </Badge>
+                      )}
+                      <Badge tone="outline" className="text-xs">
+                        <Database className="mr-1 h-3 w-3" />
+                        {s.source ? sourceLabel(s.source) : "local"}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </CardContent>

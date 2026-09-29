@@ -855,7 +855,7 @@ export default function PluginsPage() {
 
               {rows.map((row: HubAgentPluginRow) => (
 
-                <li key={row.name}>
+                <li key={row.key ?? row.name}>
 
 
                   <PluginRowCard
@@ -937,8 +937,20 @@ function PluginRowCard(props: PluginRowCardProps) {
 
   const tabPath = dm?.tab && !dm.tab.hidden ? dm.tab.override ?? dm.tab.path : null;
 
-  const busy = rowBusy === row.name;
+  // Enable/disable by the loader key: two plugins can share a manifest name
+  // (image_gen/fal and video_gen/fal), and the name would toggle both.
+  const pluginId = row.key ?? row.name;
+  const busy = rowBusy === pluginId;
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const canToggle = row.toggleable !== false;
+  const builtInNote =
+    row.kind === "model-provider"
+      ? "LLM provider — always available. Pick it on the Models page."
+      : row.always_on && row.runtime_status === "enabled"
+        ? row.kind === "platform"
+          ? "Built-in channel adapter — loads when the channel is set up on the Channels page."
+          : "Built-in — loads automatically; choose which one is used in its settings."
+        : null;
 
   const badgeTone =
     row.runtime_status === "enabled"
@@ -969,21 +981,26 @@ function PluginRowCard(props: PluginRowCardProps) {
 
             <Badge tone={badgeTone}>{row.runtime_status}</Badge>
 
+            {row.always_on ? <Badge tone="outline">built-in</Badge> : null}
+
             {row.auth_required ? (
               <Badge tone="destructive">{t.pluginsPage.authRequired}</Badge>
             ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {row.runtime_status === "enabled" ? (
+            {!canToggle ? null : row.runtime_status === "enabled" ? (
               <Button
                 disabled={busy}
                 ghost
                 size="sm"
                 onClick={() => {
-                  void setRuntimeLoading(row.name, async () => {
-                    await api.disableAgentPlugin(row.name);
-                    showToast(t.pluginsPage.disableRuntime, "success");
+                  void setRuntimeLoading(pluginId, async () => {
+                    await api.disableAgentPlugin(pluginId);
+                    showToast(
+                      `${row.name} disabled. New chats won't load it; restart the gateway for messaging channels.`,
+                      "success",
+                    );
                   });
                 }}
               >
@@ -995,9 +1012,12 @@ function PluginRowCard(props: PluginRowCardProps) {
                 ghost
                 size="sm"
                 onClick={() => {
-                  void setRuntimeLoading(row.name, async () => {
-                    await api.enableAgentPlugin(row.name);
-                    showToast(t.pluginsPage.enableRuntime, "success");
+                  void setRuntimeLoading(pluginId, async () => {
+                    await api.enableAgentPlugin(pluginId);
+                    showToast(
+                      `${row.name} enabled. New chats load it; restart the gateway for messaging channels.`,
+                      "success",
+                    );
                   });
                 }}
               >
@@ -1078,6 +1098,12 @@ function PluginRowCard(props: PluginRowCardProps) {
         {row.description ? (
           <p className="min-w-0 w-full text-xs tracking-[0.06em] text-text-secondary break-words">
             {row.description}
+          </p>
+        ) : null}
+
+        {builtInNote ? (
+          <p className="text-xs tracking-[0.05em] text-text-tertiary">
+            {builtInNote}
           </p>
         ) : null}
 
