@@ -354,6 +354,14 @@ def _suppress_mouse_residue_early() -> None:
         # the log with raw CSI.
         if not os.isatty(1):
             return
+        # Windows classic console (conhost, the Windows Server default)
+        # prints escape codes as literal ``←[?1003l`` text unless VT
+        # processing is on. Turn it on; if that is impossible, send nothing.
+        if sys.platform == "win32":
+            from robo_cli.stdio import enable_windows_vt_mode
+
+            if not enable_windows_vt_mode():
+                return
         # Disable every mouse-tracking variant we know about. Idempotent and
         # safe to send even when no tracking is currently asserted.
         os.write(
@@ -2116,6 +2124,10 @@ def _make_tui_argv(
         # being missing at runtime (e.g. useCursorAdvance). Prebuild it here.
         npm = _node_bin("npm")
         ink_dir = tui_dir / "packages" / "robo-ink"
+        from robo_constants import with_robo_node_path
+
+        # The build scripts call `node` by name; put Robo's own Node first on
+        # PATH (Windows installs do not add it to PATH).
         result = subprocess.run(
             [npm, "run", "build"],
             cwd=str(ink_dir),
@@ -2123,6 +2135,7 @@ def _make_tui_argv(
             text=True,
             encoding="utf-8",
             errors="replace",
+            env=with_robo_node_path(),
         )
         if result.returncode != 0:
             combined = f"{result.stdout or ''}{result.stderr or ''}".strip()
@@ -2148,6 +2161,10 @@ def _make_tui_argv(
 
     if should_build:
         npm = _node_bin("npm")
+        from robo_constants import with_robo_node_path
+
+        # The build scripts call `node` by name; put Robo's own Node first on
+        # PATH (Windows installs do not add it to PATH).
         result = subprocess.run(
             [npm, "run", "build"],
             cwd=str(tui_dir),
@@ -2155,6 +2172,7 @@ def _make_tui_argv(
             text=True,
             encoding="utf-8",
             errors="replace",
+            env=with_robo_node_path(),
         )
         if result.returncode != 0:
             combined = f"{result.stdout or ''}{result.stderr or ''}".strip()
@@ -11469,6 +11487,18 @@ def main():
     try:
         from robo_cli.stdio import configure_windows_stdio
         configure_windows_stdio()
+    except Exception:
+        pass
+
+    # Windows classic console with a raster font (Windows Server default):
+    # Robo's symbols render as '?'. Say how to get a window that draws them.
+    try:
+        if sys.platform == "win32" and sys.stdout.isatty():
+            from robo_cli.stdio import windows_console_font_hint
+
+            _font_hint = windows_console_font_hint()
+            if _font_hint:
+                print(_font_hint, file=sys.stderr)
     except Exception:
         pass
 

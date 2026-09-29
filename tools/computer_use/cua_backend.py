@@ -715,6 +715,17 @@ def _candidate_cua_driver_commands(override: Optional[str] = None) -> List[str]:
             os.path.join(home, ".local", "bin", "cua-driver.exe"),
             os.path.join(home, ".local", "bin", "cua-driver"),
         ])
+        # Where the official Windows installer (cua-driver-rs install.ps1)
+        # puts it. It adds the bin dir to the *User* PATH only, which a Robo
+        # process started before the install never sees.
+        local_appdata = os.environ.get("LOCALAPPDATA", "").strip()
+        if local_appdata:
+            candidates.append(
+                os.path.join(local_appdata, "Programs", "Cua", "cua-driver", "bin", "cua-driver.exe")
+            )
+        candidates.append(
+            os.path.join(home, ".cua-driver", "packages", "current", "cua-driver.exe")
+        )
     else:
         candidates.extend([
             os.path.join(home, ".local", "bin", "cua-driver"),

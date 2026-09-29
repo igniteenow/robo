@@ -687,6 +687,14 @@ def _resolve_stdio_command(command: str, env: dict) -> tuple[str, dict]:
                 # re-execs /usr/bin/env node which needs the same directory.
                 os.path.join(os.sep, "usr", "local", "bin", resolved_command),
             ]
+            if sys.platform == "win32":
+                # install-robo.ps1 unpacks portable Node straight into
+                # <ROBO_HOME>\node (node.exe, npm.cmd, npx.cmd) and does not
+                # add that folder to PATH.
+                win_name = {"npx": "npx.cmd", "npm": "npm.cmd", "node": "node.exe"}[
+                    resolved_command
+                ]
+                candidates.insert(0, os.path.join(robo_home, "node", win_name))
             for candidate in candidates:
                 if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
                     resolved_command = candidate

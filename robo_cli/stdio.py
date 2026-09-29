@@ -32,15 +32,156 @@ from __future__ import annotations
 import os
 import sys
 
-__all__ = ["configure_windows_stdio", "is_windows"]
+__all__ = ["configure_windows_stdio", "enable_windows_vt_mode", "is_windows"]
 
 
 _CONFIGURED = False
+
+# SetConsoleMode flag that makes the console interpret ANSI/VT escape codes
+# (colors, cursor moves).  Windows Terminal turns it on for every app; the
+# classic console window (conhost — the default on Windows Server) leaves it
+# off, so colored output shows up as literal ``←[33m…`` text.
+ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+_STD_OUTPUT_HANDLE = -11
+_STD_ERROR_HANDLE = -12
 
 
 def is_windows() -> bool:
     """Return True iff running on native Windows (not WSL)."""
     return sys.platform == "win32"
+
+
+def _enable_vt_processing(get_mode, set_mode) -> bool:
+    """Turn on VT processing for the stdout and stderr consoles.
+
+    ``get_mode(std_handle_id)`` returns the console mode, or ``None`` when
+    that stream is not a console (redirected to a file or pipe).
+    ``set_mode(std_handle_id, mode)`` returns True on success.
+
+    Returns True when stdout is a console that now renders escape codes.
+    """
+    stdout_vt = False
+    for std_id in (_STD_OUTPUT_HANDLE, _STD_ERROR_HANDLE):
+        mode = get_mode(std_id)
+        if mode is None:
+            continue
+        if mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING:
+            enabled = True
+        else:
+            enabled = bool(set_mode(std_id, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
+        if std_id == _STD_OUTPUT_HANDLE:
+            stdout_vt = enabled
+    return stdout_vt
+
+
+def _win32_console_mode_fns():
+    """Return ``(get_mode, set_mode)`` backed by kernel32 console calls."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetStdHandle.restype = wintypes.HANDLE
+    kernel32.GetConsoleMode.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.GetConsoleMode.restype = wintypes.BOOL
+    kernel32.SetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.SetConsoleMode.restype = wintypes.BOOL
+
+    def get_mode(std_id: int):
+        handle = kernel32.GetStdHandle(std_id)
+        if not handle or handle == ctypes.c_void_p(-1).value:
+            return None
+        mode = wintypes.DWORD()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return None  # not a console (file / pipe)
+        return mode.value
+
+    def set_mode(std_id: int, mode: int) -> bool:
+        handle = kernel32.GetStdHandle(std_id)
+        if not handle or handle == ctypes.c_void_p(-1).value:
+            return False
+        return bool(kernel32.SetConsoleMode(handle, mode))
+
+    return get_mode, set_mode
+
+
+_TMPF_TRUETYPE = 0x04
+
+
+def _console_font_is_raster():
+    """True when stdout's console window uses a raster (bitmap) font.
+
+    Raster fonts only have the OEM code page's glyphs, so ``◆ ╭ ━`` and most
+    other symbols Robo draws show up as ``?``.  Returns None when stdout is
+    not a console.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class _ConsoleFontInfoEx(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.ULONG),
+            ("nFont", wintypes.DWORD),
+            ("dwFontSize", wintypes._COORD),
+            ("FontFamily", wintypes.UINT),
+            ("FontWeight", wintypes.UINT),
+            ("FaceName", wintypes.WCHAR * 32),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetStdHandle.restype = wintypes.HANDLE
+    kernel32.GetCurrentConsoleFontEx.argtypes = [
+        wintypes.HANDLE, wintypes.BOOL, ctypes.POINTER(_ConsoleFontInfoEx),
+    ]
+    kernel32.GetCurrentConsoleFontEx.restype = wintypes.BOOL
+    handle = kernel32.GetStdHandle(_STD_OUTPUT_HANDLE)
+    if not handle or handle == ctypes.c_void_p(-1).value:
+        return None
+    info = _ConsoleFontInfoEx()
+    info.cbSize = ctypes.sizeof(info)
+    if not kernel32.GetCurrentConsoleFontEx(handle, False, ctypes.byref(info)):
+        return None
+    return not (info.FontFamily & _TMPF_TRUETYPE)
+
+
+def windows_console_font_hint(environ=None, font_is_raster=None):
+    """One-line hint when this console window cannot draw Robo's symbols.
+
+    Returns None everywhere else: non-Windows, Windows Terminal / VS Code
+    (they draw every symbol), a TrueType console font, or when the font
+    cannot be read.  Never raises.
+    """
+    env = os.environ if environ is None else environ
+    if not is_windows():
+        return None
+    if env.get("WT_SESSION") or env.get("TERM_PROGRAM"):
+        return None
+    try:
+        raster = (font_is_raster or _console_font_is_raster)()
+    except Exception:
+        return None
+    if not raster:
+        return None
+    return (
+        "Note: this console window uses a raster font, so Robo's symbols show "
+        "as '?'. Open Robo in Windows Terminal (search 'Terminal' in Start), "
+        "or choose Consolas in this window's Properties > Font."
+    )
+
+
+def enable_windows_vt_mode() -> bool:
+    """Make the Windows console render ANSI color and cursor codes.
+
+    No-op on non-Windows.  Never raises.  Returns True when stdout is a
+    console that renders escape codes (already on, or switched on here).
+    Only the VT flag is added; every other console mode bit is kept.
+    """
+    if not is_windows():
+        return False
+    try:
+        get_mode, set_mode = _win32_console_mode_fns()
+        return _enable_vt_processing(get_mode, set_mode)
+    except Exception:
+        return False
 
 
 def _flip_console_code_page_to_utf8() -> None:
@@ -104,6 +245,10 @@ def configure_windows_stdio() -> bool:
         # Mark configured so repeated calls on POSIX are true no-ops.
         _CONFIGURED = True
         return False
+
+    # Render colors instead of printing raw ``←[33m`` codes in the classic
+    # console window (conhost, the Windows Server default).
+    enable_windows_vt_mode()
 
     if os.environ.get("ROBO_DISABLE_WINDOWS_UTF8") in {"1", "true", "True", "yes"}:
         _CONFIGURED = True

@@ -334,3 +334,66 @@ async def test_dashboard_prewarms_the_chat_tui_under_the_chat_lock(monkeypatch) 
     monkeypatch.setattr(cli_main, "_make_tui_argv", no_node)
     await ws._prewarm_chat_tui(ws.app)           # never takes the dashboard down
     assert not lock.locked()
+
+
+# ---------------------------------------------------------------------------
+# The TUI build scripts call `node` by name. Windows installs keep Robo's
+# Node in <ROBO_HOME>\node and never add it to PATH, so the build failed with
+# "'node' is not recognized" on machines without a system Node.
+# ---------------------------------------------------------------------------
+
+
+def _managed_node_dir() -> Path:
+    from robo_constants import get_robo_home, iter_robo_node_dirs
+
+    assert get_robo_home()  # isolated temp ROBO_HOME from conftest
+    node_dir = iter_robo_node_dirs()[0]
+    node_dir.mkdir(parents=True, exist_ok=True)
+    return node_dir
+
+
+def _record_build_envs(main_mod, monkeypatch) -> list:
+    import robo_constants
+
+    _record_builds(main_mod, monkeypatch)
+    # Resolve npm/node the same way on every OS (Windows scans PATH for .cmd
+    # shims instead of calling shutil.which).
+    monkeypatch.setattr(robo_constants, "find_node_executable", lambda cmd: f"/bin/{cmd}")
+    envs = []
+
+    def fake_run(cmd, *args, **kwargs):
+        if list(cmd[-2:]) == ["run", "build"]:
+            envs.append(kwargs.get("env"))
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(main_mod.subprocess, "run", fake_run)
+    return envs
+
+
+def test_tui_build_runs_with_robo_managed_node_on_path(
+    tmp_path: Path, main_mod, monkeypatch
+) -> None:
+    node_dir = _managed_node_dir()
+    tui_dir = _tui_with_bundle(tmp_path, source_newer=True)
+    envs = _record_build_envs(main_mod, monkeypatch)
+
+    main_mod._make_tui_argv(tui_dir, tui_dev=False)
+
+    assert len(envs) == 1
+    assert envs[0] is not None
+    assert envs[0]["PATH"].split(os.pathsep)[0] == str(node_dir)
+
+
+def test_tui_dev_prebuild_runs_with_robo_managed_node_on_path(
+    tmp_path: Path, main_mod, monkeypatch
+) -> None:
+    node_dir = _managed_node_dir()
+    tui_dir = _tui_with_bundle(tmp_path, source_newer=True)
+    (tui_dir / "packages" / "robo-ink").mkdir(parents=True)
+    envs = _record_build_envs(main_mod, monkeypatch)
+
+    main_mod._make_tui_argv(tui_dir, tui_dev=True)
+
+    assert len(envs) == 1
+    assert envs[0] is not None
+    assert envs[0]["PATH"].split(os.pathsep)[0] == str(node_dir)

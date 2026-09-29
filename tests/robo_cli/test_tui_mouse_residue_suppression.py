@@ -51,3 +51,36 @@ class TestEarlyMouseDisable:
         with patch("os.isatty", return_value=True), patch("os.write", side_effect=boom):
             # Must not propagate — startup hot path can never break.
             _suppress_mouse_residue_early()
+
+
+class TestWindowsClassicConsole:
+    """conhost (the Windows Server default) prints escape codes as literal
+    ``←[?1003l`` text unless VT processing is on."""
+
+    def _tui_argv(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["robo", "--tui"])
+        monkeypatch.delenv("ROBO_TUI", raising=False)
+        monkeypatch.delenv("ROBO_TUI_NO_EARLY_DISABLE", raising=False)
+        monkeypatch.setattr(sys, "platform", "win32")
+
+    def test_writes_nothing_when_vt_cannot_be_enabled(self, monkeypatch):
+        self._tui_argv(monkeypatch)
+
+        with patch("os.isatty", return_value=True), \
+             patch("robo_cli.stdio.enable_windows_vt_mode", return_value=False), \
+             patch("os.write") as mock_write:
+            _suppress_mouse_residue_early()
+
+        mock_write.assert_not_called()
+
+    def test_enables_vt_before_writing(self, monkeypatch):
+        self._tui_argv(monkeypatch)
+        order = []
+
+        with patch("os.isatty", return_value=True), \
+             patch("robo_cli.stdio.enable_windows_vt_mode",
+                   side_effect=lambda: order.append("vt") or True), \
+             patch("os.write", side_effect=lambda fd, data: order.append(data)):
+            _suppress_mouse_residue_early()
+
+        assert order == ["vt", EXPECTED]
