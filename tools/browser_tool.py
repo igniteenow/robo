@@ -4766,6 +4766,64 @@ def _chromium_search_roots() -> List[str]:
     return roots
 
 
+def _agent_browser_downloaded_chrome() -> Optional[str]:
+    """Chrome that ``agent-browser install`` downloaded, if any.
+
+    agent-browser 0.26+ unpacks Chrome for Testing into
+    ``~/.agent-browser/browsers/chrome-<version>/`` and launches it from there
+    before looking anywhere else. Same layouts agent-browser itself accepts.
+    """
+    root = os.path.join(os.path.expanduser("~"), ".agent-browser", "browsers")
+    try:
+        entries = sorted(os.listdir(root), reverse=True)
+    except OSError:
+        return None
+    if sys.platform == "win32":
+        layouts = ("chrome.exe", os.path.join("chrome-win64", "chrome.exe"))
+    elif sys.platform == "darwin":
+        app = os.path.join(
+            "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"
+        )
+        layouts = (app, os.path.join("chrome-mac-arm64", app), os.path.join("chrome-mac-x64", app))
+    else:
+        layouts = ("chrome", os.path.join("chrome-linux64", "chrome"))
+    for entry in entries:
+        if not entry.startswith("chrome-"):
+            continue
+        for layout in layouts:
+            candidate = os.path.join(root, entry, layout)
+            if os.path.isfile(candidate):
+                return candidate
+    return None
+
+
+def _system_chrome_install_paths() -> List[str]:
+    """Installed Chrome/Brave locations agent-browser launches on Windows/macOS.
+
+    These installers do not put the browser on PATH, so a PATH lookup misses
+    them. (Linux browsers are found by name on PATH.)
+    """
+    if sys.platform == "win32":
+        paths: List[str] = []
+        local = os.environ.get("LOCALAPPDATA", "").strip()
+        if local:
+            paths.append(os.path.join(local, "Google", "Chrome", "Application", "chrome.exe"))
+            paths.append(
+                os.path.join(local, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")
+            )
+        paths.append(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+        paths.append(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe")
+        return paths
+    if sys.platform == "darwin":
+        return [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        ]
+    return []
+
+
 def _chromium_installed() -> bool:
     """Return True when a usable Chromium (or headless-shell) build is on disk.
 
@@ -4773,9 +4831,12 @@ def _chromium_installed() -> bool:
 
     1. ``AGENT_BROWSER_EXECUTABLE_PATH`` env var — the official way to point
        agent-browser at a pre-installed Chrome/Chromium.
-    2. System Chrome/Chromium in PATH (``google-chrome``, ``chromium``,
-       ``chromium-browser``, ``chrome``).
-    3. Playwright's browser cache (current logic) — directories containing
+    2. The Chrome that ``agent-browser install`` downloaded
+       (``~/.agent-browser/browsers``), which agent-browser launches first.
+    3. System Chrome/Chromium in PATH (``google-chrome``, ``chromium``,
+       ``chromium-browser``, ``chrome``), and on Windows/macOS the standard
+       Chrome/Brave install folders.
+    4. Playwright's browser cache (current logic) — directories containing
        ``chromium-*`` or ``chromium_headless_shell-*``.
 
     agent-browser (0.26+) downloads Playwright's chromium / headless-shell
@@ -4796,18 +4857,25 @@ def _chromium_installed() -> bool:
             _cached_chromium_installed = True
             return True
 
-    # 2. System Chrome/Chromium in PATH (common names)
+    # 2. Chrome downloaded by `agent-browser install` (what "Run setup" and the
+    #    lazy install fetch); agent-browser launches this one first.
+    if _agent_browser_downloaded_chrome():
+        _cached_chromium_installed = True
+        return True
+
+    # 3. System Chrome/Chromium in PATH (common names), then the standard
+    #    install folders agent-browser also launches from.
     system_chrome = (
         shutil.which("google-chrome")
         or shutil.which("chromium")
         or shutil.which("chromium-browser")
         or shutil.which("chrome")
     )
-    if system_chrome:
+    if system_chrome or any(os.path.isfile(p) for p in _system_chrome_install_paths()):
         _cached_chromium_installed = True
         return True
 
-    # 3. Playwright browser cache (legacy — chromium-* / chromium_headless_shell-* dirs)
+    # 4. Playwright browser cache (legacy — chromium-* / chromium_headless_shell-* dirs)
     for root in _chromium_search_roots():
         if not root or not os.path.isdir(root):
             continue

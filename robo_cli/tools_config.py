@@ -1697,7 +1697,22 @@ def _run_post_setup(post_setup_key: str):
                 env=with_robo_node_path(),
             )
             if result.returncode == 0:
-                _print_success("    Chromium installed")
+                # Check the way the browser tool will, so "installed" is only
+                # reported when the tool can actually find the browser.
+                try:
+                    import tools.browser_tool as _browser_tool
+
+                    _browser_tool._cached_chromium_installed = None
+                    found = _chromium_installed()
+                except Exception:
+                    found = True
+                if found:
+                    _print_success("    Chromium installed")
+                else:
+                    _print_warning(
+                        "    The Chromium download finished, but Robo cannot find it; "
+                        "run `robo doctor` for details"
+                    )
                 # Invalidate the cached "missing" result so subsequent
                 # check_browser_requirements() calls see the new install.
                 import tools.browser_tool as _bt

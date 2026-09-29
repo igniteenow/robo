@@ -2078,10 +2078,10 @@ def run_doctor(args):
                             "(browser_* tools will be hidden from the agent)",
                         )
                         if sys.platform == "win32":
-                            check_info(
-                                f"Install with: cd {PROJECT_ROOT} && "
-                                "npx playwright install chromium"
-                            )
+                            # agent-browser's own installer puts Chrome where
+                            # agent-browser looks (and `&&` is not valid in
+                            # Windows PowerShell 5.1).
+                            check_info("Install with: robo tools post-setup agent_browser")
                         else:
                             check_info(
                                 f"Install with: cd {PROJECT_ROOT} && "
