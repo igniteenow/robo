@@ -24,6 +24,53 @@ class TestDoctorPlatformHints:
         assert doctor._python_install_cmd() == "python -m pip install"
         assert doctor._system_package_install_cmd("ripgrep") == "pkg install ripgrep"
 
+    def test_windows_package_hint_uses_winget(self, monkeypatch):
+        monkeypatch.delenv("TERMUX_VERSION", raising=False)
+        monkeypatch.setattr(doctor, "_is_termux", lambda: False)
+        monkeypatch.setattr(doctor, "sys", SimpleNamespace(platform="win32"))
+
+        hint = doctor._system_package_install_cmd("ripgrep")
+
+        assert hint == "winget install BurntSushi.ripgrep.MSVC"
+        assert "apt" not in hint
+
+
+class TestDoctorNodeDetection:
+    """The Windows installer keeps Robo's Node in <ROBO_HOME>\\node and does
+    not add it to PATH; doctor must not report "Node.js not found" there."""
+
+    def test_robo_managed_node_counts_when_not_on_path(self, monkeypatch):
+        from robo_constants import iter_robo_node_dirs
+
+        monkeypatch.setattr(doctor, "_safe_which", lambda _cmd: None)
+        node_dir = iter_robo_node_dirs()[0]
+        node_dir.mkdir(parents=True, exist_ok=True)
+        name = "node.exe" if sys.platform == "win32" else "node"
+        (node_dir / name).write_text("", encoding="utf-8")
+
+        assert doctor._node_available() is True
+
+    def test_windows_layout_node_exe_in_node_folder(self, monkeypatch):
+        from robo_constants import get_robo_home
+
+        monkeypatch.setattr(doctor, "_safe_which", lambda _cmd: None)
+        monkeypatch.setattr(doctor, "sys", SimpleNamespace(platform="win32"))
+        node_dir = get_robo_home() / "node"
+        node_dir.mkdir(parents=True, exist_ok=True)
+        (node_dir / "node.exe").write_text("", encoding="utf-8")
+
+        assert doctor._node_available() is True
+
+    def test_no_node_anywhere(self, monkeypatch):
+        monkeypatch.setattr(doctor, "_safe_which", lambda _cmd: None)
+
+        assert doctor._node_available() is False
+
+    def test_node_on_path(self, monkeypatch):
+        monkeypatch.setattr(doctor, "_safe_which", lambda cmd: "/usr/bin/node" if cmd == "node" else None)
+
+        assert doctor._node_available() is True
+
 
     def test_sqlite_upgrade_hint_recreates_docker_containers(self, monkeypatch):
         monkeypatch.setattr(doctor, "detect_install_method", lambda _root: "docker")

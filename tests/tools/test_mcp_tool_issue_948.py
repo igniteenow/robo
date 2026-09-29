@@ -146,3 +146,24 @@ def test_run_stdio_malware_check_times_out_fail_open():
         assert elapsed < 1.0, f"startup did not fail-open promptly ({elapsed:.1f}s)"
 
     asyncio.run(_test())
+
+
+def test_resolve_stdio_command_finds_windows_managed_node(tmp_path, monkeypatch):
+    """Windows installs unpack portable Node straight into <ROBO_HOME>\\node
+    (npx.cmd next to node.exe) and never add it to PATH."""
+    import tools.mcp_tool as mcp_mod
+
+    node_dir = tmp_path / "node"
+    node_dir.mkdir()
+    npx_cmd = node_dir / "npx.cmd"
+    npx_cmd.write_text("@echo off\r\n", encoding="utf-8")
+    npx_cmd.chmod(0o755)
+    monkeypatch.setattr(mcp_mod, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setenv("ROBO_HOME", str(tmp_path))
+
+    with patch("tools.mcp_tool.shutil.which", return_value=None):
+        command, env = _resolve_stdio_command("npx", {"PATH": "C:\\Windows\\system32"})
+
+    assert command == str(npx_cmd)
+    # node.exe sits in the same folder, so npx's own `node` calls resolve too.
+    assert env["PATH"].split(os.pathsep)[0] == str(node_dir)

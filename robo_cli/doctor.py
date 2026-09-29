@@ -79,6 +79,9 @@ def _system_package_install_cmd(pkg: str) -> str:
         return f"pkg install {pkg}"
     if sys.platform == "darwin":
         return f"brew install {pkg}"
+    if sys.platform == "win32":
+        winget_ids = {"ripgrep": "BurntSushi.ripgrep.MSVC"}
+        return f"winget install {winget_ids.get(pkg, pkg)}"
     return f"sudo apt install {pkg}"
 
 
@@ -104,6 +107,25 @@ def _safe_which(cmd: str) -> str | None:
         return shutil.which(cmd)
     except Exception:
         return None
+
+
+def _node_available() -> bool:
+    """Node on PATH, or the Robo-managed Node that Robo runs its tools with.
+
+    The Windows installer unpacks Node into ``<ROBO_HOME>\\node`` without
+    adding it to PATH; Robo puts that folder on PATH for its own
+    subprocesses, so a PATH-only check reports "Node.js not found" on a
+    machine where every Node feature works.
+    """
+    if _safe_which("node"):
+        return True
+    try:
+        from robo_constants import iter_robo_node_dirs
+
+        names = ("node.exe", "node") if sys.platform == "win32" else ("node",)
+        return any((d / name).is_file() for d in iter_robo_node_dirs() for name in names)
+    except Exception:
+        return False
 
 
 def _termux_browser_setup_steps(node_installed: bool) -> list[str]:
@@ -1947,7 +1969,7 @@ def run_doctor(args):
             check_info("Vercel persistence: ephemeral filesystem")
 
     # Node.js + agent-browser (for browser automation tools)
-    if _safe_which("node"):
+    if _node_available():
         check_ok("Node.js")
         # Check if agent-browser is installed
         agent_browser_path = PROJECT_ROOT / "node_modules" / "agent-browser"

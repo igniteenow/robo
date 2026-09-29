@@ -1525,9 +1525,13 @@ def _run_cua_driver_installer(
                         pass
                 if result.returncode != 0:
                     logger.debug("cua-driver installer output:\n%s", result.stdout)
-        if result.returncode == 0 and shutil.which(driver_cmd):
+        # Resolve like the runtime does (PATH, then the installer's own
+        # folders): the installer adds its bin dir to the User PATH only,
+        # which this already-running process does not see.
+        installed_cmd = driver_cmd if shutil.which(driver_cmd) else _resolved_cua_driver_cmd()
+        if result.returncode == 0 and installed_cmd:
             if is_windows and not _repair_cua_driver_autostart_windows(
-                driver_cmd, verbose=verbose
+                installed_cmd, verbose=verbose
             ):
                 _print_warning(
                     "    cua-driver installed, but auto-start was not registered."

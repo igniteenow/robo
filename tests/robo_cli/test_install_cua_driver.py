@@ -1017,3 +1017,59 @@ class TestWindowsAutostartRepair:
         assert "-ArgumentList @('autostart','enable')" in ps_command
         assert f"$exe = '{driver}'" in ps_command
         assert f"& {driver}" not in ps_command
+
+
+class TestWindowsInstallDetection:
+    """The official Windows installer adds its bin dir to the *User* PATH
+    only. The already-running Robo process never sees that PATH, so a
+    PATH-only check reported "cua-driver installing did not complete" after
+    a successful install."""
+
+    def _run(self, *, which, resolved):
+        from unittest.mock import MagicMock
+        from robo_cli import tools_config
+
+        fake_proc = MagicMock()
+        fake_proc.pid = 1
+        fake_proc.returncode = 0
+        fake_proc.communicate.return_value = ("cua-driver-rs installed.", None)
+
+        with patch("platform.system", return_value="Windows"), \
+             patch("subprocess.Popen", return_value=fake_proc), \
+             patch.object(tools_config.shutil, "which", side_effect=which), \
+             patch.object(tools_config, "_resolved_cua_driver_cmd", return_value=resolved), \
+             patch.object(tools_config, "_repair_cua_driver_autostart_windows",
+                          return_value=True) as repair, \
+             patch.object(tools_config, "_clear_stale_cua_install_lock"), \
+             patch.object(tools_config, "_print_warning") as warn, \
+             patch.object(tools_config, "_print_info"):
+            ok = tools_config._run_cua_driver_installer(label="Installing", verbose=False)
+        return ok, repair, warn
+
+    def test_driver_in_installer_folder_counts_as_installed(self):
+        installed = r"C:\Users\u\AppData\Local\Programs\Cua\cua-driver\bin\cua-driver.exe"
+
+        ok, repair, warn = self._run(which=lambda _n: None, resolved=installed)
+
+        assert ok is True
+        warn.assert_not_called()
+        repair.assert_called_once()
+        assert repair.call_args.args[0] == installed
+
+    def test_driver_on_path_is_used_as_before(self):
+        on_path = r"C:\tools\cua-driver.exe"
+
+        ok, repair, _warn = self._run(
+            which=lambda n: on_path if n == "cua-driver" else None,
+            resolved=r"C:\elsewhere\cua-driver.exe",
+        )
+
+        assert ok is True
+        repair.assert_called_once_with("cua-driver", verbose=False)
+
+    def test_driver_nowhere_still_reports_failure(self):
+        ok, repair, warn = self._run(which=lambda _n: None, resolved=None)
+
+        assert ok is False
+        repair.assert_not_called()
+        assert any("did not complete" in str(c.args[0]) for c in warn.call_args_list)
