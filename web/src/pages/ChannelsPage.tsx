@@ -30,6 +30,7 @@ import type {
   MessagingPlatform,
   MessagingPlatformEnvVar,
   MessagingPlatformUpdate,
+  StatusResponse,
   TelegramOnboardingStartResponse,
   WhatsAppOnboardingStartResponse,
 } from "@/lib/api";
@@ -127,6 +128,67 @@ function isTerminalWhatsAppOnboardingError(error: unknown): boolean {
 
 function normalizeWhatsAppMode(mode: unknown): "bot" | "self-chat" | null {
   return mode === "bot" || mode === "self-chat" ? mode : null;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Wait for a dashboard-started `robo gateway restart` to take effect: a
+ * gateway process other than the one running before (new PID, or — where the
+ * PID is hidden in remote mode — a fresh "running" state stamp). `ok` is false
+ * only when the restart command itself failed.
+ */
+async function followGatewayRestart(
+  action: string,
+  before: StatusResponse | null,
+): Promise<{ ok: boolean; running: boolean; detail: string }> {
+  const isNewGateway = (st: StatusResponse) => {
+    if (!st.gateway_running) return false;
+    if (!before || !before.gateway_running) return true;
+    if (st.gateway_pid != null && before.gateway_pid != null) {
+      return st.gateway_pid !== before.gateway_pid;
+    }
+    return (
+      st.gateway_state === "running" &&
+      !!st.gateway_updated_at &&
+      st.gateway_updated_at !== before.gateway_updated_at
+    );
+  };
+  // A Windows restart drains the old process first (up to ~30 s) before
+  // starting the new one.
+  const deadline = Date.now() + 150_000;
+  let actionDone = false;
+  let doneAt = 0;
+  let last: StatusResponse | null = null;
+  while (Date.now() < deadline) {
+    await sleep(1500);
+    if (!actionDone) {
+      try {
+        const st = await api.getActionStatus(action, 20);
+        if (!st.running) {
+          actionDone = true;
+          doneAt = Date.now();
+          if (st.exit_code !== 0 && st.exit_code !== null) {
+            const line =
+              [...st.lines].reverse().find((l) => l.trim()) ??
+              `exit code ${st.exit_code}`;
+            return { ok: false, running: false, detail: line.trim() };
+          }
+        }
+      } catch {
+        /* transient; keep polling */
+      }
+    }
+    try {
+      last = await api.getStatus();
+      if (isNewGateway(last)) return { ok: true, running: true, detail: "" };
+    } catch {
+      /* keep waiting */
+    }
+    // Restart command finished cleanly but no new gateway after 30 s.
+    if (actionDone && Date.now() - doneAt > 30_000) break;
+  }
+  return { ok: true, running: !!last?.gateway_running, detail: "" };
 }
 
 export default function ChannelsPage() {
@@ -262,11 +324,29 @@ export default function ChannelsPage() {
   const handleRestart = async () => {
     setRestarting(true);
     try {
-      await api.restartGateway();
+      const before = await api.getStatus().catch(() => null);
+      const res = await api.restartGateway();
       showToast("Gateway restarting…", "success");
       setRestartNeeded(false);
-      // Give the gateway a moment to come up, then refresh status.
-      setTimeout(() => void load(), 4000);
+      // Follow the restart to its end (a Windows restart drains the old
+      // process first and can take most of a minute) instead of guessing
+      // with one reload after 4 s, which usually showed "not running".
+      const outcome = await followGatewayRestart(
+        res?.name || "gateway-restart",
+        before,
+      );
+      await load();
+      if (!outcome.ok) {
+        setRestartNeeded(true);
+        showToast(`Gateway restart failed: ${outcome.detail}`, "error");
+      } else if (outcome.running) {
+        showToast("Gateway is running — channel changes are live.", "success");
+      } else {
+        showToast(
+          "Restart finished but the gateway isn't running. Check Logs → gateway for the reason.",
+          "error",
+        );
+      }
     } catch (e) {
       showToast(`Failed to restart: ${e}`, "error");
     } finally {

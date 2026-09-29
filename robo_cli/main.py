@@ -1928,8 +1928,18 @@ def _ensure_tui_workspace(tui_dir: Path) -> None:
     sys.exit(1)
 
 
-def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
-    """TUI: --dev → tsx src; else node dist (ROBO_TUI_DIR prebuilt or esbuild)."""
+def _make_tui_argv(
+    tui_dir: Path, tui_dev: bool, *, rebuild_if_stale: bool = False
+) -> tuple[list[str], Path]:
+    """TUI: --dev → tsx src; else node dist (ROBO_TUI_DIR prebuilt or esbuild).
+
+    ``rebuild_if_stale``: rebuild ``dist/entry.js`` only when it is missing or
+    older than the TUI sources (``_tui_need_rebuild``) instead of on every
+    call. The dashboard sets it: it resolves this for EVERY chat it opens, and
+    an unconditional ``npm run build`` there made each new or resumed browser
+    chat wait seconds before it could start. Terminal launches keep the
+    historical always-rebuild behaviour.
+    """
     _ensure_tui_node()
 
     def _node_bin(bin: str) -> str:
@@ -1993,6 +2003,20 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
     # about to npm install/build from source, so the workspace must exist.
     if not ext_dir:
         _ensure_tui_workspace(tui_dir)
+
+    # Dashboard chats: an up-to-date dist/entry.js is a self-contained bundle,
+    # so run it without consulting node_modules at all. The dashboard's own web
+    # build runs `npm ci --workspace web`, which wipes node_modules down to the
+    # web workspace; the ui-tui-scoped `npm install` below never restores the
+    # root/desktop packages, so `_tui_need_npm_install` stayed True forever and
+    # EVERY chat opened (new or resumed) ran `npm install` + `npm run build`
+    # first — the chat sat on "Please wait while the conversation loads…".
+    # Install/build now only happens when the TUI sources are newer than the
+    # bundle (or it is missing).
+    if rebuild_if_stale and not tui_dev and not _is_termux_startup_environment():
+        if not _tui_need_rebuild(tui_dir):
+            node = _node_bin("node")
+            return [node, "--expose-gc", str(tui_dir / "dist" / "entry.js")], tui_dir
 
     # 2. Normal flow: npm install if needed, always esbuild, then node dist/entry.js.
     #    --dev flow: npm install if needed, then tsx src/entry.tsx.
@@ -2119,6 +2143,8 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
     should_build = True
     if termux_startup:
         should_build = did_install or termux_need_rebuild
+    elif rebuild_if_stale:
+        should_build = did_install or _tui_need_rebuild(tui_dir)
 
     if should_build:
         npm = _node_bin("npm")
@@ -10555,6 +10581,55 @@ def cmd_dashboard(args):
         else:
             os.execvpe(sys.executable, reexec_argv, env)
 
+    # ── Background run: keep serving after the terminal closes ─────────
+    # An interactive `robo dashboard` finishes its terminal-bound work here
+    # (web UI build, login prompt for a network bind) and then hands the
+    # server to a detached child — see robo_cli/dashboard_background.py.
+    # `serve`, Desktop-spawned backends, containers, services and pipes keep
+    # the foreground behaviour; `--foreground` opts out.
+    from robo_cli import dashboard_background as _dash_bg
+
+    _run_in_background = _dash_bg.should_run_in_background(
+        args, headless=_headless_backend
+    )
+    if _run_in_background:
+        _existing = _dash_bg.find_running_dashboard(
+            args.host,
+            args.port,
+            scan=_scan_dashboard_processes,
+            parse=_parse_dashboard_runtime,
+            listening=_dashboard_listening,
+        )
+        if _existing is not None:
+            _pid, _running_host = _existing
+            if not _dash_bg.same_bind(_running_host, args.host):
+                print(
+                    f"✗ A Robo dashboard is already running on "
+                    f"{_running_host}:{args.port} (PID {_pid})."
+                )
+                print(
+                    "  Stop it first with `robo dashboard --stop`, "
+                    "or choose another --port."
+                )
+                sys.exit(1)
+            _shown_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
+            print(
+                f"✓ The Robo dashboard is already running "
+                f"(PID {_pid}): http://{_shown_host}:{args.port}"
+            )
+            print("  Restart it with `robo dashboard --stop`, then `robo dashboard`.")
+            if not args.no_open:
+                try:
+                    from robo_cli.web_server import _maybe_open_browser
+
+                    _maybe_open_browser(
+                        args.host, args.port, True,
+                        getattr(args, "open_profile", "") or "",
+                    )
+                except Exception:
+                    pass
+            sys.exit(0)
+
     if _token_file:
         _ssh_session_token = _read_ssh_session_token_file(_token_file)
 
@@ -10677,6 +10752,22 @@ def cmd_dashboard(args):
         # log and proceed; the gate's fail-closed branch will surface
         # the missing-provider state if it matters.
         print(f"⚠ Plugin discovery failed: {exc}", file=sys.stderr)
+
+    if _run_in_background:
+        # The login prompt needs this terminal, so it runs before the hand-off;
+        # the detached child reads the saved credentials from config.yaml.
+        _maybe_setup_dashboard_auth_interactively(args)
+        try:
+            from robo_cli.web_server import _maybe_open_browser as _open_browser
+        except Exception:
+            _open_browser = None
+        sys.exit(
+            _dash_bg.launch_dashboard_in_background(
+                args,
+                profile_name=_launch_profile,
+                open_browser=_open_browser,
+            )
+        )
 
     # Desktop chat uses the dashboard's in-process /api/ws gateway, which builds
     # agents via tui_gateway.server._make_agent.  That path only snapshots the

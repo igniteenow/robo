@@ -176,3 +176,161 @@ def test_make_tui_argv_omits_workspace_when_tui_has_own_lockfile(
     assert install_cmd[:2] == ["/bin/npm", "install"]
     # cwd must be tui_dir (standalone), not parent
     assert calls[0][1]["cwd"] == str(tui_dir)
+
+
+# ---------------------------------------------------------------------------
+# The dashboard resolves the TUI launch for EVERY chat it opens; rebuilding
+# the bundle each time made new and resumed browser chats wait seconds.
+# ---------------------------------------------------------------------------
+
+
+def _tui_with_bundle(tmp_path: Path, *, source_newer: bool) -> Path:
+    tui_dir = tmp_path / "ui-tui"
+    (tui_dir / "src").mkdir(parents=True)
+    src = tui_dir / "src" / "entry.tsx"
+    src.write_text("export {}")
+    _touch_tui_entry(tui_dir)
+    entry = tui_dir / "dist" / "entry.js"
+    old, new = 1_700_000_000, 1_700_000_100
+    os.utime(src, (new, new) if source_newer else (old, old))
+    os.utime(entry, (old, old) if source_newer else (new, new))
+    return tui_dir
+
+
+def _record_builds(main_mod, monkeypatch) -> list:
+    monkeypatch.delenv("TERMUX_VERSION", raising=False)
+    monkeypatch.delenv("ROBO_TUI_FORCE_BUILD", raising=False)
+    monkeypatch.delenv("ROBO_TUI_DIR", raising=False)
+    monkeypatch.setenv("PREFIX", "/usr")
+    monkeypatch.setattr(main_mod, "_tui_need_npm_install", lambda _root: False)
+    monkeypatch.setattr(main_mod, "_find_bundled_tui", lambda *a, **k: None)
+    monkeypatch.setattr(main_mod.shutil, "which", lambda name: f"/bin/{name}")
+    builds = []
+
+    def fake_run(cmd, *args, **kwargs):
+        if list(cmd[-2:]) == ["run", "build"]:
+            builds.append(cmd)
+        return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(main_mod.subprocess, "run", fake_run)
+    return builds
+
+
+def test_dashboard_chat_skips_the_build_when_the_bundle_is_fresh(
+    tmp_path: Path, main_mod, monkeypatch
+) -> None:
+    tui_dir = _tui_with_bundle(tmp_path, source_newer=False)
+    builds = _record_builds(main_mod, monkeypatch)
+
+    argv, _cwd = main_mod._make_tui_argv(tui_dir, tui_dev=False, rebuild_if_stale=True)
+
+    assert builds == []
+    assert argv[-1] == str(tui_dir / "dist" / "entry.js")
+
+
+def test_dashboard_chat_never_runs_npm_when_the_bundle_is_fresh(
+    tmp_path: Path, main_mod, monkeypatch
+) -> None:
+    """The dashboard's own web build (`npm ci --workspace web`) leaves
+    node_modules looking "out of date" to the TUI install check forever; a
+    fresh bundle must still start without any npm call."""
+    tui_dir = _tui_with_bundle(tmp_path, source_newer=False)
+    _record_builds(main_mod, monkeypatch)
+    monkeypatch.setattr(main_mod, "_tui_need_npm_install", lambda _root: True)
+    npm_calls = []
+    monkeypatch.setattr(
+        main_mod.subprocess,
+        "run",
+        lambda cmd, *a, **k: npm_calls.append(cmd)
+        or types.SimpleNamespace(returncode=0, stdout="", stderr=""),
+    )
+
+    argv, _cwd = main_mod._make_tui_argv(tui_dir, tui_dev=False, rebuild_if_stale=True)
+
+    assert npm_calls == []
+    assert argv[-1] == str(tui_dir / "dist" / "entry.js")
+
+
+def test_dashboard_chat_installs_and_builds_when_stale(
+    tmp_path: Path, main_mod, monkeypatch
+) -> None:
+    tui_dir = _tui_with_bundle(tmp_path, source_newer=True)
+    builds = _record_builds(main_mod, monkeypatch)
+    monkeypatch.setattr(main_mod, "_tui_need_npm_install", lambda _root: True)
+    installs = []
+    real_run = main_mod.subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        if "install" in list(cmd):
+            installs.append(cmd)
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(main_mod.subprocess, "run", fake_run)
+
+    main_mod._make_tui_argv(tui_dir, tui_dev=False, rebuild_if_stale=True)
+
+    assert len(installs) == 1
+    assert len(builds) == 1
+
+
+def test_dashboard_chat_rebuilds_after_a_source_change(
+    tmp_path: Path, main_mod, monkeypatch
+) -> None:
+    tui_dir = _tui_with_bundle(tmp_path, source_newer=True)
+    builds = _record_builds(main_mod, monkeypatch)
+
+    main_mod._make_tui_argv(tui_dir, tui_dev=False, rebuild_if_stale=True)
+
+    assert len(builds) == 1
+
+
+def test_terminal_launch_still_rebuilds_every_time(
+    tmp_path: Path, main_mod, monkeypatch
+) -> None:
+    tui_dir = _tui_with_bundle(tmp_path, source_newer=False)
+    builds = _record_builds(main_mod, monkeypatch)
+
+    main_mod._make_tui_argv(tui_dir, tui_dev=False)
+
+    assert len(builds) == 1
+
+
+def test_dashboard_chats_resolve_the_tui_with_rebuild_if_stale(monkeypatch) -> None:
+    import robo_cli.main as cli_main
+    import robo_cli.web_server as ws
+
+    seen = {}
+
+    def fake_make(root, tui_dev=False, **kwargs):
+        seen.update(kwargs)
+        return (["node", "fake-tui.js"], Path("/tmp"))
+
+    monkeypatch.setattr(cli_main, "_make_tui_argv", fake_make)
+    ws._resolve_chat_argv()
+    assert seen.get("rebuild_if_stale") is True
+
+
+@pytest.mark.asyncio
+async def test_dashboard_prewarms_the_chat_tui_under_the_chat_lock(monkeypatch) -> None:
+    import asyncio
+
+    import robo_cli.main as cli_main
+    import robo_cli.web_server as ws
+
+    calls = []
+    lock = ws._get_chat_argv_lock(ws.app)
+
+    def fake_make(root, tui_dev, **kwargs):
+        calls.append((tui_dev, kwargs, lock.locked()))
+        return (["node", "x.js"], root)
+
+    monkeypatch.setattr(cli_main, "_make_tui_argv", fake_make)
+    await ws._prewarm_chat_tui(ws.app)
+    assert calls == [(False, {"rebuild_if_stale": True}, True)]
+
+    def no_node(*_a, **_k):
+        raise SystemExit(1)                      # what _make_tui_argv does without Node
+
+    monkeypatch.setattr(cli_main, "_make_tui_argv", no_node)
+    await ws._prewarm_chat_tui(ws.app)           # never takes the dashboard down
+    assert not lock.locked()

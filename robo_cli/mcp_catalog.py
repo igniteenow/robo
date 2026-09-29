@@ -30,6 +30,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -388,13 +389,62 @@ def _install_root() -> Path:
     return root
 
 
+# Manifests are written POSIX-style (``python3 -m venv .venv``,
+# ``.venv/bin/pip``, ``${INSTALL_DIR}/.venv/bin/python``). On Windows a venv
+# keeps its programs in ``.venv\Scripts\*.exe`` and ``python3`` is often the
+# Microsoft Store placeholder, so those manifests failed to install (n8n) or
+# installed a server that could never start. Translate them on Windows only;
+# every other platform runs the manifest exactly as written.
+_VENV_BIN_RE = re.compile(r"(?P<pre>^|[\s\"'/\\])\.venv[/\\]bin[/\\](?P<exe>[A-Za-z0-9_.-]+)")
+_PYTHON3_RE = re.compile(r"^\s*python3?(?=\s)")
+
+
+def _windows_venv_path(value: str) -> str:
+    """``.venv/bin/<tool>`` → ``.venv\\Scripts\\<tool>.exe`` (Windows layout)."""
+
+    def _swap(match: "re.Match[str]") -> str:
+        exe = match.group("exe")
+        if not exe.lower().endswith(".exe"):
+            exe += ".exe"
+        return f"{match.group('pre')}.venv\\Scripts\\{exe}"
+
+    return _VENV_BIN_RE.sub(_swap, value)
+
+
+def _windows_python() -> str:
+    """The interpreter Robo itself runs on (console flavour), quoted for cmd."""
+    exe = Path(sys.executable)
+    if exe.name.lower() == "pythonw.exe":
+        console = exe.with_name("python.exe")
+        if console.exists():
+            exe = console
+    return f'"{exe}"'
+
+
+def _platform_bootstrap_command(cmd: str, *, platform: Optional[str] = None) -> str:
+    if (platform or sys.platform) != "win32":
+        return cmd
+    cmd = _PYTHON3_RE.sub(lambda _m: _windows_python(), cmd, count=1)
+    return _windows_venv_path(cmd)
+
+
+def _platform_launch_value(value: str, *, platform: Optional[str] = None) -> str:
+    if (platform or sys.platform) != "win32":
+        return value
+    value = _windows_venv_path(value)
+    if re.match(r"^[A-Za-z]:[\\/]", value):
+        # An absolute Windows path (the expanded ${INSTALL_DIR}): one separator.
+        value = value.replace("/", "\\")
+    return value
+
+
 def _run_bootstrap(cwd: Path, commands: List[str]) -> None:
     """Execute bootstrap commands in *cwd*. Raise CatalogError on first failure.
 
     Each command runs through the shell (so `&&` etc. work). The output is
     streamed to the user's terminal for visibility.
     """
-    for cmd in commands:
+    for cmd in (_platform_bootstrap_command(c) for c in commands):
         print(color(f"  $ {cmd}", Colors.DIM))
         proc = subprocess.run(cmd, cwd=str(cwd), shell=True)
         if proc.returncode != 0:
@@ -512,9 +562,14 @@ def _build_server_config(
     cfg: dict = {}
     t = entry.transport
     if t.type == "stdio":
-        cfg["command"] = _expand_install_dir(t.command or "", install_dir)
+        cfg["command"] = _platform_launch_value(
+            _expand_install_dir(t.command or "", install_dir)
+        )
         if t.args:
-            cfg["args"] = [_expand_install_dir(a, install_dir) for a in t.args]
+            cfg["args"] = [
+                _platform_launch_value(_expand_install_dir(a, install_dir))
+                for a in t.args
+            ]
         if t.env:
             cfg["env"] = dict(t.env)
     elif t.type == "http":

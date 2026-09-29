@@ -21,6 +21,39 @@ def test_ringbuffer_drops_oldest_over_capacity():
     assert rb.truncated is True
 
 
+def test_truncated_replay_restores_full_screen_mode():
+    """The TUI's one-time mode switches can fall off the front of the ring
+    buffer; a reattaching browser must still land in full screen with the
+    cursor hidden and bracketed paste on (otherwise a multi-line paste would
+    be submitted line by line)."""
+    rb = RingBuffer(16)
+    rb.append(b"\x1b[?1049h\x1b[?25l\x1b[?2004h")
+    rb.append(b"x" * 40)                  # pushes the switches out
+    snap = rb.snapshot()
+    assert snap.startswith(b"\x1b[?1049h\x1b[?25l\x1b[?2004h")
+    assert snap.endswith(b"x" * 16)
+
+
+def test_mode_switch_split_across_reads_is_tracked():
+    rb = RingBuffer(8)
+    rb.append(b"\x1b[?10")
+    rb.append(b"49h" + b"y" * 20)
+    assert rb.snapshot().startswith(b"\x1b[?1049h")
+
+
+def test_modes_turned_back_off_are_not_reasserted():
+    rb = RingBuffer(8)
+    rb.append(b"\x1b[?1049h" + b"a" * 10 + b"\x1b[?1049l")
+    rb.append(b"b" * 20)
+    assert rb.snapshot() == b"b" * 8
+
+
+def test_untruncated_replay_is_byte_exact():
+    rb = RingBuffer(1024)
+    rb.append(b"\x1b[?1049hhello")
+    assert rb.snapshot() == b"\x1b[?1049hhello"
+
+
 
 
 class FakeBridge:
@@ -143,3 +176,61 @@ async def test_reaper_loop_invokes_reap(monkeypatch):
     except asyncio.CancelledError:
         pass
     assert calls["n"] >= 2
+
+
+# ---------------------------------------------------------------------------
+# Two connections racing for one chat (the dashboard page reconnects while
+# the first connection is still starting, e.g. when it jumps to a chat's
+# latest continuation). The live viewer must never lose the PTY to the older,
+# already-abandoned connection — that froze every other chat opened.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_older_connection_never_takes_the_pty_from_a_newer_one():
+    from robo_cli.pty_session import PtySession
+    s = PtySession("k", FakeBridge([b"", b"", b""]), buffer_cap=1024, read_timeout=0.01)
+    await s.start()
+    newer, older = FakeWS(), FakeWS()
+    assert await s.attach(newer, seq=2) is True
+    assert await s.attach(older, seq=1) is False     # finished setting up last
+    assert older.close_code == 4409
+    assert newer.close_code is None                  # the live viewer keeps it
+    assert s.attached is True
+    await s.close()
+
+
+@pytest.mark.asyncio
+async def test_a_newer_connection_still_takes_over():
+    from robo_cli.pty_session import PtySession
+    s = PtySession("k", FakeBridge([b"", b"", b""]), buffer_cap=1024, read_timeout=0.01)
+    await s.start()
+    first, second = FakeWS(), FakeWS()
+    assert await s.attach(first, seq=1) is True
+    assert await s.attach(second, seq=2) is True     # reconnect / newer tab
+    assert first.close_code == 4409
+    assert second.close_code is None
+    await s.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_connections_to_one_chat_start_one_pty():
+    import threading
+    reg = make_registry()
+    spawned = []
+    gate = threading.Event()
+
+    def slow_spawn():
+        spawned.append(1)
+        gate.wait(1.0)                               # a real spawn takes a while
+        return FakeBridge([b"", b"", b""])
+
+    first = asyncio.create_task(reg.attach_or_spawn("chat", spawn=slow_spawn))
+    await asyncio.sleep(0.05)
+    second = asyncio.create_task(reg.attach_or_spawn("chat", spawn=slow_spawn))
+    await asyncio.sleep(0.05)
+    gate.set()
+    (s1, created1), (s2, created2) = await asyncio.gather(first, second)
+    assert len(spawned) == 1
+    assert s1 is s2 and created1 is True and created2 is False
+    await reg.close_all()

@@ -110,7 +110,11 @@ dependencies = [
   # without an explicit dependency here (and in the `web` extra below).
   "python-multipart>=0.0.9,<1",
   "ptyprocess>=0.7.0,<1; sys_platform != 'win32'",
-  "pywinpty>=2.0.0,<3; sys_platform == 'win32'",
+  # >=3.0.5: pywinpty 2.x (winpty-rs 0.4) waits 100 ms before every 4 KB PTY
+  # read, capping the dashboard's browser chat at ~40 KB/s on Windows (slow
+  # scrolling, late text, slow chat loads). 3.x reads as output arrives and
+  # bundles the current ConPTY; 3.0.4's wheels were broken.
+  "pywinpty>=3.0.5,<4; sys_platform == 'win32'",
   # Desktop SSH's Windows remote runtime (robo_cli/windows_ssh_runtime.py)
   # imports win32security/win32file/etc. directly — declare pywin32 rather than
   # relying on the concurrent-log-handler → portalocker transitive chain.

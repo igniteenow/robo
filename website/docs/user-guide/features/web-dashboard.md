@@ -20,6 +20,8 @@ robo dashboard
 
 This starts a local web server and opens `http://127.0.0.1:9119` in your browser. The dashboard runs entirely on your machine — no data leaves localhost.
 
+Started from a terminal, the dashboard runs **in the background**: you can close the terminal (or log out of SSH) and the page keeps working. Stop it with `robo dashboard --stop`, check it with `robo dashboard --status`, and find its output in `~/.robo/logs/dashboard-stdio.log`. Add `--foreground` to keep it attached to the terminal instead. Services, containers, piped runs and the desktop app always run it in the foreground.
+
 ### Options
 
 | Flag | Default | Description |
@@ -29,6 +31,7 @@ This starts a local web server and opens `http://127.0.0.1:9119` in your browser
 | `--no-open` | — | Don't auto-open the browser |
 | `--insecure` | off | **Deprecated / no-op.** Formerly bypassed auth on a non-loopback bind; it no longer disables authentication — a public bind always requires an auth provider (password or OAuth) |
 | `--isolated` | off | When launched from a named profile (`worker dashboard`), run a dedicated per-profile server instead of routing to the machine dashboard |
+| `--foreground` | off | Keep the dashboard attached to this terminal (it stops when the terminal closes) |
 
 ```bash
 # Custom port
@@ -237,6 +240,16 @@ Each key shows:
 
 Advanced/rarely-used keys are hidden by default behind a toggle.
 
+Provider keys are grouped per provider (OpenAI, xAI, NVIDIA, …) using the same
+provider catalog as `robo model`.
+
+You can also set a provider up from **Models → Set Main Model**: pick a
+provider marked "not set up" and paste its API key (it's checked with the
+provider when possible and saved to `.env`), or choose **Custom endpoint** to
+use any OpenAI-compatible server — LM Studio, Ollama, vLLM, llama.cpp, LiteLLM
+or a hosted API — by entering its base URL, an optional key, and a model
+(**Find models** lists what the server offers).
+
 ### Sessions
 
 Browse and inspect all agent sessions. Each row shows the session title, source platform icon (CLI, Telegram, Discord, Slack, cron), model name, message count, tool call count, and how long ago it was active. Live sessions are marked with a pulsing badge.
@@ -248,6 +261,7 @@ Browse and inspect all agent sessions. Each row shows the session title, source 
 - **Tool calls** — assistant messages with tool calls show collapsible blocks with the function name and JSON arguments.
 - **Rename** — set or clear a session's title inline (pencil icon).
 - **Export** — download a session (metadata + full message history) as JSON (download icon).
+- **Recent sessions** — the overview lists the most recently active sessions from every source, including ones open right now (marked *live*). The chat sidebar's session list refreshes itself, so chats started in the desktop app, a terminal or a messaging channel appear without a reload. A new chat is saved once its first message is sent.
 - **Prune** — the header "Prune old sessions" button deletes ended sessions older than N days.
 - **Delete** — remove a session and its message history with the trash icon.
 
@@ -310,16 +324,29 @@ block in `config.yaml` that `robo mcp` reads from.
 
 **Your MCP servers:**
 
-- **Add** — register an HTTP/SSE server (URL) or a stdio server (command + args), with optional `KEY=VALUE` environment variables for stdio servers
-- **Enable / disable** — toggle a server on or off without deleting it. A disabled server stays in config so you can re-enable it later. Takes effect on the next gateway restart.
+- **Add** — register a remote server (Streamable HTTP or SSE URL, with no auth, a Bearer token, OAuth, and optional extra headers) or a local stdio server (command + args, with optional `KEY=VALUE` environment variables). Wrap an argument that contains spaces in quotes. The server is tested right after it's added.
+- **Import JSON** — paste the setup snippet from any MCP server's instructions: the `mcpServers` block used by Claude Desktop, Claude Code, Cursor or Windsurf, VS Code's `servers` block, Zed's `context_servers`, or Robo YAML. Each server is converted, security-checked like the Add form, and saved; existing servers are skipped unless you tick **Replace**. Token-like header values are stored in `.env`, not `config.yaml`.
+- **Enable / disable** — toggle a server on or off without deleting it. A disabled server stays in config so you can re-enable it later.
+- **When changes apply** — open chats (dashboard, TUI) reload MCP servers automatically within a few seconds; new chats start with them. Messaging channels pick changes up after a gateway restart or `/reload-mcp`.
 - **Test** — connect to a server, list its tools, and disconnect — verifies the connection before the agent depends on it
 - **Remove** — delete a server from the config
 - Secret-shaped env values are redacted in the list view
 
 **Catalog:** browse the bundled MCP servers (`optional-mcps/`
 catalog) and install any of them with one click. Entries that need API keys
-prompt for them inline; the values go to `.env`. This is the same catalog
-`robo mcp catalog` / `robo mcp install` use.
+prompt for them inline; the values go to `.env`. Entries that are cloned and
+built locally install in the background and the page reports when they finish.
+This is the same catalog `robo mcp catalog` / `robo mcp install` use.
+
+### Plugins
+
+Lists every plugin Robo can load, with the status the runtime actually uses:
+
+- **LLM provider plugins** (for example `deepseek-provider`) are always available — pick one on the Models page. They have no Enable/Disable button.
+- **Built-in backends and channel adapters** (image/video generation, web search backends, dashboard sign-in, Telegram, Discord, …) show *enabled · built-in*: they load automatically and can be disabled.
+- **Other plugins** are opt-in: **Enable** turns them on for new chats; restart the gateway for messaging channels.
+- The plugin that handles dashboard password sign-in can't be disabled while a dashboard password is set, so a remote dashboard can't lock you out.
+- **Install** a plugin from a git URL, and **Update** or **Remove** installed ones.
 
 ### Webhooks
 
@@ -352,8 +379,8 @@ the API server and webhook endpoints) with its live connection status.
 
 - **Configure** — open a per-platform form with exactly the fields that channel needs (bot token, app token, server URL, allowlist, etc.). Secrets render as password inputs and are stored redacted; leaving a field blank keeps the existing value. Required fields are marked and validated. A "Setup guide" link points to the platform's credential docs.
 - **Enable / disable** — toggle a channel on or off. The credential stays on disk; only the active state changes.
-- **Test** — check whether the channel is configured, enabled, and reporting a live connection from the gateway.
-- **Restart gateway** — credentials are written to `~/.robo/.env` and the enabled flag to `config.yaml`; the gateway connects each enabled channel on its next restart, which you can trigger right from the page.
+- **Test** — for Telegram, Discord and Slack, first asks the platform whether the saved bot token works; then checks whether the channel is enabled and reporting a live connection from the gateway.
+- **Restart gateway** — credentials are written to `~/.robo/.env` and the enabled flag to `config.yaml`; the gateway connects each enabled channel on its next restart, which you can trigger right from the page. The page follows the restart until the new gateway is running and tells you if it failed.
 
 ### System
 

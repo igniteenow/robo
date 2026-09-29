@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter } from "react-router";
+import {
+  MemoryRouter,
+  type NavigateFunction,
+  useLocation,
+  useNavigate,
+} from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 class FakeFitAddon {
@@ -18,6 +23,7 @@ class FakeTerminal {
   options: Record<string, unknown>;
   rows = 24;
   cols = 80;
+  buffer = { active: { type: "normal" } };
   parser = {
     registerOscHandler: vi.fn(),
   };
@@ -55,6 +61,10 @@ class FakeTerminal {
     return { dispose() {} };
   }
 
+  onWriteParsed() {
+    return { dispose() {} };
+  }
+
   open() {}
 
   paste() {}
@@ -81,8 +91,9 @@ vi.mock("@/components/Backdrop", () => ({ Backdrop: () => null }));
 vi.mock("@/plugins", () => ({
   PluginSlot: () => null,
 }));
+const headerSetEnd = vi.fn();
 vi.mock("@/contexts/usePageHeader", () => ({
-  usePageHeader: () => ({ setEnd: vi.fn(), setTitle: vi.fn() }),
+  usePageHeader: () => ({ setEnd: headerSetEnd, setTitle: vi.fn() }),
 }));
 vi.mock("@/contexts/useProfileScope", () => ({
   useProfileScope: () => ({ profile: "" }),
@@ -147,6 +158,7 @@ async function render(ui: ReactNode) {
 beforeEach(() => {
   FakeWebSocket.instances = [];
   maybeReloadForLoopbackWsAuthFailure.mockClear();
+  headerSetEnd.mockClear();
   vi.stubGlobal("WebSocket", FakeWebSocket);
   vi.stubGlobal(
     "ResizeObserver",
@@ -224,5 +236,118 @@ describe("ChatPage", () => {
     });
 
     expect(maybeReloadForLoopbackWsAuthFailure).toHaveBeenCalledWith(4401);
+  });
+
+  it("puts its actions in the page header and only clears its own", async () => {
+    const { default: ChatPage } = await import("./ChatPage");
+
+    await render(
+      <MemoryRouter initialEntries={["/chat"]}>
+        <ChatPage isActive />
+      </MemoryRouter>,
+    );
+
+    const placed = headerSetEnd.mock.calls
+      .map(([arg]) => arg)
+      .filter((arg) => typeof arg !== "function");
+    expect(placed.length).toBeGreaterThan(0);
+    const ours = placed[placed.length - 1];
+    expect(ours).toBeTruthy();
+
+    await act(async () => root.unmount());
+
+    const clear = headerSetEnd.mock.calls
+      .map(([arg]) => arg)
+      .filter((arg): arg is (current: unknown) => unknown => typeof arg === "function")
+      .pop();
+    expect(clear).toBeDefined();
+    // Still ours → removed. Another page's buttons → left alone.
+    expect(clear?.(ours)).toBeNull();
+    const otherPage = { page: "cron" };
+    expect(clear?.(otherPage)).toBe(otherPage);
+
+    // afterEach unmounts again; give it a fresh root.
+    root = createRoot(container);
+  });
+
+  it("keeps the resumed chat alive while other dashboard pages are open", async () => {
+    const { default: ChatPage } = await import("./ChatPage");
+    const nav: { current: NavigateFunction | null } = { current: null };
+
+    // Mirrors App.tsx: one persistent ChatPage, active only on /chat.
+    function PersistentChatHost() {
+      const location = useLocation();
+      nav.current = useNavigate();
+      return <ChatPage isActive={location.pathname === "/chat"} />;
+    }
+
+    await render(
+      <MemoryRouter initialEntries={["/chat?resume=sess-a"]}>
+        <PersistentChatHost />
+      </MemoryRouter>,
+    );
+
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    expect(FakeWebSocket.instances[0].url).toContain("resume=sess-a");
+
+    // /sessions has no ?resume= — that must not tear the terminal down or
+    // boot a different agent in the background.
+    await act(async () => {
+      await nav.current?.("/sessions");
+    });
+    // Back through the bare nav link.
+    await act(async () => {
+      await nav.current?.("/chat");
+    });
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(FakeWebSocket.instances[0].readyState).toBe(FakeWebSocket.OPEN);
+  });
+
+  it("keeps every chat opened from history connected (not every other one)", async () => {
+    const { default: ChatPage } = await import("./ChatPage");
+    const nav: { current: NavigateFunction | null } = { current: null };
+
+    function PersistentChatHost() {
+      const location = useLocation();
+      nav.current = useNavigate();
+      return <ChatPage isActive={location.pathname === "/chat"} />;
+    }
+
+    await render(
+      <MemoryRouter initialEntries={["/chat?resume=sess-a"]}>
+        <PersistentChatHost />
+      </MemoryRouter>,
+    );
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    const chatA = FakeWebSocket.instances[0];
+
+    // Open chat B from the session list.
+    await act(async () => {
+      await nav.current?.("/chat?resume=sess-b");
+    });
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
+    const chatB = FakeWebSocket.instances[1];
+    expect(chatB.url).toContain("resume=sess-b");
+    expect(chatA.readyState).toBe(3);
+
+    // Chat A's close completes only now, after B is connected. It must not
+    // cut B off: a window focus must leave B alone, not reload the chat.
+    await act(async () => {
+      chatA.onclose?.({ code: 1005, reason: "", wasClean: true });
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    // Open chat C: B's socket is closed (it used to be leaked, and the chat
+    // after it froze in turn).
+    await act(async () => {
+      await nav.current?.("/chat?resume=sess-c");
+    });
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(3));
+    expect(chatB.readyState).toBe(3);
+    expect(FakeWebSocket.instances[2].readyState).toBe(FakeWebSocket.OPEN);
   });
 });

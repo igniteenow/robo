@@ -65,16 +65,22 @@ const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
   { prefix: "UPSTAGE_", name: "Upstage Solar", priority: 14 },
 ];
 
-function getProviderGroup(key: string): string {
+/**
+ * The provider card a key belongs to. Known prefixes keep their curated card;
+ * anything else uses the provider name the backend's provider catalog reports
+ * (OpenAI, xAI, NVIDIA, …) instead of piling into one "Other" card.
+ */
+function getProviderGroup(key: string, providerLabel?: string): string {
   for (const g of PROVIDER_GROUPS) {
     if (key.startsWith(g.prefix)) return g.name;
   }
-  return "Other";
+  return providerLabel?.trim() || "Other";
 }
 
 function getProviderPriority(groupName: string): number {
+  if (groupName === "Other") return 99;
   const entry = PROVIDER_GROUPS.find((g) => g.name === groupName);
-  return entry?.priority ?? 99;
+  return entry?.priority ?? 50;
 }
 
 interface ProviderGroup {
@@ -817,7 +823,7 @@ export default function EnvPage() {
     // Group by provider
     const groupMap = new Map<string, [string, EnvVarInfo][]>();
     for (const entry of providerEntries) {
-      const groupName = getProviderGroup(entry[0]);
+      const groupName = getProviderGroup(entry[0], entry[1].provider_label);
       if (!groupMap.has(groupName)) groupMap.set(groupName, []);
       groupMap.get(groupName)!.push(entry);
     }
@@ -829,7 +835,7 @@ export default function EnvPage() {
         entries,
         hasAnySet: entries.some(([, info]) => info.is_set),
       }))
-      .sort((a, b) => a.priority - b.priority);
+      .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
 
     // Non-provider categories — use translated labels. Platform credentials
     // (channel_managed) are configured on the Channels page, so the messaging

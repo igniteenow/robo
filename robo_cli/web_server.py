@@ -25,6 +25,7 @@ import hashlib
 import hmac
 import inspect
 import importlib.util
+import itertools
 import json
 import logging
 import math
@@ -299,6 +300,43 @@ def _get_chat_argv_lock(app: "FastAPI") -> asyncio.Lock:
     except AttributeError:
         app.state.chat_argv_lock = asyncio.Lock()
         return app.state.chat_argv_lock
+
+
+def _enable_dashboard_voice_handoff() -> None:
+    """Let browser chats share the host microphone (see tui_gateway.server).
+
+    Every browser chat talks to this process's in-memory gateway, and each
+    chat's TUI arms the wake-word listener on start; without the handoff the
+    first chat kept the mic and push-to-talk in every other chat answered
+    "voice: still transcribing". Only the web dashboard turns this on.
+    """
+    try:
+        from tui_gateway.server import enable_shared_gateway_mic_handoff
+
+        enable_shared_gateway_mic_handoff()
+    except Exception:
+        _log.debug("voice mic handoff unavailable", exc_info=True)
+
+
+async def _prewarm_chat_tui(app: "FastAPI") -> None:
+    """Install/rebuild the chat TUI if needed, before the first chat asks.
+
+    Same call a chat makes (``rebuild_if_stale``), under the same lock, so a
+    chat opened meanwhile waits for this instead of building a second time.
+    Best-effort: any failure is left for the first chat to report.
+    """
+    try:
+        from robo_cli.main import PROJECT_ROOT, _make_tui_argv
+
+        async with _get_chat_argv_lock(app):
+            await asyncio.to_thread(
+                _make_tui_argv,
+                PROJECT_ROOT / "ui-tui",
+                False,
+                rebuild_if_stale=True,
+            )
+    except (Exception, SystemExit) as exc:  # SystemExit: Node missing
+        _log.debug("chat TUI prewarm skipped: %s", exc)
 
 
 def _get_pty_active_session_files(app: "FastAPI") -> dict[str, Path]:
@@ -3819,11 +3857,28 @@ def _spawn_robo_action(
     else:
         popen_kwargs["start_new_session"] = True
 
-    proc = subprocess.Popen(cmd, **popen_kwargs)
-    # The child inherits its own duplicated fd for stdout/stderr, so the
-    # parent's handle can be released immediately — otherwise we leak one
-    # fd per spawned action.
-    log_file.close()
+    try:
+        try:
+            proc = subprocess.Popen(cmd, **popen_kwargs)
+        except OSError:
+            # A parent job object that forbids breakaway (some terminals,
+            # service wrappers) makes CREATE_BREAKAWAY_FROM_JOB fail with
+            # ERROR_ACCESS_DENIED — every gateway start/stop/restart and
+            # background install then 500'd. Retry without breakaway, as
+            # gateway_windows._spawn_detached does.
+            if sys.platform != "win32":
+                raise
+            from robo_cli._subprocess_compat import (
+                windows_detach_flags_without_breakaway,
+            )
+
+            popen_kwargs["creationflags"] = windows_detach_flags_without_breakaway()
+            proc = subprocess.Popen(cmd, **popen_kwargs)
+    finally:
+        # The child inherits its own duplicated fd for stdout/stderr, so the
+        # parent's handle can be released immediately — otherwise we leak one
+        # fd per spawned action (and on a failed spawn).
+        log_file.close()
     _ACTION_RESULTS.pop(name, None)
     _ACTION_COMMANDS[name] = tuple(subcommand)
     _ACTION_PROCS[name] = proc
@@ -7425,22 +7480,28 @@ def _write_custom_endpoint(cfg: Dict[str, Any], body: CustomEndpointUpdate) -> T
 
 
 @app.get("/api/providers/custom-endpoints")
-def list_custom_endpoints():
-    """Return configured OpenAI-compatible custom endpoints for Desktop."""
+def list_custom_endpoints(profile: Optional[str] = None):
+    """Return configured OpenAI-compatible custom endpoints (Desktop + web).
+
+    ``profile`` scopes to a management profile (web dashboard); Desktop omits
+    it and gets the process's own profile, as before.
+    """
     try:
-        return _custom_endpoint_response(load_config())
+        with _config_profile_scope(profile):
+            return _custom_endpoint_response(load_config())
     except Exception:
         _log.exception("GET /api/providers/custom-endpoints failed")
         raise HTTPException(status_code=500, detail="Failed to list custom endpoints")
 
 
 @app.post("/api/providers/custom-endpoints")
-def upsert_custom_endpoint(body: CustomEndpointUpdate):
+def upsert_custom_endpoint(body: CustomEndpointUpdate, profile: Optional[str] = None):
     """Create or update a v12+ ``providers`` custom endpoint entry."""
     try:
-        cfg = load_config()
-        endpoint_id, _entry = _write_custom_endpoint(cfg, body)
-        save_config(cfg)
+        with _config_profile_scope(profile):
+            cfg = load_config()
+            endpoint_id, _entry = _write_custom_endpoint(cfg, body)
+            save_config(cfg)
         response = _custom_endpoint_response(cfg)
         response["ok"] = True
         response["id"] = endpoint_id
@@ -9331,27 +9392,35 @@ async def get_messaging_platforms(profile: Optional[str] = None):
     # load_env() honors the ROBO_HOME contextvar override; the gateway
     # status readers do NOT (they resolve process-level paths), so the
     # profile directory is passed explicitly for those (#71211).
-    with _profile_scope(profile) as scoped_dir:
-        env_on_disk = load_env()
-        runtime = (
-            read_runtime_status(path=scoped_dir / "gateway_state.json")
-            if scoped_dir is not None
-            else read_runtime_status()
-        )
-        return {
-            "env_path": str(get_env_path()),
-            "gateway_start_command": _gateway_display_command(profile, "start"),
-            "platforms": [
-                _messaging_platform_payload(
-                    entry,
-                    env_on_disk,
-                    runtime,
-                    scoped=scoped_dir is not None,
-                    profile_home=scoped_dir,
-                )
-                for entry in _messaging_platform_catalog()
-            ]
-        }
+    #
+    # All of it is synchronous file/process probing (gateway liveness per
+    # platform, load_gateway_config — seconds on some Windows machines), so
+    # it runs in a worker thread: on the event loop it stalled every other
+    # request and the chat terminal's output while the Channels page loaded.
+    def _build() -> Dict[str, Any]:
+        with _profile_scope(profile) as scoped_dir:
+            env_on_disk = load_env()
+            runtime = (
+                read_runtime_status(path=scoped_dir / "gateway_state.json")
+                if scoped_dir is not None
+                else read_runtime_status()
+            )
+            return {
+                "env_path": str(get_env_path()),
+                "gateway_start_command": _gateway_display_command(profile, "start"),
+                "platforms": [
+                    _messaging_platform_payload(
+                        entry,
+                        env_on_disk,
+                        runtime,
+                        scoped=scoped_dir is not None,
+                        profile_home=scoped_dir,
+                    )
+                    for entry in _messaging_platform_catalog()
+                ]
+            }
+
+    return await run_in_threadpool(_build)
 
 
 def _multiplex_port_binding_conflict(
@@ -9472,6 +9541,70 @@ async def update_messaging_platform(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+async def _live_channel_credential_check(
+    platform_id: str, env: Dict[str, str]
+) -> Optional[Dict[str, Any]]:
+    """Ask the platform whether the saved bot credential works.
+
+    Returns ``{"ok": bool, "message": str}``, or ``None`` when there is no
+    check for this platform or the platform couldn't be reached (a network
+    problem is not a verdict on the token). Covers the platforms whose token
+    can be verified with one read-only call.
+    """
+    import httpx
+
+    pid = (platform_id or "").lower()
+    request = None
+    if pid == "telegram" and env.get("TELEGRAM_BOT_TOKEN"):
+        token = env["TELEGRAM_BOT_TOKEN"].strip()
+        request = ("GET", f"https://api.telegram.org/bot{token}/getMe", {}, "Telegram")
+    elif pid == "discord" and env.get("DISCORD_BOT_TOKEN"):
+        token = env["DISCORD_BOT_TOKEN"].strip()
+        request = (
+            "GET",
+            "https://discord.com/api/v10/users/@me",
+            {"Authorization": f"Bot {token}"},
+            "Discord",
+        )
+    elif pid == "slack" and env.get("SLACK_BOT_TOKEN"):
+        token = env["SLACK_BOT_TOKEN"].strip()
+        request = (
+            "POST",
+            "https://slack.com/api/auth.test",
+            {"Authorization": f"Bearer {token}"},
+            "Slack",
+        )
+    if request is None:
+        return None
+    method, url, headers, label = request
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
+            resp = await client.request(method, url, headers=headers)
+    except Exception:
+        return None
+    try:
+        data = resp.json()
+    except Exception:
+        data = {}
+    if pid == "slack":
+        if isinstance(data, dict) and data.get("ok"):
+            who = data.get("user") or "bot"
+            team = data.get("team") or "workspace"
+            return {"ok": True, "message": f"Slack token works ({who} in {team})."}
+        err = data.get("error") if isinstance(data, dict) else None
+        if err in {"invalid_auth", "not_authed", "account_inactive", "token_revoked"}:
+            return {"ok": False, "message": f"Slack rejected the bot token ({err})."}
+        return None
+    if resp.status_code in (401, 403, 404):
+        return {"ok": False, "message": f"{label} rejected the bot token. Check it and save again."}
+    if not resp.is_success:
+        return None
+    result = data.get("result") if pid == "telegram" and isinstance(data, dict) else data
+    username = result.get("username") if isinstance(result, dict) else None
+    who = f" (@{username})" if username else ""
+    return {"ok": True, "message": f"{label} bot token works{who}."}
+
+
 @app.post("/api/messaging/platforms/{platform_id}/test")
 async def test_messaging_platform(platform_id: str, profile: Optional[str] = None):
     entry = _catalog_lookup(platform_id)
@@ -9480,20 +9613,44 @@ async def test_messaging_platform(platform_id: str, profile: Optional[str] = Non
             status_code=404, detail=f"Unknown messaging platform: {platform_id}"
         )
 
-    with _profile_scope(profile) as scoped_dir:
-        env_on_disk = load_env()
-        runtime = (
-            read_runtime_status(path=scoped_dir / "gateway_state.json")
-            if scoped_dir is not None
-            else read_runtime_status()
+    def _snapshot():
+        with _profile_scope(profile) as scoped_dir:
+            env_on_disk = load_env()
+            runtime = (
+                read_runtime_status(path=scoped_dir / "gateway_state.json")
+                if scoped_dir is not None
+                else read_runtime_status()
+            )
+            return env_on_disk, _messaging_platform_payload(
+                entry,
+                env_on_disk,
+                runtime,
+                scoped=scoped_dir is not None,
+                profile_home=scoped_dir,
+            )
+
+    env_on_disk, payload = await run_in_threadpool(_snapshot)
+    if payload["configured"]:
+        # Check the credential itself first, so a wrong token is reported as
+        # such instead of "restart the gateway".
+        check = await _live_channel_credential_check(
+            str(entry.get("id") or platform_id), dict(env_on_disk or {})
         )
-        payload = _messaging_platform_payload(
-            entry,
-            env_on_disk,
-            runtime,
-            scoped=scoped_dir is not None,
-            profile_home=scoped_dir,
-        )
+        if check is not None and not check["ok"]:
+            return {"ok": False, "state": payload["state"], "message": check["message"]}
+        if check is not None and payload["enabled"] and not payload["gateway_running"]:
+            return {
+                "ok": False,
+                "state": payload["state"],
+                "message": check["message"]
+                + " Start or restart the gateway to connect it.",
+            }
+        if check is not None and payload["enabled"] and payload["state"] == "connected":
+            return {
+                "ok": True,
+                "state": payload["state"],
+                "message": f"{check['message']} {entry['name']} is connected.",
+            }
     if not payload["enabled"]:
         message = f"{entry['name']} is disabled. Enable it, then restart the gateway."
         return {"ok": False, "state": payload["state"], "message": message}
@@ -11991,13 +12148,26 @@ def _normalize_mcp_server_create(
             raise ValueError(
                 "Environment variables are only supported for stdio MCP servers"
             )
+        extra_headers = {
+            str(key).strip(): str(value)
+            for key, value in (getattr(body, "headers", None) or {}).items()
+            if str(key).strip()
+        }
         if auth == "header":
             normalized = _strip_bearer_prefix(bearer_token) if bearer_token else ""
             if not normalized or normalized.lower() == "bearer":
                 raise ValueError("Bearer token is required")
-            server_config["headers"] = _bearer_auth_headers(name)
+            # The Bearer option owns Authorization; keep the other headers.
+            extra_headers = {
+                key: value
+                for key, value in extra_headers.items()
+                if key.lower() != "authorization"
+            }
+            server_config["headers"] = {**extra_headers, **_bearer_auth_headers(name)}
         elif body.bearer_token is not None:
             raise ValueError("Bearer token requires header authentication")
+        elif extra_headers:
+            server_config["headers"] = extra_headers
 
         server_config["url"] = url
         if transport == "sse":
@@ -12009,6 +12179,8 @@ def _normalize_mcp_server_create(
             raise ValueError(
                 "HTTP authentication is not supported for stdio MCP servers"
             )
+        if getattr(body, "headers", None):
+            raise ValueError("Headers are only supported for remote (URL) MCP servers")
         server_config["command"] = command
         if body.args:
             server_config["args"] = list(body.args)
@@ -13404,6 +13576,7 @@ def _write_profile_mcp_servers(profile_dir: Path, servers: List["MCPServerCreate
     """
     from robo_constants import set_robo_home_override, reset_robo_home_override
     from robo_cli.mcp_config import _save_bearer_auth_token
+    from robo_cli.mcp_import import secure_mcp_headers
 
     written = 0
     token = set_robo_home_override(str(profile_dir))
@@ -13422,7 +13595,11 @@ def _write_profile_mcp_servers(profile_dir: Path, servers: List["MCPServerCreate
                 )
                 continue
             if bearer_token is not None:
-                entry["headers"] = _save_bearer_auth_token(name, bearer_token)
+                entry["headers"] = {
+                    **(entry.get("headers") or {}),
+                    **_save_bearer_auth_token(name, bearer_token),
+                }
+            entry = secure_mcp_headers(name, entry, save_env_value)
             mcp[name] = entry
             written += 1
         if written:
@@ -14398,6 +14575,8 @@ _PTY_READ_CHUNK_TIMEOUT = 0.2
 # bound to a process that survives disconnect/refresh and is reattachable.
 from robo_cli.pty_session import PtySessionRegistry, RegistryFull, run_reaper  # noqa: E402
 
+_PTY_CONNECT_SEQ = itertools.count()
+
 PTY_REGISTRY = PtySessionRegistry(
     ttl=30 * 60,
     max_sessions=16,
@@ -14778,7 +14957,11 @@ def _resolve_chat_argv(
     if requested and requested.lower() != "current":
         profile_dir = _resolve_profile_dir(requested)
 
-    argv, cwd = _make_tui_argv(PROJECT_ROOT / "ui-tui", tui_dev=False)
+    # Every chat the dashboard opens (new or resumed) comes through here:
+    # rebuild the TUI bundle only when its sources changed, not per chat.
+    argv, cwd = _make_tui_argv(
+        PROJECT_ROOT / "ui-tui", tui_dev=False, rebuild_if_stale=True
+    )
     # Robo TUI child: build via the single spawn-env factory (profile-home
     # contract applied; secrets kept — the spawned agent needs provider creds).
     # An explicit profile scope below still overrides ROBO_HOME afterwards.
@@ -14798,7 +14981,13 @@ def _resolve_chat_argv(
     # build unchanged for native CLI usage; only disable mouse tracking for
     # the dashboard PTY path.
     env.setdefault("ROBO_TUI_DISABLE_MOUSE", "1")
-    env.setdefault("ROBO_TUI_INLINE", "1")
+    # Full-screen layout, same as `robo` in a terminal: header at the top,
+    # input box pinned to the bottom. Inline mode only drew as tall as its
+    # content, which left the chat box floating mid-page in the browser.
+    # Scrolling works without TUI mouse capture: ChatPage turns the wheel
+    # and touch swipes into wheel reports the TUI already understands, and
+    # pty_session re-asserts the full-screen mode on a truncated replay.
+    env.setdefault("ROBO_TUI_INLINE", "0")
     # The dashboard terminal is xterm.js, which always renders 24-bit RGB.
     # But chalk inside the TUI child decides its color depth from the
     # SERVER process env — and hosted/cloud deploys run the dashboard under
@@ -14811,6 +15000,7 @@ def _resolve_chat_argv(
     # setdefault so an explicit operator value still wins.
     env.setdefault("COLORTERM", "truecolor")
     env["ROBO_TUI_DASHBOARD"] = "1"
+    _apply_browser_terminal_identity(env)
 
     if profile_dir is not None:
         env["ROBO_HOME"] = str(profile_dir)
@@ -14843,6 +15033,55 @@ def _resolve_chat_argv(
             env["ROBO_TUI_GATEWAY_URL"] = gateway_ws_url
 
     return list(argv), str(cwd) if cwd else None, env
+
+
+# Terminal-identity variables inherited from whatever terminal launched the
+# dashboard (Windows Terminal, iTerm, kitty, tmux, a VS Code window, …). They
+# describe the LAUNCHER, not the chat's real terminal, which is always the
+# browser's xterm.js — so the embedded TUI must never see them.
+_LAUNCHER_TERMINAL_ENV = (
+    "TERM_PROGRAM_VERSION",
+    "WT_SESSION",
+    "WT_PROFILE_ID",
+    "ITERM_SESSION_ID",
+    "ITERM_PROFILE",
+    "LC_TERMINAL",
+    "LC_TERMINAL_VERSION",
+    "KITTY_WINDOW_ID",
+    "KITTY_PID",
+    "TMUX",
+    "TMUX_PANE",
+    "STY",
+    "VTE_VERSION",
+    "ZED_TERM",
+    "WEZTERM_PANE",
+    "GHOSTTY_RESOURCES_DIR",
+    "VSCODE_GIT_IPC_HANDLE",
+    "VSCODE_GIT_ASKPASS_MAIN",
+    "CURSOR_TRACE_ID",
+)
+
+
+def _apply_browser_terminal_identity(env: dict) -> None:
+    """Describe the dashboard chat's real terminal to the embedded TUI.
+
+    The browser chat is xterm.js — the same engine as VS Code's integrated
+    terminal — and on Windows it sits behind ConPTY exactly like VS Code's.
+    The TUI already carries a tuned profile for that host, keyed on
+    ``TERM_PROGRAM=vscode``: scrolling shifts lines with DECSTBM inside
+    synchronized-output frames (xterm.js supports DEC 2026) instead of
+    repainting the whole screen on every wheel step, and the wheel curve
+    matches xterm.js event cadence. Without it the TUI fell back to its
+    unknown-terminal path — a full repaint per step at one row per event —
+    which made browser scrolling crawl.
+
+    Hyperlinks stay plain text: the TUI only enables OSC 8 for VS Code when it
+    also sees a VS Code version, which is removed here, so URLs remain
+    visible in the chat and clickable through the dashboard's link handler.
+    """
+    for name in _LAUNCHER_TERMINAL_ENV:
+        env.pop(name, None)
+    env["TERM_PROGRAM"] = "vscode"
 
 
 # Hosts that mean "listen on every interface" — the server should bind to
@@ -15617,6 +15856,9 @@ async def console_ws(ws: WebSocket) -> None:
 @app.websocket("/api/pty")
 async def pty_ws(ws: WebSocket) -> None:
     peer = ws.client.host if ws.client else "?"
+    # Arrival order, taken before any await: when two connections race for
+    # one chat's PTY, the newer one keeps it (PtySession.attach).
+    connect_seq = next(_PTY_CONNECT_SEQ)
 
     if not _DASHBOARD_EMBEDDED_CHAT_ENABLED:
         _log.info("pty refused: embedded chat disabled peer=%s", peer)
@@ -15750,7 +15992,9 @@ async def pty_ws(ws: WebSocket) -> None:
         await ws.close(code=1011)
         return
 
-    await session.attach(ws)
+    if not await session.attach(ws, seq=connect_seq):
+        # A newer connection for this chat already owns the PTY.
+        return
 
     # --- writer loop: WebSocket → PTY master ----------------------------
     # No reader task here: the session's drain task (spawned once per PTY,
@@ -15816,6 +16060,9 @@ async def gateway_ws(ws: WebSocket) -> None:
         return
 
     from tui_gateway.ws import handle_ws
+
+    if getattr(ws.app.state, "dashboard_voice_handoff", False):
+        _enable_dashboard_voice_handoff()
 
     await handle_ws(ws)
 
@@ -16777,6 +17024,86 @@ def _schedule_check_fn_probe(fn) -> Optional[threading.Thread]:
     return thread
 
 
+_PLUGIN_KINDS = frozenset({"standalone", "backend", "exclusive", "platform", "model-provider"})
+
+
+def _effective_plugin_kind(dir_path: Path, manifest: Dict[str, Any]) -> str:
+    """The plugin kind as ``PluginManager._parse_manifest`` resolves it."""
+    raw = manifest.get("kind") if isinstance(manifest, dict) else None
+    if isinstance(raw, str) and raw.strip().lower() in _PLUGIN_KINDS:
+        return raw.strip().lower()
+    if raw is None:
+        # Same source heuristic the loader applies to manifests with no kind.
+        try:
+            text = (dir_path / "__init__.py").read_text(
+                encoding="utf-8", errors="replace"
+            )[:8192]
+        except OSError:
+            text = ""
+        if "register_memory_provider" in text or "MemoryProvider" in text:
+            return "exclusive"
+        if "register_provider" in text and "ProviderProfile" in text:
+            return "model-provider"
+    return "standalone"
+
+
+def _plugin_loader_key(name: str, key: str, source: str) -> str:
+    """The key ``PluginManager`` gates this plugin on.
+
+    The listing keys bundled platform adapters ``platforms/<dir>``, but the
+    loader scans that folder without a prefix, so it knows them by manifest
+    name (``telegram-platform``) — writing the listing key to
+    ``plugins.disabled`` would be silently ignored.
+    """
+    if source == "bundled" and key.startswith("platforms/"):
+        return name
+    return key or name
+
+
+def _plugin_runtime_state(
+    *,
+    name: str,
+    loader_key: str,
+    kind: str,
+    source: str,
+    dir_path: Path,
+    enabled_set: set,
+    disabled_set: set,
+) -> tuple:
+    """``(runtime_status, always_on, toggleable)`` as the runtime sees it.
+
+    Mirrors ``PluginManager.discover_and_load``: bundled backends (image/video/
+    web/browser backends, dashboard auth, ...) and bundled platform adapters
+    load unless disabled; model providers are always loaded by
+    ``providers/`` discovery (it doesn't read the plugin lists, so enable/
+    disable can't change them); everything else is opt-in via
+    ``plugins.enabled``. Before this the page only read the lists, so the
+    active DeepSeek provider and every built-in backend showed "inactive".
+    """
+    aliases = {name, loader_key}
+    if kind == "model-provider":
+        loaded_by_providers = source == "bundled"
+        if not loaded_by_providers:
+            try:
+                from robo_constants import get_robo_home
+
+                dir_path.resolve().relative_to(
+                    (get_robo_home() / "plugins" / "model-providers").resolve()
+                )
+                loaded_by_providers = True
+            except (ValueError, OSError):
+                loaded_by_providers = False
+        if loaded_by_providers:
+            return "enabled", True, False
+    if aliases & disabled_set:
+        return "disabled", False, True
+    if source == "bundled" and kind in {"backend", "platform"}:
+        return "enabled", True, True
+    if aliases & enabled_set:
+        return "enabled", False, True
+    return "inactive", False, True
+
+
 def _merged_plugins_hub(force_refresh: bool = False) -> Dict[str, Any]:
     """Agent discovery + dashboard manifests + optional provider picker metadata.
 
@@ -16819,20 +17146,20 @@ def _merged_plugins_hub(force_refresh: bool = False) -> Dict[str, Any]:
     rows: List[Dict[str, Any]] = []
 
     for name, version, description, source, dir_str, key in _discover_all_plugins():
-        # Both the path-derived key (nested category plugins) and the bare
-        # manifest name count for enabled/disabled state, matching the runtime
-        # loader's back-compat lookup.
-        aliases = {name}
-        if key:
-            aliases.add(key)
-        if aliases & disabled_set:
-            runtime_status = "disabled"
-        elif aliases & enabled_set:
-            runtime_status = "enabled"
-        else:
-            runtime_status = "inactive"
-
         dir_path = Path(dir_str)
+        manifest_data = _read_plugin_manifest_at(dir_path)
+        kind = _effective_plugin_kind(dir_path, manifest_data)
+        toggle_id = _plugin_loader_key(name, key, source)
+        runtime_status, always_on, toggleable = _plugin_runtime_state(
+            name=name,
+            loader_key=toggle_id,
+            kind=kind,
+            source=source,
+            dir_path=dir_path,
+            enabled_set=enabled_set,
+            disabled_set=disabled_set,
+        )
+
         dm = dash_by_name.get(name)
         has_dash_manifest = dm is not None or (dir_path / "dashboard" / "manifest.json").exists()
 
@@ -16852,7 +17179,6 @@ def _merged_plugins_hub(force_refresh: bool = False) -> Dict[str, Any]:
         # live probe inside this request path.
         auth_required = False
         auth_command = ""
-        manifest_data = _read_plugin_manifest_at(dir_path)
         provides_tools = manifest_data.get("provides_tools") or []
         if provides_tools:
             try:
@@ -16883,6 +17209,16 @@ def _merged_plugins_hub(force_refresh: bool = False) -> Dict[str, Any]:
             "description": description or "",
             "source": source,
             "runtime_status": runtime_status,
+            # What the loader does with it: "model-provider" | "backend" |
+            # "platform" | "standalone" | "exclusive".
+            "kind": kind,
+            # Identifier for enable/disable — unique even when two plugins
+            # share a manifest name (image_gen/fal vs video_gen/fal).
+            "key": toggle_id,
+            # Ships with Robo and loads without being enabled.
+            "always_on": always_on,
+            # False when enable/disable has no effect (model providers).
+            "toggleable": toggleable,
             "has_dashboard_manifest": has_dash_manifest,
             "dashboard_manifest": _strip_dashboard_manifest(dm) if dm else None,
             "path": dir_str,
@@ -16991,7 +17327,25 @@ async def post_agent_plugin_enable(request: Request, name: str):
 async def post_agent_plugin_disable(request: Request, name: str):
     _require_token(request)
     name = _validate_plugin_name(name)
-    from robo_cli.plugins_cmd import dashboard_set_agent_plugin_enabled
+    from robo_cli.plugins_cmd import (
+        _BASIC_AUTH_PLUGIN_KEYS,
+        dashboard_set_agent_plugin_enabled,
+    )
+
+    # The Plugins page lists the bundled password-login backend like any other
+    # plugin; disabling it while dashboard.basic_auth is set locks everyone out
+    # of a remote dashboard after the next restart.
+    if name in _BASIC_AUTH_PLUGIN_KEYS:
+        basic_auth = cfg_get(load_config(), "dashboard", "basic_auth", default=None)
+        if isinstance(basic_auth, dict) and basic_auth.get("username"):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This plugin handles password sign-in for this dashboard; "
+                    "disabling it would lock you out. Remove the dashboard "
+                    "password (dashboard.basic_auth) first."
+                ),
+            )
 
     result = dashboard_set_agent_plugin_enabled(name, enabled=False)
     if not result.get("ok"):
@@ -17617,6 +17971,15 @@ def start_server(
 
             actual_port = _read_bound_port(server, fallback=port)
             app.state.bound_port = actual_port
+
+            # Bring the chat's TUI bundle up to date now, in the background,
+            # so the first chat opens without waiting on a rebuild (after an
+            # update, say). Not for `serve`: the desktop app has its own chat.
+            if not headless and _DASHBOARD_EMBEDDED_CHAT_ENABLED:
+                asyncio.get_running_loop().create_task(_prewarm_chat_tui(app))
+                # Applied on the first chat connection (importing the gateway
+                # here would redirect this process's stdout before READY).
+                app.state.dashboard_voice_handoff = True
 
             _write_dashboard_ready_file(actual_port)
             # Port-discovery sentinel parsed by the desktop spawn. `serve` is a

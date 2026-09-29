@@ -531,7 +531,7 @@ def _install_plugin_core(identifier: str, *, force: bool) -> tuple[Path, dict, s
                     f"Plugin '{plugin_name}' already exists. Use force reinstall "
                     f"or run `robo plugins update {plugin_name}`.",
                 )
-            shutil.rmtree(target)
+            _rmtree_plugin_dir(target)
 
         shutil.move(str(tmp_target), str(target))
 
@@ -776,6 +776,29 @@ def _save_enabled_set(enabled: set) -> None:
         config["plugins"] = {}
     config["plugins"]["enabled"] = sorted(enabled)
     save_config(config)
+
+
+def _rmtree_plugin_dir(path: Path) -> None:
+    """``shutil.rmtree`` that also removes read-only files.
+
+    A git-installed plugin keeps read-only objects under ``.git/objects``; on
+    Windows plain ``rmtree`` fails on them with PermissionError, so removing
+    or force-reinstalling such a plugin from the dashboard errored out.
+    """
+    import stat
+
+    def _on_error(func, failing_path, _exc_info):
+        for target in (os.path.dirname(failing_path), failing_path):
+            try:
+                os.chmod(target, stat.S_IWRITE | stat.S_IREAD | stat.S_IEXEC)
+            except OSError:
+                pass
+        func(failing_path)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_on_error)
+    else:
+        shutil.rmtree(path, onerror=_on_error)
 
 
 def _resolve_plugin_key(name: str) -> Optional[str]:
@@ -1900,6 +1923,25 @@ def _toggle_plugin_toolset(name: str, *, enable: bool) -> None:
         save_config(config)
 
 
+def _plugin_disable_aliases(identifier: str) -> set[str]:
+    """Identifiers under which config may have disabled *identifier*'s plugin.
+
+    Includes the path key and the manifest name — the name only when no other
+    plugin shares it, so enabling ``image_gen/fal`` never re-enables a
+    ``video_gen/fal`` that a bare ``fal`` entry also covers.
+    """
+    entries = _discover_all_plugins()
+    matches = [e for e in entries if identifier in (e[0], e[5])]
+    aliases = {identifier}
+    if len(matches) != 1:
+        return aliases
+    name, key = matches[0][0], matches[0][5]
+    aliases.add(key)
+    if sum(1 for e in entries if e[0] == name) == 1:
+        aliases.add(name)
+    return aliases
+
+
 def dashboard_set_agent_plugin_enabled(name: str, *, enabled: bool) -> dict[str, Any]:
     """Enable or disable a plugin in ``config.yaml`` (runtime allow/deny lists).
 
@@ -1913,10 +1955,16 @@ def dashboard_set_agent_plugin_enabled(name: str, *, enabled: bool) -> dict[str,
     dis = _get_disabled_set()
 
     if enabled:
-        if name in en and name not in dis:
+        # The loader treats the plugin as disabled if ANY of its identifiers
+        # is listed (key, manifest name, or the listing's platforms/<dir>
+        # key the CLI writes), so clear them all — clearing only ``name``
+        # left a plugin disabled under another alias while the button said
+        # "enabled".
+        aliases = _plugin_disable_aliases(name)
+        if name in en and not (aliases & dis):
             return {"ok": True, "name": name, "unchanged": True}
         en.add(name)
-        dis.discard(name)
+        dis -= aliases
         _save_enabled_set(en)
         _save_disabled_set(dis)
         _toggle_plugin_toolset(name, enable=True)
@@ -2036,7 +2084,7 @@ def dashboard_remove_user_plugin(name: str) -> dict[str, Any]:
             "error": f"Plugin '{name}' was not found under {plugins_dir}.",
         }
 
-    shutil.rmtree(target)
+    _rmtree_plugin_dir(target)
     return {"ok": True, "name": name}
 
 

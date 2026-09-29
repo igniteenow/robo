@@ -3730,6 +3730,36 @@ def test_resolve_chat_argv_injects_gateway_ws_url(monkeypatch):
     assert "token=" in gateway_url
 
 
+def test_dashboard_chat_tui_is_told_it_runs_in_xterm_js(monkeypatch):
+    """The chat's terminal is the browser's xterm.js, never the terminal that
+    launched the dashboard. The TUI's xterm.js profile gives fast DECSTBM
+    scrolling; leaking the launcher's identity (Windows Terminal, iTerm, …)
+    made it pick the wrong profile."""
+    import robo_cli.main as cli_main
+    import robo_cli.web_server as ws
+
+    monkeypatch.setattr(
+        cli_main,
+        "_make_tui_argv",
+        lambda *_args, **_kwargs: (["node", "fake-tui.js"], Path("/tmp")),
+    )
+    for name, value in {
+        "WT_SESSION": "abc",
+        "TERM_PROGRAM": "iTerm.app",
+        "TERM_PROGRAM_VERSION": "3.5",
+        "ITERM_SESSION_ID": "w0t0p0",
+        "TMUX": "/tmp/tmux-1000/default,1,0",
+        "KITTY_WINDOW_ID": "1",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    _argv, _cwd, env = ws._resolve_chat_argv()
+
+    assert env["TERM_PROGRAM"] == "vscode"
+    for leaked in ("WT_SESSION", "TERM_PROGRAM_VERSION", "ITERM_SESSION_ID", "TMUX", "KITTY_WINDOW_ID"):
+        assert leaked not in env
+
+
 class TestDashboardPluginStaticAssetAllowlist:
     """``/dashboard-plugins/<name>/<path>`` is unauthenticated by design —
     the SPA loads plugin JS via ``<script src>`` and CSS via

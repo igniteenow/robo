@@ -14,7 +14,9 @@ the working winpty usage already shipping in ``tools/process_registry.py``.
 
 from __future__ import annotations
 
+import logging
 import os
+import select
 import sys
 import time
 from typing import Optional, Sequence
@@ -36,6 +38,62 @@ __all__ = ["WinPtyBridge", "PtyUnavailableError"]
 _MIN_DIMENSION = 1
 _MAX_COLS = 2000
 _MAX_ROWS = 1000
+
+
+# Coalescing ConPTY output into whole screen updates (see
+# WinPtyBridge._with_trailing_pieces): a gap longer than _COALESCE_GAP_S ends
+# the update; _COALESCE_MAX_S / _COALESCE_MAX_CHARS bound the added latency
+# and the message size while output streams without pause.
+_COALESCE_GAP_S = 0.003
+_COALESCE_MAX_S = 0.012
+_COALESCE_MAX_CHARS = 256 * 1024
+
+
+_slow_pywinpty_warned = False
+
+
+def _pywinpty_major(version: str) -> Optional[int]:
+    try:
+        return int(str(version).split(".", 1)[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def _warn_if_slow_pywinpty(version: Optional[str] = None) -> bool:
+    """Log once when pywinpty < 3 is installed (100 ms stall per 4 KB read).
+
+    Returns True when the warning applies. ``version`` is for tests.
+    """
+    global _slow_pywinpty_warned
+    if version is None:
+        try:
+            import winpty  # type: ignore
+
+            version = getattr(winpty, "__version__", "")
+        except Exception:
+            return False
+    major = _pywinpty_major(version)
+    if major is None or major >= 3:
+        return False
+    if not _slow_pywinpty_warned:
+        _slow_pywinpty_warned = True
+        logging.getLogger(__name__).warning(
+            "pywinpty %s makes the dashboard chat slow on Windows (it waits "
+            "100 ms before every 4 KB of output). Update Robo, or run: "
+            "python -m pip install \"pywinpty>=3.0.5,<4\"",
+            version,
+        )
+    return True
+
+
+def _encode(data) -> bytes:
+    if isinstance(data, bytes):
+        return data
+    # NOTE: pywinpty decodes internally, so a multibyte UTF-8 sequence
+    # can in theory split across reads. xterm.js tolerates the rare
+    # replacement char; this is the one fidelity tradeoff vs the POSIX
+    # raw-fd path.
+    return data.encode("utf-8", errors="replace")
 
 
 def _clamp(value: int, maximum: int) -> int:
@@ -96,6 +154,7 @@ class WinPtyBridge:
         )
         if not spawn_env.get("TERM"):
             spawn_env["TERM"] = "xterm-256color"
+        _warn_if_slow_pywinpty()
         # pywinpty mirrors ptyprocess: dimensions=(rows, cols).
         # This call shape is the one already used in tools/process_registry.py.
         proc = PtyProcess.spawn(  # type: ignore[union-attr]
@@ -121,7 +180,7 @@ class WinPtyBridge:
     # -- I/O --------------------------------------------------------------
 
     def read(self, timeout: float = 0.2) -> Optional[bytes]:
-        """Up to 64 KiB of child output.
+        """Child output: one screen update's worth, up to ~256 KiB.
 
         Returns bytes, ``b""`` when nothing is available this tick, or
         ``None`` once the child has exited (EOF).
@@ -139,13 +198,44 @@ class WinPtyBridge:
             # doesn't pin a core while the TUI is idle.
             time.sleep(min(timeout, 0.02))
             return b""
-        if isinstance(data, bytes):
-            return data
-        # NOTE: pywinpty decodes internally, so a multibyte UTF-8 sequence
-        # can in theory split across reads. xterm.js tolerates the rare
-        # replacement char; this is the one fidelity tradeoff vs the POSIX
-        # raw-fd path.
-        return data.encode("utf-8", errors="replace")
+        return b"".join(_encode(piece) for piece in self._with_trailing_pieces(data))
+
+    def _with_trailing_pieces(self, first):
+        """``first`` plus the pieces of the same screen update behind it.
+
+        pywinpty's reader thread forwards ConPTY output in 4096-char pieces,
+        about a millisecond apart, so one TUI frame arrives as several reads.
+        Sent one by one, the browser can paint between them and show half a
+        frame. Keep reading while the next piece follows within
+        ``_COALESCE_GAP_S`` (bounded in time and size) and send the frame
+        whole. Needs pywinpty's socket (``fileobj``); without it, returns
+        ``first`` alone, as before.
+        """
+        pieces = [first]
+        sock = getattr(self._proc, "fileobj", None)
+        if sock is None:
+            return pieces
+        size = len(first)
+        deadline = time.monotonic() + _COALESCE_MAX_S
+        while size < _COALESCE_MAX_CHARS:
+            wait = min(_COALESCE_GAP_S, deadline - time.monotonic())
+            if wait <= 0:
+                break
+            try:
+                ready, _, _ = select.select([sock], [], [], wait)
+            except (OSError, ValueError):
+                break
+            if not ready:
+                break
+            try:
+                more = self._proc.read(65536)
+            except Exception:
+                # EOF (or a dead socket) — the next read() reports it.
+                break
+            if more:
+                pieces.append(more)
+                size += len(more)
+        return pieces
 
     def write(self, data: bytes) -> None:
         if self._closed or not data:

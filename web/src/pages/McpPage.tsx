@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
-import { KeyRound, Package, Power, Server, Trash2, X, Zap } from "lucide-react";
+import {
+  FileJson,
+  KeyRound,
+  Package,
+  Power,
+  Server,
+  Trash2,
+  X,
+  Zap,
+} from "lucide-react";
 import { Badge } from "@igniteenow/ui/ui/components/badge";
 import { Button } from "@igniteenow/ui/ui/components/button";
 import { Select, SelectOption } from "@igniteenow/ui/ui/components/select";
@@ -10,6 +19,7 @@ import type {
   McpCatalogDiagnostic,
   McpCatalogEntry,
   McpHttpAuth,
+  McpImportResult,
   McpServer,
   McpTestResult,
 } from "@/lib/api";
@@ -25,6 +35,7 @@ import { usePageHeader } from "@/contexts/usePageHeader";
 import { cn, themedBody } from "@/lib/utils";
 import {
   buildMcpServerCreate,
+  isRemoteMcpTransport,
   type McpTransport,
 } from "@/lib/mcp-server-create";
 import { completeMcpDashboardOAuth } from "@/lib/mcp-dashboard-oauth";
@@ -37,11 +48,59 @@ function truncateText(value: string, maxLength: number): string {
   return value.length > maxLength ? value.slice(0, maxLength) + "..." : value;
 }
 
+const ACTION_POLL_MS = 2000;
+const ACTION_TIMEOUT_MS = 15 * 60 * 1000;
+
+/** Follow a background dashboard action (e.g. `robo mcp install`) to its end. */
+async function waitForAction(
+  action: string,
+): Promise<{ ok: boolean; detail: string }> {
+  const deadline = Date.now() + ACTION_TIMEOUT_MS;
+  let misses = 0;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, ACTION_POLL_MS));
+    try {
+      const status = await api.getActionStatus(action, 20);
+      misses = 0;
+      if (status.running) continue;
+      const last =
+        [...status.lines].reverse().find((line) => line.trim()) ??
+        `exit code ${status.exit_code}`;
+      return { ok: status.exit_code === 0, detail: last.trim() };
+    } catch (e) {
+      // A dashboard restart or a blip; give up only if it keeps failing.
+      if (++misses >= 5) return { ok: false, detail: String(e) };
+    }
+  }
+  return { ok: false, detail: "still running after 15 minutes" };
+}
+
 const TRANSPORT_TONE: Record<string, "success" | "warning" | "secondary"> = {
   http: "success",
   stdio: "warning",
   unknown: "secondary",
 };
+
+// Where MCP changes land: open chats reload them on their own (the chat polls
+// config and runs reload.mcp); the messaging gateway only on restart.
+const MCP_APPLY_NOTE =
+  "Saved. Open chats load MCP changes automatically within a few seconds. " +
+  "Messaging channels (Telegram, Discord, …) pick them up after a gateway " +
+  "restart or /reload-mcp.";
+
+const IMPORT_PLACEHOLDER = `{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\\\Users\\\\me\\\\Documents"]
+    },
+    "remote-tools": {
+      "type": "http",
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+    }
+  }
+}`;
 
 export default function McpPage() {
   const [servers, setServers] = useState<McpServer[]>([]);
@@ -58,6 +117,7 @@ export default function McpPage() {
   const [url, setUrl] = useState("");
   const [httpAuth, setHttpAuth] = useState<McpHttpAuth>("none");
   const [bearerToken, setBearerToken] = useState("");
+  const [headers, setHeaders] = useState("");
   const [command, setCommand] = useState("");
   const [args, setArgs] = useState("");
   const [env, setEnv] = useState("");
@@ -69,6 +129,23 @@ export default function McpPage() {
   const createModalRef = useModalBehavior({
     open: createModalOpen,
     onClose: closeCreateModal,
+  });
+
+  // Import (paste JSON) modal state
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<McpImportResult | null>(
+    null,
+  );
+  const closeImportModal = useCallback(() => {
+    setImportOpen(false);
+    setImportResult(null);
+  }, []);
+  const importModalRef = useModalBehavior({
+    open: importOpen,
+    onClose: closeImportModal,
   });
 
   // Test results keyed by server name
@@ -126,6 +203,7 @@ export default function McpPage() {
         url,
         httpAuth,
         bearerToken,
+        headers,
         command,
         args,
         env,
@@ -140,23 +218,27 @@ export default function McpPage() {
 
     setCreating(true);
     try {
-      await api.addMcpServer(body);
+      const added = await api.addMcpServer(body);
+      const needsOAuth = isRemoteMcpTransport(transport) && httpAuth === "oauth";
       showToast(
-        transport === "http" && httpAuth === "oauth"
-          ? "Added — authenticate with OAuth"
-          : "Add ✓",
+        needsOAuth ? "Added — authenticate with OAuth" : "Add ✓",
         "success",
       );
       setName("");
       setUrl("");
       setHttpAuth("none");
       setBearerToken("");
+      setHeaders("");
       setCommand("");
       setArgs("");
       setEnv("");
       setTransport("http");
       setCreateModalOpen(false);
-      loadServers();
+      setRestartNote(MCP_APPLY_NOTE);
+      await loadServers();
+      // Connect once right away so a wrong command/URL/token shows up now,
+      // not later in a chat. OAuth servers need Authenticate first.
+      if (!needsOAuth) void handleTest(added);
     } catch (e) {
       showToast(`Failed to add: ${e}`, "error");
     } finally {
@@ -210,13 +292,43 @@ export default function McpPage() {
       setServers((prev) =>
         prev.map((s) => (s.name === server.name ? { ...s, enabled: next } : s)),
       );
-      setRestartNote(
-        "Enable/disable takes effect on the next gateway restart.",
-      );
+      setRestartNote(MCP_APPLY_NOTE);
     } catch (e) {
       showToast(`Error: ${e}`, "error");
     } finally {
       setTogglingName(null);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!importText.trim()) {
+      showToast("Paste an MCP configuration first", "error");
+      return;
+    }
+    setImporting(true);
+    try {
+      const result = await api.importMcpServers(importText, importOverwrite);
+      setImportResult(result);
+      if (result.added.length) {
+        setRestartNote(MCP_APPLY_NOTE);
+        showToast(
+          `Imported ${result.added.length} server${result.added.length === 1 ? "" : "s"}`,
+          "success",
+        );
+        await loadServers();
+        for (const server of result.added) {
+          if (server.auth !== "oauth") void handleTest(server);
+        }
+      }
+      if (!result.errors.length && !result.skipped.length) {
+        setImportText("");
+        setImportOpen(false);
+        setImportResult(null);
+      }
+    } catch (e) {
+      showToast(`Import failed: ${e}`, "error");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -247,13 +359,28 @@ export default function McpPage() {
       setInstallingName(entry.name);
       try {
         const res = await api.installMcpCatalogEntry(entry.name, envMap, true);
-        if (res.background) {
+        setInstallEntry(null);
+        setInstallEnv({});
+        if (res.background && res.action) {
+          // Git-bootstrap entries clone + build in a background process;
+          // follow it so the page reports the real outcome.
+          showToast("Installing in background…", "success");
+          const done = await waitForAction(res.action);
+          if (done.ok) {
+            showToast(`Installed: "${truncateText(entry.name, 30)}"`, "success");
+            setRestartNote(MCP_APPLY_NOTE);
+          } else {
+            showToast(
+              `Install of ${entry.name} failed: ${done.detail}`,
+              "error",
+            );
+          }
+        } else if (res.background) {
           showToast("Installing in background…", "success");
         } else {
           showToast(`Installed: "${truncateText(entry.name, 30)}"`, "success");
+          setRestartNote(MCP_APPLY_NOTE);
         }
-        setInstallEntry(null);
-        setInstallEnv({});
         await Promise.all([loadServers(), loadCatalog()]);
       } catch (e) {
         showToast(`Failed to install: ${e}`, "error");
@@ -296,13 +423,24 @@ export default function McpPage() {
   // Put "Add Server" button in page header
   useLayoutEffect(() => {
     setEnd(
-      <Button
-        className="uppercase"
-        size="sm"
-        onClick={() => setCreateModalOpen(true)}
-      >
-        Add Server
-      </Button>,
+      <div className="flex items-center gap-2">
+        <Button
+          outlined
+          className="uppercase"
+          size="sm"
+          prefix={<FileJson />}
+          onClick={() => setImportOpen(true)}
+        >
+          Import JSON
+        </Button>
+        <Button
+          className="uppercase"
+          size="sm"
+          onClick={() => setCreateModalOpen(true)}
+        >
+          Add Server
+        </Button>
+      </div>,
     );
     return () => {
       setEnd(null);
@@ -397,12 +535,17 @@ export default function McpPage() {
                     if (nextTransport === "stdio") setBearerToken("");
                   }}
                 >
-                  <SelectOption value="http">HTTP/SSE</SelectOption>
-                  <SelectOption value="stdio">stdio</SelectOption>
+                  <SelectOption value="http">
+                    Remote — Streamable HTTP
+                  </SelectOption>
+                  <SelectOption value="sse">Remote — SSE</SelectOption>
+                  <SelectOption value="stdio">
+                    Local command (stdio)
+                  </SelectOption>
                 </Select>
               </div>
 
-              {transport === "http" ? (
+              {isRemoteMcpTransport(transport) ? (
                 <>
                   <div className="grid gap-2">
                     <Label htmlFor="mcp-url">URL</Label>
@@ -448,11 +591,26 @@ export default function McpPage() {
                   )}
                   {httpAuth === "oauth" && (
                     <p className="text-xs text-muted-foreground">
-                      Add the server, then use Authenticate. Robo opens the
-                      OAuth browser on the machine running the Dashboard
-                      backend.
+                      Add the server, then use Authenticate. The sign-in page
+                      opens in a new browser tab.
                     </p>
                   )}
+                  <div className="grid gap-2">
+                    <Label htmlFor="mcp-headers">
+                      Extra headers (optional, Name: value per line)
+                    </Label>
+                    <textarea
+                      id="mcp-headers"
+                      className="flex min-h-[64px] w-full border border-border bg-background/40 px-3 py-2 text-sm font-courier shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30 focus-visible:border-foreground/25"
+                      placeholder={"X-API-Key: your-key\nX-Workspace: team-a"}
+                      value={headers}
+                      onChange={(e) => setHeaders(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Key/token-like values are stored in .env, not
+                      config.yaml.
+                    </p>
+                  </div>
                 </>
               ) : (
                 <>
@@ -473,6 +631,10 @@ export default function McpPage() {
                       value={args}
                       onChange={(e) => setArgs(e.target.value)}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Separate with spaces; wrap an argument that contains
+                      spaces in quotes, e.g. &quot;C:\My Files&quot;.
+                    </p>
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="mcp-env">
@@ -498,6 +660,109 @@ export default function McpPage() {
                   prefix={creating ? <Spinner /> : undefined}
                 >
                   {creating ? "Adding..." : "Add"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import modal: paste any MCP client's JSON (or Robo YAML) */}
+      {importOpen && (
+        <div
+          ref={importModalRef}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/85 p-4"
+          onClick={(e) => e.target === e.currentTarget && closeImportModal()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="import-mcp-title"
+        >
+          <div
+            className={cn(
+              themedBody,
+              "relative w-full max-w-2xl border border-border bg-card shadow-2xl flex flex-col max-h-[90vh]",
+            )}
+          >
+            <Button
+              ghost
+              size="icon"
+              onClick={closeImportModal}
+              className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+              aria-label="Close"
+            >
+              <X />
+            </Button>
+
+            <header className="p-5 pb-3 border-b border-border">
+              <h2
+                id="import-mcp-title"
+                className="font-display text-display text-base tracking-wider"
+              >
+                Import MCP servers
+              </h2>
+            </header>
+
+            <div className="p-5 grid gap-4 overflow-y-auto">
+              <p className="text-xs text-muted-foreground">
+                Paste the setup JSON from any MCP server&apos;s instructions —
+                the <code className="font-mono">mcpServers</code> block for
+                Claude Desktop, Claude Code, Cursor or Windsurf, VS Code&apos;s{" "}
+                <code className="font-mono">servers</code> block, or Robo
+                YAML. Local commands, HTTP and SSE servers, env vars and
+                headers are all supported; tokens in headers are stored in
+                .env.
+              </p>
+              <textarea
+                aria-label="MCP configuration"
+                className="flex min-h-[220px] w-full border border-border bg-background/40 px-3 py-2 text-xs font-courier shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/30 focus-visible:border-foreground/25"
+                placeholder={IMPORT_PLACEHOLDER}
+                spellCheck={false}
+                value={importText}
+                onChange={(e) => {
+                  setImportText(e.target.value);
+                  setImportResult(null);
+                }}
+              />
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={importOverwrite}
+                  onChange={(e) => setImportOverwrite(e.target.checked)}
+                />
+                Replace servers that already exist with the same name
+              </label>
+
+              {importResult && (
+                <div className="grid gap-1 text-xs">
+                  {importResult.added.map((s) => (
+                    <p key={`a-${s.name}`} className="text-success">
+                      Added {s.name}
+                    </p>
+                  ))}
+                  {importResult.skipped.map((s) => (
+                    <p key={`s-${s.name}`} className="text-warning">
+                      Skipped {s.name}: {s.reason} (tick “Replace” to
+                      overwrite)
+                    </p>
+                  ))}
+                  {importResult.errors.map((s) => (
+                    <p key={`e-${s.name}`} className="text-destructive">
+                      {s.name ? `${s.name}: ` : ""}
+                      {s.error}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  className="uppercase"
+                  size="sm"
+                  onClick={() => void handleImport()}
+                  disabled={importing}
+                  prefix={importing ? <Spinner /> : undefined}
+                >
+                  {importing ? "Importing..." : "Import"}
                 </Button>
               </div>
             </div>
