@@ -945,7 +945,8 @@ def _(rid, params: dict) -> dict:
                     "output": (
                         "/snapshot restore is blocked in the TUI because it changes "
                         "config/state on disk while the live agent has cached settings. "
-                        "Run it in the classic CLI, then restart the TUI."
+                        "Quit, run `robo snapshot restore <id>` in a terminal, "
+                        "then start Robo again."
                     ),
                 },
             )

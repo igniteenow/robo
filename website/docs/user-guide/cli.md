@@ -13,7 +13,7 @@ Run `robo setup` and you're ready to `robo chat`.
 :::
 
 :::tip
-Robo also ships a modern TUI with modal overlays, mouse selection, and non-blocking input. Launch it with `robo --tui` — see the [TUI](tui.md) guide.
+`robo`, `robo chat` and `robo --cli` open the TUI, with modal overlays, mouse selection, and non-blocking input — see the [TUI](tui.md) guide. The classic prompt_toolkit chat no longer opens from a terminal; one-shot runs (`robo chat -q`, `robo -z`) work as before.
 :::
 
 ## Running the CLI
@@ -22,8 +22,10 @@ Robo also ships a modern TUI with modal overlays, mouse selection, and non-block
 # Start an interactive session (default)
 robo
 
-# Single query mode (non-interactive)
+# Single query: in a terminal this opens the TUI with the question;
+# add --cli (or use robo -z "Hello") for one answer with no UI
 robo chat -q "Hello"
+robo --cli chat -q "Hello"
 
 # With a specific model
 robo chat --model "anthropic/claude-sonnet-4"

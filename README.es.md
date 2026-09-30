@@ -32,6 +32,8 @@ Funciona en tu propio ordenador, usa herramientas reales y pregunta antes de hac
 
 Robo planifica la tarea, la hace con herramientas reales (terminal, archivos, navegador, código), comprueba
 su propio trabajo y pregunta **Permitir una vez / Permitir en esta sesión / Denegar** antes de algo arriesgado.
+*Permitir en esta sesión* deja de preguntar hasta que esa sesión termina; los comandos de la lista de bloqueo de
+Robo siguen bloqueados.
 Funciona con el modelo que elijas: OpenAI, Anthropic, Gemini, DeepSeek, Kimi, OpenRouter,
 o un modelo local con Ollama o cualquier servidor compatible con OpenAI.
 
@@ -64,7 +66,8 @@ robo              # empieza a chatear
 
 Necesitas `git` y Python 3.11, 3.12 o 3.13 (3.14 aún no es compatible). El instalador prepara Node
 por sí mismo y nunca sobrescribe tu configuración, memoria ni habilidades. En Debian/Ubuntu, la voz necesita además `sudo apt install libportaudio2`.
-Si algo no va bien, ejecuta `robo doctor`.
+Si algo no va bien, ejecuta `robo doctor`. Para instalaciones automatizadas, llama directamente a
+`scripts/install.sh` o `scripts/install.ps1`.
 
 ## Ejecutarlo
 
@@ -72,11 +75,11 @@ Todas las formas de usar Robo comparten las mismas sesiones, memoria y configura
 
 | Quieres | Ejecuta | Obtienes |
 |---|---|---|
-| **Terminal** | `robo` | App de terminal a pantalla completa con chat de voz (`robo --cli` para el modo clásico) |
+| **Terminal** | `robo` | App de terminal con chat de voz |
 | **App de escritorio** | `robo desktop` | App nativa para Windows, macOS y Linux. La primera vez la compila; luego abre al instante |
 | **Navegador** | `robo dashboard` | Robo en `http://localhost:9119`: chat, ajustes, sesiones, habilidades, MCP |
-| **Una respuesta rápida** | `robo chat -q "Resume README.md"` | Una pregunta, una respuesta, sin interfaz |
-| **Tus propias apps** | `robo gateway` | API compatible con OpenAI en `http://localhost:8642/v1` ([detalles](#api-http)) |
+| **Una respuesta rápida** | `robo -z "Resume README.md"` | Una pregunta, una respuesta, sin interfaz |
+| **Tus propias apps** | `robo gateway` | API compatible con OpenAI en `http://localhost:8642/v1`, cuando `API_SERVER_KEY` está configurada ([detalles](#api-http)) |
 
 ### Voz
 
@@ -130,11 +133,15 @@ También puedes escribirle a Robo desde **Telegram, WhatsApp, Discord, Slack** y
 | `/help` | Todos los comandos dentro de un chat |
 | `/edit` | Recuperar tu último mensaje y reescribirlo |
 
-Mientras Robo trabaja, simplemente escribe: tu mensaje redirige la tarea en curso.
+Mientras Robo trabaja, simplemente escribe: Robo lee tu mensaje al momento y cambia de rumbo (el paso que
+estaba ejecutando se detiene). `/busy steer` deja terminar primero el paso actual; `/busy queue` guarda tu
+mensaje para el siguiente turno.
 
 ## Hazlo tuyo
 
-Todo son archivos de texto en `~/.robo` (Windows: `%USERPROFILE%\.robo`), fáciles de editar, respaldar o mover:
+Todo son archivos de texto en `~/.robo`, fáciles de editar, respaldar o mover. En Windows la carpeta es
+`%USERPROFILE%\.robo` si instalaste con `install-robo.ps1`, y `%LOCALAPPDATA%\robo` si usaste
+`scripts/install.ps1`.
 
 | Archivo | Qué contiene |
 |---|---|
@@ -148,8 +155,8 @@ Todo son archivos de texto en `~/.robo` (Windows: `%USERPROFILE%\.robo`), fácil
 <summary><b>API HTTP</b></summary>
 
 <a id="api-http"></a>
-Usa Robo desde tus propias apps o interfaces de chat como Open WebUI. Añade una clave de al menos
-16 caracteres a `~/.robo/.env` (Windows: `%USERPROFILE%\.robo\.env`):
+Usa Robo desde tus propias apps o interfaces de chat como Open WebUI. La API solo arranca cuando añades una
+clave de al menos 16 caracteres a `.env` en tu carpeta de Robo (ver [Hazlo tuyo](#hazlo-tuyo)):
 
 ```bash
 API_SERVER_KEY=your-secret-key-16-plus-chars
@@ -163,16 +170,21 @@ curl http://localhost:8642/v1/chat/completions \
   -d '{"model": "robo-engineer", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
+La API también necesita el paquete `aiohttp`, que `install-robo.ps1` e `install-robo.sh` no instalan.
+Si falta, `robo gateway` lo indica y muestra el comando que lo instala.
+
 </details>
 
 <details>
-<summary><b>Docker (Linux y macOS)</b></summary>
+<summary><b>Docker (Linux)</b></summary>
 
 ```bash
 ROBO_UID=$(id -u) ROBO_GID=$(id -g) docker compose up -d
 ```
 
 Ejecuta el gateway y el dashboard en `http://localhost:9119`, con tus datos en `~/.robo`.
+El archivo compose usa la red del host, que Docker ofrece en Linux. En macOS, actívala antes en
+Docker Desktop 4.34 o posterior: inicia sesión y ve a **Settings → Resources → Network → Enable host networking**.
 
 </details>
 

@@ -5,9 +5,10 @@ name: Release
 # update users from.
 #
 # To release a version:
-#   1. Bump it in all four files that declare it -- pyproject.toml,
-#      robo_runtime/version.py, package.json, apps/desktop/package.json -- and
-#      merge that to main.
+#   1. Bump it in the five files that declare it -- pyproject.toml,
+#      robo_runtime/version.py, ROBO_VERSION, package.json,
+#      apps/desktop/package.json -- refresh the two lockfiles (`uv lock` and
+#      `npm install --package-lock-only`), and merge that to main.
 #   2. Tag that commit on main and push the tag:
 #        git fetch origin && git tag v3.0.2 origin/main && git push origin v3.0.2
 #

@@ -18,7 +18,7 @@ robo [flags] [command]        (no subcommand = interactive chat)
   --skills, -s SKILL        Preload skills (comma-separate or repeat)
   --profile, -p NAME        Use a named profile
   --yolo                    Skip dangerous command approval
-  --tui / --cli             Force the Ink TUI / classic REPL
+  --tui / --cli             Open the Ink TUI (the default); --cli with -q: one answer, no UI
   --ignore-rules            Skip AGENTS.md/SOUL.md/memory/skill injection
   --safe-mode               Disable ALL customizations (troubleshooting)
   --pass-session-id         Include session ID in system prompt

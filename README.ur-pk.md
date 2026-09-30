@@ -32,6 +32,7 @@
 
 روبو کام کی منصوبہ بندی کرتا ہے، اسے اصل ٹولز (ٹرمینل، فائلیں، براؤزر، کوڈ) سے مکمل کرتا ہے، اپنا کام خود چیک کرتا ہے،
 اور کسی بھی خطرناک قدم سے پہلے پوچھتا ہے: **Allow once / Allow for this session / Deny**۔
+*Allow for this session* چننے پر اس سیشن کے ختم ہونے تک دوبارہ نہیں پوچھا جاتا؛ روبو کی بلاک لسٹ والی کمانڈز پھر بھی بلاک رہتی ہیں۔
 یہ آپ کے منتخب کردہ ماڈل کے ساتھ کام کرتا ہے: OpenAI، Anthropic، Gemini، DeepSeek، Kimi، OpenRouter،
 یا Ollama یا کسی بھی OpenAI-compatible سرور کے ذریعے مقامی (local) ماڈل۔
 
@@ -76,7 +77,7 @@ robo              # start chatting
 
 پہلے سے `git` اور Python 3.11، 3.12 یا 3.13 ہونا ضروری ہے (3.14 ابھی سپورٹڈ نہیں)۔ انسٹالر Node خود سیٹ اپ کرتا ہے اور آپ کی کنفیگریشن، میموری یا اسکلز کو کبھی اوور رائٹ نہیں کرتا۔
 Debian/Ubuntu پر آواز کے لیے یہ بھی چاہیے: `sudo apt install libportaudio2`۔
-اگر کچھ ٹھیک نہ لگے تو `robo doctor` چلائیں۔
+اگر کچھ ٹھیک نہ لگے تو `robo doctor` چلائیں۔ اسکرپٹ کے ذریعے انسٹال کرنے کے لیے `scripts/install.sh` یا `scripts/install.ps1` براہِ راست چلائیں۔
 
 ## چلائیں
 
@@ -84,11 +85,11 @@ Debian/Ubuntu پر آواز کے لیے یہ بھی چاہیے: `sudo apt instal
 
 | آپ کو چاہیے | چلائیں | آپ کو ملے گا |
 |---|---|---|
-| **ٹرمینل** | `robo` | آواز کے ساتھ فل اسکرین ٹرمینل ایپ (کلاسک پرامپٹ کے لیے `robo --cli`) |
+| **ٹرمینل** | `robo` | آواز کے ساتھ ٹرمینل ایپ |
 | **ڈیسک ٹاپ ایپ** | `robo desktop` | Windows، macOS، Linux کے لیے ایپ۔ پہلی بار build ہوتی ہے، پھر فوراً کھلتی ہے |
 | **براؤزر** | `robo dashboard` | `http://localhost:9119` پر روبو: چیٹ، سیٹنگز، سیشنز، اسکلز، MCP |
-| **ایک فوری جواب** | `robo chat -q "Summarize README.md"` | ایک سوال، ایک جواب، بغیر UI |
-| **آپ کی اپنی ایپس** | `robo gateway` | `http://localhost:8642/v1` پر OpenAI-compatible API |
+| **ایک فوری جواب** | `robo -z "Summarize README.md"` | ایک سوال، ایک جواب، بغیر UI |
+| **آپ کی اپنی ایپس** | `robo gateway` | `http://localhost:8642/v1` پر OpenAI-compatible API، جب `API_SERVER_KEY` سیٹ ہو |
 
 ### آواز
 
@@ -146,11 +147,13 @@ robo dashboard --host 0.0.0.0 --no-open
 | `/help` | چیٹ کے اندر تمام کمانڈز |
 | `/edit` | اپنا آخری پیغام واپس لے کر دوبارہ لکھیں |
 
-جب روبو کام کر رہا ہو تو بس لکھیں: آپ کا پیغام جاری کام کا رخ بدل دیتا ہے۔
+جب روبو کام کر رہا ہو تو بس لکھیں: روبو آپ کا پیغام فوراً پڑھ کر رخ بدل لیتا ہے (جو قدم چل رہا تھا وہ رک جاتا ہے)۔
+`/busy steer` سے موجودہ قدم پہلے مکمل ہوتا ہے؛ `/busy queue` آپ کا پیغام اگلی باری کے لیے رکھ لیتا ہے۔
 
 ## اسے اپنا بنائیں
 
-سب کچھ `~/.robo` (Windows: `%USERPROFILE%\.robo`) میں سادہ فائلوں کی صورت میں ہے، جنہیں ایڈٹ، بیک اپ یا منتقل کرنا آسان ہے:
+سب کچھ `~/.robo` میں سادہ فائلوں کی صورت میں ہے، جنہیں ایڈٹ، بیک اپ یا منتقل کرنا آسان ہے۔ Windows پر یہ فولڈر
+`install-robo.ps1` سے انسٹال کرنے پر `%USERPROFILE%\.robo` اور `scripts/install.ps1` سے انسٹال کرنے پر `%LOCALAPPDATA%\robo` ہے۔
 
 | فائل | اس میں کیا ہے |
 |---|---|
@@ -160,7 +163,7 @@ robo dashboard --host 0.0.0.0 --no-open
 | `skills/` | دوبارہ استعمال ہونے والے طریقے۔ کہیں "اسے اسکل کے طور پر محفوظ کرو" |
 | `.env` | آپ کی API keys |
 
-HTTP API اور Docker کی تفصیل کے لیے [انگریزی README](README.md#http-api) دیکھیں۔
+HTTP API (صرف `API_SERVER_KEY` سیٹ ہونے پر چلتی ہے) اور Docker (Linux؛ macOS پر پہلے Docker Desktop میں host networking آن کریں) کی تفصیل کے لیے [انگریزی README](README.md#http-api) دیکھیں۔
 
 ## ابتدائی رسائی (Early access)
 

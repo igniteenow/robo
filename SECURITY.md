@@ -16,9 +16,10 @@ A useful report includes:
 - A concise description and severity assessment.
 - The affected component, identified by file path and line range
   (e.g. `path/to/file.py:120-145`).
-- Environment details (`robo version`, commit SHA, OS, Python
+- Environment details (`robo --version`, commit SHA, OS, Python
   version).
-- A reproduction against `main` or the latest release.
+- A reproduction against the current `main` branch, which is what
+  `robo update` installs.
 - A statement of which trust boundary in §2 is crossed.
 
 Please read §2 and §3 before submitting. Reports that demonstrate
@@ -320,17 +321,21 @@ that:
   §2.5). For skills, this means reading the Python and scripts,
   not just SKILL.md. Skills Guard reports and the install audit
   log are the review surface.
-- Robo includes supply-chain guards for MCP server
-  launches and for dependency / bundled-package changes in CI; see
-  `CONTRIBUTING.md` for specifics.
+- Before launching an MCP server through `npx` or `uvx`, Robo checks
+  the package against the OSV database and refuses known malware
+  (it fails open when OSV can't be reached). In CI, `uv.lock` must
+  match `pyproject.toml`, GitHub Actions are pinned to commit SHAs,
+  and a weekly OSV scan checks the locked dependencies. Dependency
+  changes are reviewed by hand; see `CONTRIBUTING.md` for the pinning
+  rules.
 
 ---
 
 ## 5. Disclosure
 
-- **Coordinated disclosure window:** 90 days from report, or until a
-  fix is released, whichever comes first.
+- **Coordinated disclosure window:** 90 days from report, or until the
+  fix is on `main`, whichever comes first.
 - **Channel:** the GHSA thread or email correspondence with
   support@igniteenow.com.
-- **Credit:** reporters are credited in release notes unless
-  anonymity is requested.
+- **Credit:** reporters are credited in the security advisory and
+  the fix's pull request unless anonymity is requested.

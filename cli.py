@@ -8656,7 +8656,7 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         turn_word = "turn" if turns_undone == 1 else "turns"
         msg_count = rewound_rows or removed_count
         print(
-            f"✓b Undid {turns_undone} {turn_word} ({msg_count} message(s)). "
+            f"✓ Undid {turns_undone} {turn_word} ({msg_count} message(s)). "
             f"Backed up to: \"{removed_text[:60]}{'...' if len(removed_text) > 60 else ''}\""
         )
         remaining = len(self.conversation_history)

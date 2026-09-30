@@ -1406,10 +1406,9 @@ approvals:
   cron_mode: deny          # cron jobs have nobody to ask: deny | approve
 
 display:
-  # Interactive interface for `robo` / `robo chat` when stdin is a TTY.
-  #   tui: the modern Ink terminal UI (default; same as `robo --tui`)
-  #   cli: the classic prompt_toolkit REPL (same as `robo --cli`)
-  # Explicit flags always win over this setting.
+  # Interactive `robo`, `robo chat` and `robo --cli` open the terminal app
+  # (the Ink TUI). `cli` (the old classic prompt) now opens it too; leave
+  # this at tui.
   interface: tui
 
   # Use compact banner mode (hides the ASCII-art banner, shows a single line).

@@ -145,7 +145,7 @@ When the agent acts, you'll see a **tinted overlay cursor** glide
 across the screen to where each click / type / scroll lands. The real
 OS cursor never moves — the overlay is a visual cue that says "the
 agent is acting here." Each Robo run declares its own cua-driver
-**session id** (something like `hermes-3a7b9c14d2e8`); the cursor's
+**session id** (something like `robo-3a7b9c14d2e8`); the cursor's
 identity is keyed to that session, so concurrent runs / subagents each
 get their own cursor without stepping on each other.
 

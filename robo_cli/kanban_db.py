@@ -9086,11 +9086,11 @@ def _default_spawn(
     env["ROBO_PROFILE"] = profile_arg
 
     # A worker must NEVER boot the interactive TUI: an inherited ROBO_TUI=1
-    # or a `display.interface: tui` in the profile's config would send the
-    # quiet chat run into the Ink TUI, whose no-TTY bail-out exits 0 without
-    # doing the task → "protocol violation" on every attempt. `--cli` is the
-    # highest-precedence interface override; dropping the env var covers
-    # older robo builds on PATH that predate the flag's precedence.
+    # would send the quiet chat run into the Ink TUI, whose no-TTY bail-out
+    # exits 0 without doing the task → "protocol violation" on every attempt.
+    # `--cli` together with `-q` is the highest-precedence "one answer, no UI"
+    # override; dropping the env var covers older robo builds on PATH that
+    # predate the flag's precedence.
     env.pop("ROBO_TUI", None)
 
     cmd = [

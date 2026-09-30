@@ -266,73 +266,58 @@ def _set_process_title() -> None:
         pass
 
 
-# Cheap, dependency-free read of `display.interface` from config.yaml for the
-# earliest hot-path decisions (mouse-residue suppression, Termux fast launch)
-# that run *before* robo_cli.config is importable. Mirrors the explicit
-# precedence used everywhere else: `--cli` always wins, then `--tui`/env, then
-# this config value. Cached so the multiple early callers don't re-parse YAML.
-_EARLY_INTERFACE_CACHE: "list | None" = None
+# In a terminal, `robo --cli` opens the same terminal app (the Ink TUI) as
+# plain `robo`: the classic prompt_toolkit chat is no longer launched
+# interactively. With a one-shot question, or without a terminal, `--cli`
+# behaves exactly as before — that is how headless runs are spawned (kanban
+# workers run `robo --cli chat -q …`).
+_ONE_SHOT_ARGV_FLAGS = ("-q", "--query", "--image", "-z", "--oneshot")
 
 
-def _config_default_interface_early() -> str:
-    """Return the configured default interface ("cli"/"tui") via a minimal
-    YAML read. Best-effort: any error falls back to "cli" (legacy behavior)."""
-    global _EARLY_INTERFACE_CACHE
-    if _EARLY_INTERFACE_CACHE is not None:
-        return _EARLY_INTERFACE_CACHE[0]
-    value = "cli"
+def _argv_requests_one_shot(argv: "list[str]") -> bool:
+    """True when the command line asks for one answer rather than a chat."""
+    for arg in argv:
+        if arg in _ONE_SHOT_ARGV_FLAGS:
+            return True
+        # --query=…, --image=…, --oneshot=…
+        if arg.startswith(("--query=", "--image=", "--oneshot=")):
+            return True
+        # -q"…" / -z"…" (argparse accepts a value glued to a short option)
+        if len(arg) > 2 and arg[:2] in ("-q", "-z") and not arg.startswith("--"):
+            return True
+    return False
+
+
+def _stdio_is_tty() -> bool:
     try:
-        home = os.environ.get("ROBO_HOME")
-        if home:
-            cfg_path = os.path.join(home, "config.yaml")
-        else:
-            cfg_path = os.path.join(os.path.expanduser("~"), ".robo", "config.yaml")
-        if os.path.exists(cfg_path):
-            import yaml as _yaml_iface
-
-            with open(cfg_path, encoding="utf-8") as _f:
-                raw = _yaml_iface.load(
-                    _f, Loader=getattr(_yaml_iface, "CSafeLoader", None) or _yaml_iface.SafeLoader
-                ) or {}
-            disp = raw.get("display", {})
-            if isinstance(disp, dict):
-                iface = disp.get("interface")
-                if isinstance(iface, str) and iface.strip().lower() == "tui":
-                    value = "tui"
+        return bool(sys.stdin.isatty() and sys.stdout.isatty())
     except Exception:
-        value = "cli"  # best-effort — default to classic REPL on any error
-    _EARLY_INTERFACE_CACHE = [value]
-    return value
+        return False
 
 
 def _wants_tui_early(argv: "list[str] | None" = None) -> bool:
     """Earliest TUI decision, usable before argparse/config imports.
 
-    Precedence: explicit ``--cli`` wins (forces classic REPL), then
-    explicit ``--tui``/``ROBO_TUI=1``, then a real-TTY gate (a
-    non-interactive stdio can't host the Ink UI, so ambient config never
-    boots it there), then ``display.interface`` in config.
+    Mirrors ``_resolve_use_tui``: ``--cli`` opens the TUI only for an
+    interactive chat in a terminal (with a one-shot question, or without a
+    terminal, it stays headless exactly as before); otherwise explicit
+    ``--tui``/``ROBO_TUI=1`` wins, then a real-TTY gate (a non-interactive
+    stdio can't host the Ink UI), and any other interactive launch is the TUI.
 
     The TTY gate is load-bearing for headless spawners — kanban workers,
     cron jobs, pipes run ``robo … chat -q`` with stdio on a pipe. This
     is the earliest launch decision (it runs before ``cmd_chat`` /
-    ``_resolve_use_tui``), so a ``display.interface: tui`` default used to
-    boot the TUI here — whose no-TTY bail-out exits 0 without doing the
-    task → "protocol violation" on every attempt. An explicit ``--tui``
-    still reaches the informative bail-out.
+    ``_resolve_use_tui``); booting the TUI there hits its no-TTY bail-out,
+    which exits 0 without doing the task → "protocol violation" on every
+    attempt. An explicit ``--tui`` still reaches the informative bail-out.
     """
     if argv is None:
         argv = sys.argv[1:]
     if "--cli" in argv:
-        return False
+        return not _argv_requests_one_shot(argv) and _stdio_is_tty()
     if os.environ.get("ROBO_TUI") == "1" or "--tui" in argv:
         return True
-    try:
-        if not (sys.stdin.isatty() and sys.stdout.isatty()):
-            return False
-    except Exception:
-        return False
-    return _config_default_interface_early() == "tui"
+    return _stdio_is_tty()
 
 
 # Mouse-tracking residue suppression — runs BEFORE every other import on the
@@ -464,6 +449,7 @@ from robo_cli.subcommands.approvals import build_approvals_parser
 from robo_cli.subcommands.dump import build_dump_parser
 from robo_cli.subcommands.debug import build_debug_parser
 from robo_cli.subcommands.backup import build_backup_parser
+from robo_cli.subcommands.snapshot import build_snapshot_parser
 from robo_cli.subcommands.import_cmd import build_import_cmd_parser
 from robo_cli.subcommands.import_agent import build_import_agent_parser
 from robo_cli.subcommands.config import build_config_parser
@@ -2538,47 +2524,38 @@ def _sync_bundled_skills_quietly() -> None:
         pass
 
 
+def _args_request_one_shot(args) -> bool:
+    """True when the parsed command asks for one answer rather than a chat."""
+    return getattr(args, "query", None) is not None or getattr(args, "image", None) is not None
+
+
 def _resolve_use_tui(args) -> bool:
-    """Decide whether to launch the TUI for a chat/bare invocation.
+    """Decide whether a chat/bare invocation runs in the TUI.
 
-    Precedence (highest first):
-      1. ``--cli`` flag         → always classic REPL
-      2. ``--tui`` flag         → always TUI (explicit ask)
-      3. no TTY                 → always classic (ambient prefs don't apply)
-      4. ``ROBO_TUI=1`` env   → TUI
-      5. ``display.interface`` config value ("cli" | "tui")
-      6. default → classic REPL
+    Every interactive launch opens the terminal app — ``robo --cli`` and a
+    leftover ``display.interface: cli`` included; the classic prompt_toolkit
+    chat is no longer launched from a terminal. What stays headless:
 
-    Explicit flags always win over config so muscle memory and scripts keep
-    working regardless of the configured default.
+      1. ``--cli`` with a one-shot question (``-q``/``--image``) or without
+         a terminal → headless, exactly as before. Kanban workers run
+         ``robo --cli chat -q …``. (``--cli`` in a terminal → TUI.)
+      2. ``--tui`` flag         → TUI (explicit ask, even without a TTY)
+      3. no TTY                 → headless, exactly as before (pipes, cron)
+      4. anything else          → TUI
 
-    The TTY gate (3) is load-bearing: ambient TUI preferences (env var or
-    config default) must never hijack a NON-interactive invocation. Kanban
-    workers, cron jobs, and pipelines run ``robo … chat -q`` with stdout
-    on a pipe; booting the Ink TUI there hits its no-TTY bail-out, which
-    prints a resume hint and exits 0 — a kanban worker then dies with
-    "exited cleanly without calling kanban_complete — protocol violation"
-    on every attempt (found dogfooding the desktop kanban board). A user
-    who *explicitly* passes ``--tui`` still gets the informative bail-out.
+    The TTY gate (3) is load-bearing: Kanban workers, cron jobs, and
+    pipelines run ``robo … chat -q`` with stdout on a pipe; booting the Ink
+    TUI there hits its no-TTY bail-out, which prints a resume hint and exits
+    0 — a kanban worker then dies with "exited cleanly without calling
+    kanban_complete — protocol violation" on every attempt (found dogfooding
+    the desktop kanban board). A user who *explicitly* passes ``--tui``
+    still gets the informative bail-out.
     """
     if getattr(args, "cli", False):
-        return False
+        return not _args_request_one_shot(args) and _stdio_is_tty()
     if getattr(args, "tui", False):
         return True
-    try:
-        if not (sys.stdin.isatty() and sys.stdout.isatty()):
-            return False
-    except Exception:
-        return False
-    if os.environ.get("ROBO_TUI") == "1":
-        return True
-    try:
-        from robo_cli.config import load_config
-
-        iface = (load_config().get("display", {}) or {}).get("interface", "cli")
-        return isinstance(iface, str) and iface.strip().lower() == "tui"
-    except Exception:
-        return False
+    return _stdio_is_tty()
 
 
 def cmd_chat(args):
@@ -4964,6 +4941,14 @@ def cmd_backup(args):
         from robo_cli.backup import run_backup
 
         run_backup(args)
+
+
+def cmd_snapshot(args):
+    """List, create, restore or prune quick state snapshots (``robo snapshot``)."""
+    from robo_cli.backup import snapshot_command
+
+    words = [getattr(args, "action", None) or "list", *(getattr(args, "value", None) or [])]
+    snapshot_command(" ".join(["snapshot", *words]), usage_prefix="robo snapshot")
 
 
 def cmd_import(args):
@@ -10933,7 +10918,7 @@ _BUILTIN_SUBCOMMANDS = frozenset(
         "project", "proxy",
         "prompt-size",
         "send", "sessions", "setup",
-        "skin", "skills", "slack", "status", "sync", "tools", "uninstall", "update",
+        "skin", "skills", "slack", "snapshot", "status", "sync", "tools", "uninstall", "update",
         "version", "webhook", "whatsapp", "whatsapp-cloud", "chat", "secrets", "security",
         # Help-ish invocations — plugin commands not being listed in
         # top-level --help is an acceptable trade-off for skipping an
@@ -11201,8 +11186,8 @@ def _try_termux_fast_cli_launch() -> bool:
     if "-h" in argv or "--help" in argv:
         return False
     # Let the TUI fast path (or full dispatch) handle anything that resolves to
-    # the TUI — explicit --tui/env or display.interface=tui. `--cli` forces this
-    # to stay False so the classic fast path still runs.
+    # the TUI — every interactive launch now. What stays here: `--cli` one-shot
+    # questions and headless (no TTY) runs.
     if _wants_tui_early(argv):
         return False
 
@@ -11871,6 +11856,11 @@ def main():
     # backup command  (parser built in robo_cli/subcommands/backup.py)
     # =========================================================================
     build_backup_parser(subparsers, cmd_backup=cmd_backup)
+
+    # =========================================================================
+    # snapshot command  (parser built in robo_cli/subcommands/snapshot.py)
+    # =========================================================================
+    build_snapshot_parser(subparsers, cmd_snapshot=cmd_snapshot)
 
     # =========================================================================
     # checkpoints command

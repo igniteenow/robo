@@ -164,14 +164,13 @@ The right value goes to the right file automatically.
 ## 3. Run Your First Chat
 
 ```bash
-robo            # classic CLI
-robo --tui      # modern TUI (recommended)
+robo            # the terminal app (TUI)
 ```
 
 You'll see a welcome banner with your model, available tools, and skills. Use a prompt that's specific and easy to verify:
 
 :::tip Pick your interface
-Robo ships with two terminal interfaces: the classic `prompt_toolkit` CLI and a newer [TUI](../user-guide/tui.md) with modal overlays, mouse selection, and non-blocking input. Both share the same sessions, slash commands, and config — try each with `robo` vs `robo --tui`.
+`robo` opens the [TUI](../user-guide/tui.md), with modal overlays, mouse selection, and non-blocking input. It shares sessions, slash commands, and config with the desktop app (`robo desktop`) and the browser dashboard (`robo dashboard`).
 :::
 
 ```

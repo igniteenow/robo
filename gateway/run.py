@@ -13806,7 +13806,31 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
         elif platform == Platform.API_SERVER:
             from gateway.platforms.api_server import APIServerAdapter, check_api_server_requirements
             if not check_api_server_requirements():
-                logger.warning("API Server: aiohttp not installed")
+                # aiohttp only comes with the messaging extras, which the
+                # install-robo.* installers do not add; say how to get it,
+                # with the Python this gateway runs on (PowerShell needs the
+                # call operator for a quoted path).
+                import importlib.util as _ilu
+                import shlex as _shlex
+
+                _py = sys.executable
+                if os.name == "nt":
+                    _py = f'& "{_py}"' if " " in _py else _py
+                else:
+                    _py = _shlex.quote(_py)
+                _install = f'{_py} -m pip install "aiohttp>=3.14.3,<4"'
+                try:
+                    _has_pip = _ilu.find_spec("pip") is not None
+                except Exception:
+                    _has_pip = True
+                if not _has_pip:
+                    # Venvs made by `uv venv` (scripts/install.*) have no pip.
+                    _install = f"{_py} -m ensurepip --upgrade, then {_install}"
+                logger.warning(
+                    "API Server: aiohttp is not installed, so the HTTP API did not start. "
+                    "Install it with: %s",
+                    _install,
+                )
                 return None
             adapter = APIServerAdapter(config)
             adapter.gateway_runner = self
