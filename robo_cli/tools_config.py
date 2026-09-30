@@ -1773,8 +1773,15 @@ def _run_post_setup(post_setup_key: str):
         except ImportError:
             pass
         _print_info("    Installing faster-whisper (model ~150MB downloads on first use)...")
+        # The same pinned set the first transcription would lazy-install
+        # (tools/lazy_deps "stt.faster_whisper") — never an unpinned latest:
+        # a bare `-U faster-whisper` pulled PyAV 19, which broke transcription.
+        from tools.lazy_deps import feature_specs
+
+        whisper_specs = list(feature_specs("stt.faster_whisper"))
+        manual_cmd = "uv pip install " + " ".join(whisper_specs)
         try:
-            result = _pip_install(["-U", "faster-whisper", "--quiet"], timeout=300)
+            result = _pip_install([*whisper_specs, "--quiet"], timeout=300)
             if result.returncode == 0:
                 _print_success("    faster-whisper installed")
                 _print_info("    Model sizes: tiny, base (default), small, medium, large-v3")
@@ -1782,10 +1789,10 @@ def _run_post_setup(post_setup_key: str):
             else:
                 _print_warning("    faster-whisper install failed:")
                 _print_info(f"      {(result.stderr or '').strip()[:300]}")
-                _print_info("    Run manually: uv pip install -U faster-whisper")
+                _print_info(f"    Run manually: {manual_cmd}")
         except subprocess.TimeoutExpired:
             _print_warning("    faster-whisper install timed out (>5min)")
-            _print_info("    Run manually: uv pip install -U faster-whisper")
+            _print_info(f"    Run manually: {manual_cmd}")
 
     elif post_setup_key == "kittentts":
         try:
