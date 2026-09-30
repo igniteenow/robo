@@ -32,6 +32,7 @@
 
 Robo 会规划任务，用真实工具（终端、文件、浏览器、代码）完成它，并检查自己的结果；
 在任何有风险的操作之前，都会问你 **允许一次 / 本次会话允许 / 拒绝**。
+选择*本次会话允许*后，本次会话结束前不再询问；Robo 阻止列表中的命令仍然会被阻止。
 模型由你选择：OpenAI、Anthropic、Gemini、DeepSeek、Kimi、OpenRouter，
 或通过 Ollama、任意 OpenAI 兼容服务器运行的本地模型。
 
@@ -64,7 +65,7 @@ robo              # 开始对话
 
 需要预先安装 `git` 和 Python 3.11、3.12 或 3.13（暂不支持 3.14）。安装程序会自动准备 Node，并且不会覆盖你的配置、记忆或技能。
 在 Debian/Ubuntu 上，语音输入还需要 `sudo apt install libportaudio2`。
-遇到问题时运行 `robo doctor`。
+遇到问题时运行 `robo doctor`。自动化安装请直接调用 `scripts/install.sh` 或 `scripts/install.ps1`。
 
 ## 运行
 
@@ -72,11 +73,11 @@ robo              # 开始对话
 
 | 你想要 | 运行 | 得到 |
 |---|---|---|
-| **终端** | `robo` | 带语音对话的全屏终端应用（经典模式：`robo --cli`） |
+| **终端** | `robo` | 带语音对话的终端应用 |
 | **桌面应用** | `robo desktop` | Windows、macOS、Linux 原生应用。首次运行会构建，之后秒开 |
 | **浏览器** | `robo dashboard` | 在 `http://localhost:9119` 使用 Robo：对话、设置、会话、技能、MCP |
-| **快速问一句** | `robo chat -q "总结 README.md"` | 一问一答，无界面 |
-| **你自己的应用** | `robo gateway` | 兼容 OpenAI 的 API：`http://localhost:8642/v1`（[详情](#http-api)） |
+| **快速问一句** | `robo -z "总结 README.md"` | 一问一答，无界面 |
+| **你自己的应用** | `robo gateway` | 兼容 OpenAI 的 API：`http://localhost:8642/v1`，需先设置 `API_SERVER_KEY`（[详情](#http-api)） |
 
 ### 语音
 
@@ -130,11 +131,13 @@ robo dashboard --host 0.0.0.0 --no-open
 | `/help` | 对话中的全部命令 |
 | `/edit` | 撤回上一条消息并重写 |
 
-Robo 工作时，直接输入即可：你的消息会调整正在进行的任务。
+Robo 工作时，直接输入即可：Robo 会立即读取你的消息并调整方向（正在执行的步骤会被停止）。
+`/busy steer` 让当前步骤先完成；`/busy queue` 把消息留到下一轮。
 
 ## 按你的方式定制
 
-所有内容都是 `~/.robo`（Windows：`%USERPROFILE%\.robo`）里的普通文件，方便编辑、备份或迁移：
+所有内容都是 `~/.robo` 里的普通文件，方便编辑、备份或迁移。在 Windows 上，用 `install-robo.ps1`
+安装时文件夹是 `%USERPROFILE%\.robo`，用 `scripts/install.ps1` 安装时是 `%LOCALAPPDATA%\robo`。
 
 | 文件 | 内容 |
 |---|---|
@@ -148,8 +151,8 @@ Robo 工作时，直接输入即可：你的消息会调整正在进行的任务
 <summary><b>HTTP API</b></summary>
 
 <a id="http-api"></a>
-在你自己的应用或 Open WebUI 等聊天前端中使用 Robo。在 `~/.robo/.env`（Windows：`%USERPROFILE%\.robo\.env`）
-中添加一个至少 16 个字符的密钥：
+在你自己的应用或 Open WebUI 等聊天前端中使用 Robo。只有在 Robo 文件夹的 `.env` 中（见上文"按你的方式定制"）
+添加一个至少 16 个字符的密钥后，API 才会启动：
 
 ```bash
 API_SERVER_KEY=your-secret-key-16-plus-chars
@@ -163,16 +166,20 @@ curl http://localhost:8642/v1/chat/completions \
   -d '{"model": "robo-engineer", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
+API 还需要 `aiohttp` 包，`install-robo.ps1` 和 `install-robo.sh` 不会安装它。缺少时，`robo gateway` 会提示并给出安装命令。
+
 </details>
 
 <details>
-<summary><b>Docker（Linux 和 macOS）</b></summary>
+<summary><b>Docker（Linux）</b></summary>
 
 ```bash
 ROBO_UID=$(id -u) ROBO_GID=$(id -g) docker compose up -d
 ```
 
 在 `http://localhost:9119` 运行网关和控制台，数据保存在 `~/.robo`。
+compose 文件使用主机网络，Docker 在 Linux 上支持。在 macOS 上，请先在 Docker Desktop 4.34 或更高版本中开启：
+登录后进入 **Settings → Resources → Network → Enable host networking**。
 
 </details>
 

@@ -14,13 +14,38 @@ check = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(check)
 
 
-def _project(root: Path, *, pyproject="3.0.2", runtime="3.0.2", root_pkg="3.0.2", desktop_pkg="3.0.2") -> Path:
+def _project(
+    root: Path,
+    *,
+    pyproject="3.0.2",
+    runtime="3.0.2",
+    root_pkg="3.0.2",
+    desktop_pkg="3.0.2",
+    uv_lock="3.0.2",
+    npm_lock=("3.0.2", "3.0.2", "3.0.2"),
+    version_file="3.0.2",
+) -> Path:
     (root / "robo_runtime").mkdir(parents=True)
     (root / "apps" / "desktop").mkdir(parents=True)
     (root / "pyproject.toml").write_text(f'[project]\nname = "robo"\nversion = "{pyproject}"\n', encoding="utf-8")
     (root / "robo_runtime" / "version.py").write_text(f'"""x"""\n\nROBO_VERSION = "{runtime}"\n', encoding="utf-8")
+    (root / "ROBO_VERSION").write_text(f"{version_file}\n", encoding="utf-8")
     (root / "package.json").write_text(json.dumps({"version": root_pkg}), encoding="utf-8")
     (root / "apps" / "desktop" / "package.json").write_text(json.dumps({"version": desktop_pkg}), encoding="utf-8")
+    (root / "uv.lock").write_text(
+        f'version = 1\n\n[[package]]\nname = "other"\nversion = "9.9.9"\n\n'
+        f'[[package]]\nname = "robo-engineer"\nversion = "{uv_lock}"\nsource = {{ editable = "." }}\n',
+        encoding="utf-8",
+    )
+    lock_root, lock_pkg, lock_desktop = npm_lock
+    (root / "package-lock.json").write_text(
+        json.dumps({
+            "name": "robo-engineer",
+            "version": lock_root,
+            "packages": {"": {"version": lock_pkg}, "apps/desktop": {"version": lock_desktop}},
+        }),
+        encoding="utf-8",
+    )
     return root
 
 
@@ -40,6 +65,18 @@ def test_every_stale_file_is_named(tmp_path, capsys):
     assert "pyproject.toml" not in err
 
 
+def test_stale_lockfiles_and_version_file_are_named(tmp_path, capsys):
+    root = _project(tmp_path, uv_lock="3.0.1", npm_lock=("3.0.2", "3.0.2", "3.0.1"), version_file="3.0.1")
+
+    assert check.main(["v3.0.2", "--root", str(root)]) == 1
+
+    err = capsys.readouterr().err
+    assert "uv.lock says 3.0.1" in err
+    assert "package-lock.json says 3.0.2 / 3.0.2 / 3.0.1" in err
+    assert "ROBO_VERSION says 3.0.1" in err
+    assert "pyproject.toml" not in err
+
+
 @pytest.mark.parametrize("tag", ["3.0.2", "v3.0", "v3.0.2-rc1", "backup/v3.0.2", "release-3"])
 def test_non_release_tags_are_refused(tmp_path, tag):
     assert check.mismatches(tag, _project(tmp_path))[0].startswith(repr(tag))
@@ -54,7 +91,16 @@ def test_a_missing_file_is_a_mismatch_not_a_crash(tmp_path):
 
 def test_this_checkout_is_consistent_with_itself():
     # Whatever the current version is, every file must agree on it, so the
-    # next release only needs the four files bumped together.
+    # next release only needs the seven files bumped together.
     versions = set(check.versions_in_code(REPO).values())
 
     assert len(versions) == 1 and None not in versions
+
+
+def test_windows_line_endings_in_uv_lock_are_read(tmp_path):
+    # A Windows checkout with core.autocrlf=true has CRLF in uv.lock.
+    root = _project(tmp_path)
+    lock = root / "uv.lock"
+    lock.write_bytes(lock.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
+
+    assert check.versions_in_code(root)["uv.lock"] == "3.0.2"

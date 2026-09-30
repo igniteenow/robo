@@ -34,7 +34,8 @@ It runs on your own computer, uses real tools, and asks before anything risky.
 | "Compare these two spreadsheets and list who is missing from the new one." | "Research the three best options for X, compare them, and give me the sources." |
 
 Robo plans the job, does it with real tools (terminal, files, browser, code), checks its own work,
-and asks **Allow once / Allow for this session / Deny** before anything risky.
+and asks **Allow once / Allow for this session / Deny** before anything risky. *Allow for this session*
+stops the questions until that session ends; commands on Robo's block list stay blocked.
 It works with the model you choose: OpenAI, Anthropic, Gemini, DeepSeek, Kimi, OpenRouter,
 or a local model through Ollama or any OpenAI-compatible server.
 
@@ -76,11 +77,11 @@ Every way of running Robo shares the same sessions, memory, and settings.
 
 | You want | Run | You get |
 |---|---|---|
-| **Terminal** | `robo` | Full-screen terminal app with voice chat (`robo --cli` for the classic prompt) |
+| **Terminal** | `robo` | Terminal app with voice chat |
 | **Desktop app** | `robo desktop` | Native app for Windows, macOS, Linux. The first run builds it, then it opens instantly |
 | **Browser** | `robo dashboard` | Robo at `http://localhost:9119`: chat, settings, sessions, skills, MCP |
-| **One quick answer** | `robo chat -q "Summarize README.md"` | One question, one answer, no UI |
-| **Your own apps** | `robo gateway` | OpenAI-compatible API at `http://localhost:8642/v1` ([details](#http-api)) |
+| **One quick answer** | `robo -z "Summarize README.md"` | One question, one answer, no UI |
+| **Your own apps** | `robo gateway` | OpenAI-compatible API at `http://localhost:8642/v1`, once `API_SERVER_KEY` is set ([details](#http-api)) |
 
 ### Voice
 
@@ -134,11 +135,15 @@ You can also message Robo from **Telegram, WhatsApp, Discord, Slack**, and more:
 | `/help` | All commands inside a chat |
 | `/edit` | Take back your last message and rewrite it |
 
-While Robo is working, just type: your message steers the task that's already running.
+While Robo is working, just type: Robo reads your message right away and changes course (the step it
+was running is stopped). `/busy steer` lets the current step finish first; `/busy queue` holds your
+message for the next turn.
 
 ## Make it yours
 
-Everything is plain files in `~/.robo` (Windows: `%USERPROFILE%\.robo`), easy to edit, back up, or move:
+Everything is plain files in `~/.robo`, easy to edit, back up, or move. On Windows the folder is
+`%USERPROFILE%\.robo` when you installed with `install-robo.ps1`, and `%LOCALAPPDATA%\robo` when you
+used `scripts/install.ps1`.
 
 | File | What it holds |
 |---|---|
@@ -152,8 +157,8 @@ Everything is plain files in `~/.robo` (Windows: `%USERPROFILE%\.robo`), easy to
 <summary><b>HTTP API</b></summary>
 
 <a id="http-api"></a>
-Use Robo from your own apps or chat frontends such as Open WebUI. Add a key of at least
-16 characters to `~/.robo/.env` (Windows: `%USERPROFILE%\.robo\.env`):
+Use Robo from your own apps or chat frontends such as Open WebUI. The API only starts once you add a
+key of at least 16 characters to `.env` in your Robo folder (see [Make it yours](#make-it-yours)):
 
 ```bash
 API_SERVER_KEY=your-secret-key-16-plus-chars
@@ -167,16 +172,21 @@ curl http://localhost:8642/v1/chat/completions \
   -d '{"model": "robo-engineer", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
+The API also needs the `aiohttp` package, which `install-robo.ps1` and `install-robo.sh` don't add.
+If it's missing, `robo gateway` says so and prints the command that installs it.
+
 </details>
 
 <details>
-<summary><b>Docker (Linux and macOS)</b></summary>
+<summary><b>Docker (Linux)</b></summary>
 
 ```bash
 ROBO_UID=$(id -u) ROBO_GID=$(id -g) docker compose up -d
 ```
 
 Runs the gateway and the dashboard at `http://localhost:9119`, with your data in `~/.robo`.
+The compose file uses host networking, which Docker runs on Linux. On macOS, turn it on first in
+Docker Desktop 4.34 or later: sign in, then **Settings → Resources → Network → Enable host networking**.
 
 </details>
 

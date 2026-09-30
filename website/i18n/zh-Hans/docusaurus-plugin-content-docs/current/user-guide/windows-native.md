@@ -43,11 +43,9 @@ iex (irm https://raw.githubusercontent.com/igniteenow/robo/main/scripts/install.
 
 安装程序会自动重试不稳定的 git 拉取，并剥离下载的 `install.ps1` 内容中的 BOM，因此 HTTP 传输中携带的 UTF-8 BOM 不再会破坏 `[scriptblock]::Create((irm ...))` 形式。
 
-### 桌面安装程序（备选方案）
+### 桌面应用
 
-也提供了一个轻量 GUI 安装程序——如果你更倾向于双击 `.exe` 而非打开 PowerShell，可以使用它。下载 Robo Desktop，运行安装程序，首次启动时 GUI 会在后台调用 `install.ps1` 来配置 Python（通过 `uv`）、Node、PortableGit 以及下文描述的其余依赖引导流程。首次运行后，桌面应用与 PowerShell 安装的 `robo` CLI 共享同一个 `%LOCALAPPDATA%\robo\robo-engineer` 安装目录和 `%USERPROFILE%\.robo` 数据目录——可以在 GUI 和 CLI 之间自由切换。
-
-如果你想要熟悉的 Windows 安装体验，或者要将 Robo 交给非开发者使用，请使用桌面安装程序；如果你已经在终端中，请使用 PowerShell 一行命令。
+安装 Robo 之后，运行 `robo desktop`：第一次运行会先构建桌面应用再打开，之后直接打开。桌面应用使用与 `robo` 命令相同的安装和数据目录，可以在应用和终端之间自由切换。没有单独的下载包。
 
 ### 依赖引导（`dep_ensure`）
 
@@ -69,7 +67,7 @@ iex (irm https://raw.githubusercontent.com/igniteenow/robo/main/scripts/install.
 
 1. **引导 `uv`** — Astral 的快速 Python 管理器。安装到 `%USERPROFILE%\.local\bin`。
 2. **通过 `uv` 安装 Python 3.11**。无需预先安装 Python。
-3. **安装 Node.js 22**（优先使用 winget，否则将便携式 Node 压缩包解压到 `%LOCALAPPDATA%\robo\node`）。用于浏览器工具和 WhatsApp 桥接。
+3. **安装 Node.js 22 LTS**：把便携式 Node 压缩包解压到 `%LOCALAPPDATA%\robo\node`（无需管理员权限），下载失败时改用 winget。用于浏览器工具和 WhatsApp 桥接。
 4. **安装便携式 Git** — 如果 `git` 已在 PATH 中，安装程序直接使用；否则从官方 `git-for-windows` 发布版下载精简的自包含 **PortableGit**（约 45 MB）到 `%LOCALAPPDATA%\robo\git`。无需管理员权限，不写入 Windows 安装程序注册表，不干扰系统上的其他任何内容。
 5. **将仓库克隆**到 `%LOCALAPPDATA%\robo\robo-engineer` 并在其中创建 virtualenv。
 6. **分层 `uv pip install`** — 先尝试 `.[all]`，如果 `git+https` 依赖在 GitHub 限速时失败，则逐步回退到更小的集合（`[messaging,dashboard,ext]` → `[messaging]` → `.`）。防止"单次失败导致裸安装"的故障模式。

@@ -1128,12 +1128,11 @@ DEFAULT_CONFIG = {
         # "Steered into current run" confirmation bubble by setting this false.
         # The mid-turn steering itself still happens.
         "busy_steer_ack_enabled": True,
-        # Which interface bare `robo` (and `robo chat`) launches by default:
-        #   "tui" — the modern Ink TUI (Robo's default; same as passing `--tui`)
-        #   "cli" — the classic prompt_toolkit REPL (fallback; `--cli`)
-        # Explicit flags always win over this setting: `--cli` forces the classic
-        # REPL and `--tui` (or ROBO_TUI=1) forces the TUI regardless of config.
-        # Non-interactive invocations (no TTY) always use the classic REPL.
+        # Interactive `robo`, `robo chat` and `robo --cli` all open the
+        # terminal app (the Ink TUI); the classic prompt_toolkit chat is no
+        # longer launched from a terminal, so "cli" here now opens the TUI
+        # too. Kept so existing configs stay valid. Non-interactive runs (no
+        # TTY, or `--cli` with `-q`) answer one question without a UI.
         "interface": "tui",
         # When true, `robo --tui` auto-resumes the most recent human-
         # facing session on launch instead of forging a fresh one.

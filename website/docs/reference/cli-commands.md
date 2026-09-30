@@ -29,8 +29,8 @@ robo [global-options] <command> [subcommand/options]
 | `--pass-session-id` | Include the session ID in the agent's system prompt. |
 | `--ignore-user-config` | Ignore `~/.robo/config.yaml` and fall back to built-in defaults. Credentials in `.env` are still loaded. |
 | `--ignore-rules` | Skip auto-injection of `AGENTS.md`, `SOUL.md`, `.cursorrules`, memory, and preloaded skills. |
-| `--tui` | Launch the [TUI](../user-guide/tui.md) instead of the classic CLI. Equivalent to `ROBO_TUI=1`. Always wins over `display.interface`. |
-| `--cli` | Force the classic prompt_toolkit REPL. Use this to override `display.interface: tui` for a single invocation. |
+| `--tui` | Launch the [TUI](../user-guide/tui.md). It is already the default in a terminal; `--tui` also forces it without one. Equivalent to `ROBO_TUI=1`. |
+| `--cli` | Same as plain `robo`: opens the TUI. With `-q`/`--image` (`robo --cli chat -q "…"`), answers once without a UI; kanban workers run this way. |
 | `--dev` | With `--tui`: run the TypeScript sources directly via `tsx` instead of the prebuilt bundle (for TUI contributors). |
 
 ## Top-level commands
@@ -67,6 +67,7 @@ robo [global-options] <command> [subcommand/options]
 | `robo prompt-size` | Show a byte breakdown of the system prompt + tool schemas (skills index, memory, profile). Runs offline. |
 | `robo debug` | Debug tools — upload logs and system info for support. |
 | `robo backup` | Back up Robo home directory to a zip file. |
+| `robo snapshot` | List, create, restore or prune quick state snapshots (`robo snapshot restore <id>`). The terminal twin of `/snapshot`. |
 | `robo checkpoints` | Inspect / prune / clear `~/.robo/checkpoints/` (the shadow store used by `/rollback`). Run with no args for a status overview. |
 | `robo import` | Restore a Robo backup from a zip file. |
 | `robo logs` | View, tail, and filter agent/gateway/error log files. |

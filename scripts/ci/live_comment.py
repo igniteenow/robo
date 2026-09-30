@@ -590,7 +590,7 @@ def run(
         if not pending:
             # Check if any dependency failed. If so, exit non-zero so the
             # run shows as failed — this lets ``gh run rerun --failed``
-            # (e.g. from label-rerun.yml) pick up and rerun the failed jobs.
+            # pick up and rerun the failed jobs.
             failed_deps = [name for name, result in completed.items() if result == "failure"]
             if failed_deps:
                 print(f"  All jobs done, but {len(failed_deps)} failed: {', '.join(failed_deps)}")

@@ -71,8 +71,7 @@ Commands by area
   About            version · completion · journey · pets
 
 Examples
-  robo                          Start the TUI (display.interface: tui)
-  robo --cli                    Classic REPL
+  robo                          Start chatting in the terminal app
   robo -c                       Resume the most recent session
   robo chat -q "Hello"          One-shot query
   robo setup                    First-run wizard (re-run any time)
@@ -269,14 +268,14 @@ def build_top_level_parser():
         "--tui",
         action="store_true",
         default=False,
-        help="Launch the modern TUI instead of the classic REPL",
+        help="Launch the terminal app (the default in a terminal; also forces it without one)",
     )
     _inherited_flag(
         parser,
         "--cli",
         action="store_true",
         default=False,
-        help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)",
+        help="Same as plain robo: opens the terminal app. With -q/--image: one answer, no UI",
     )
     _inherited_flag(
         parser,
@@ -466,14 +465,14 @@ def build_top_level_parser():
         "--tui",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="Launch the modern TUI instead of the classic REPL",
+        help="Launch the terminal app (the default in a terminal; also forces it without one)",
     )
     _inherited_flag(
         chat_parser,
         "--cli",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="Force the classic prompt_toolkit REPL (overrides display.interface=tui)",
+        help="Same as plain robo: opens the terminal app. With -q/--image: one answer, no UI",
     )
     _inherited_flag(
         chat_parser,
