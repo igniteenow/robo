@@ -12891,6 +12891,34 @@ def _voice_emit(event: str, payload: dict | None = None) -> None:
     _emit(event, sid, payload)
 
 
+_VOICE_STT_ERROR_NOTICE_KEY = "voice.stt_error"
+
+
+def _voice_stt_error_notice(error: object) -> None:
+    """Tell the user a recording could not be turned into text, and why.
+
+    Without this a speech-to-text failure (a broken local engine, a provider
+    error) looked exactly like silence: the recording badge went away and
+    nothing was sent. Uses the same ``notification.show`` channel as the
+    agent-startup notice — the TUI shows it in its status bar, the desktop
+    app as a toast — and expires on its own.
+    """
+    detail = " ".join(str(error or "").split()) or "speech-to-text failed"
+    if len(detail) > 160:
+        detail = detail[:157] + "..."
+    _voice_emit(
+        "notification.show",
+        {
+            "text": f"✕ Voice: couldn't turn your recording into text — {detail}",
+            "level": "error",
+            "kind": "ttl",
+            "ttl_ms": 20000,
+            "key": _VOICE_STT_ERROR_NOTICE_KEY,
+            "id": _VOICE_STT_ERROR_NOTICE_KEY,
+        },
+    )
+
+
 def _resume_voice_wake() -> None:
     global _voice_wake_owner
     with _voice_sid_lock:
@@ -13217,6 +13245,8 @@ def _full_duplex_listener() -> None:
                 result = transcribe_recording(wav_path)
             finally:
                 _stop_transcribing_cue()
+            if not result.get("success"):
+                _voice_stt_error_notice(result.get("error"))
             text = (result.get("transcript") or "").strip() if result.get("success") else ""
             if text:
                 # Stop-check must never break transcript delivery — if the
@@ -14013,6 +14043,10 @@ def _(rid, params: dict) -> dict:
                 _voice_emit("voice.transcript", {"no_speech_limit": True})
                 _resume_voice_wake()
 
+            def _on_error(error):
+                _stop_transcribing_cue()
+                _voice_stt_error_notice(error)
+
             def _on_stop_phrase(t):
                 # Explicit user intent: the user SAID a bare stop phrase
                 # ("stop"). End the voice chat exactly like a manual
@@ -14064,6 +14098,7 @@ def _(rid, params: dict) -> dict:
                 max_recording_seconds=safe_max_rec,
                 on_stop_phrase=_on_stop_phrase,
                 noise_floor_multiplier=safe_floor_mult,
+                on_error=_on_error,
             )
             if started is False:
                 _resume_voice_wake()

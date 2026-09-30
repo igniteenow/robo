@@ -334,8 +334,24 @@ _continuous_on_silent_limit: Optional[Callable[[], None]] = None
 # reporting "no speech detected". When unset, on_silent_limit fires as a
 # fallback so older callers still turn voice off.
 _continuous_on_stop_phrase: Optional[Callable[[str], None]] = None
+# Called with the error text when speech-to-text fails (for example a broken
+# local engine or a provider error), so the UI can say why nothing was sent
+# instead of treating the failure as silence.
+_continuous_on_error: Optional[Callable[[str], None]] = None
 _continuous_no_speech_count = 0
 _CONTINUOUS_NO_SPEECH_LIMIT = 3
+
+
+def _report_stt_error(on_error: Optional[Callable[[str], None]], error: object) -> None:
+    """Log a speech-to-text failure and hand it to ``on_error``. Never raises."""
+    text = str(error or "").strip() or "speech-to-text failed"
+    logger.warning("voice transcription failed: %s", text)
+    if on_error is None:
+        return
+    try:
+        on_error(text)
+    except Exception as e:
+        logger.warning("on_error callback raised: %s", e)
 
 
 # ── Push-to-talk API ─────────────────────────────────────────────────
@@ -411,6 +427,7 @@ def start_continuous(
     max_recording_seconds: float = 0.0,
     on_stop_phrase: Optional[Callable[[str], None]] = None,
     noise_floor_multiplier: Optional[float] = None,
+    on_error: Optional[Callable[[str], None]] = None,
 ) -> bool:
     """Start a VAD-driven continuous recording loop.
 
@@ -442,10 +459,14 @@ def start_continuous(
     ``noise_floor_multiplier`` (``voice.noise_floor_multiplier``) scales the
     recorder's measured room noise into its speech/silence threshold; ``None``
     keeps the recorder's default, ``0`` pins the fixed ``silence_threshold``.
+
+    ``on_error`` is called with the error text when speech-to-text fails, so
+    the UI can show why nothing was sent. The cycle still counts as silent,
+    exactly as before.
     """
     global _continuous_active, _continuous_recorder, _continuous_auto_restart
     global _continuous_on_transcript, _continuous_on_status, _continuous_on_silent_limit
-    global _continuous_on_stop_phrase
+    global _continuous_on_stop_phrase, _continuous_on_error
     global _continuous_no_speech_count
 
     with _continuous_lock:
@@ -461,6 +482,7 @@ def start_continuous(
         _continuous_on_status = on_status
         _continuous_on_silent_limit = on_silent_limit
         _continuous_on_stop_phrase = on_stop_phrase
+        _continuous_on_error = on_error
         if auto_restart:
             _continuous_no_speech_count = 0
 
@@ -518,7 +540,7 @@ def stop_continuous(force_transcribe: bool = False) -> None:
     """
     global _continuous_active, _continuous_on_transcript, _continuous_stopping
     global _continuous_on_status, _continuous_on_silent_limit
-    global _continuous_on_stop_phrase
+    global _continuous_on_stop_phrase, _continuous_on_error
     global _continuous_recorder, _continuous_no_speech_count
 
     with _continuous_lock:
@@ -530,6 +552,7 @@ def stop_continuous(force_transcribe: bool = False) -> None:
         on_transcript = _continuous_on_transcript
         on_silent_limit = _continuous_on_silent_limit
         on_stop_phrase = _continuous_on_stop_phrase
+        on_error = _continuous_on_error
         auto_restart = _continuous_auto_restart
         track_no_speech = force_transcribe and not auto_restart
         _continuous_stopping = rec is not None
@@ -537,6 +560,7 @@ def stop_continuous(force_transcribe: bool = False) -> None:
         _continuous_on_status = None
         _continuous_on_silent_limit = None
         _continuous_on_stop_phrase = None
+        _continuous_on_error = None
         if not track_no_speech:
             _continuous_no_speech_count = 0
 
@@ -560,16 +584,23 @@ def stop_continuous(force_transcribe: bool = False) -> None:
             def _transcribe_and_cleanup():
                 global _continuous_no_speech_count, _continuous_stopping
                 transcript: Optional[str] = None
+                stt_error: Optional[str] = None
                 should_halt = False
 
                 try:
                     if wav_path:
                         try:
-                            result = transcribe_recording(wav_path)
+                            try:
+                                result = transcribe_recording(wav_path)
+                            except Exception as e:
+                                stt_error = str(e) or type(e).__name__
+                                raise
                             if result.get("success"):
                                 text = (result.get("transcript") or "").strip()
                                 if text and not is_whisper_hallucination(text):
                                     transcript = text
+                            else:
+                                stt_error = str(result.get("error") or "") or "speech-to-text failed"
                         finally:
                             if os.path.isfile(wav_path):
                                 os.unlink(wav_path)
@@ -597,6 +628,8 @@ def stop_continuous(force_transcribe: bool = False) -> None:
                                 on_silent_limit()
                         except Exception:
                             pass
+                    if stt_error and not transcript:
+                        _report_stt_error(on_error, stt_error)
                     if transcript:
                         try:
                             on_transcript(transcript)
@@ -683,6 +716,7 @@ def _continuous_on_silence() -> None:
         on_status = _continuous_on_status
         on_silent_limit = _continuous_on_silent_limit
         on_stop_phrase = _continuous_on_stop_phrase
+        on_error = _continuous_on_error
 
     if rec is None:
         _debug("_continuous_on_silence: no recorder — abort")
@@ -704,6 +738,7 @@ def _continuous_on_silence() -> None:
     )
 
     transcript: Optional[str] = None
+    stt_error: Optional[str] = None
 
     if wav_path:
         try:
@@ -721,9 +756,12 @@ def _continuous_on_silence() -> None:
             )
             if success and text and not is_whisper_hallucination(text):
                 transcript = text
+            elif not success:
+                stt_error = str(err or "") or "speech-to-text failed"
         except Exception as e:
             logger.warning("continuous transcription failed: %s", e)
             _debug(f"_continuous_on_silence: transcribe raised {type(e).__name__}: {e}")
+            stt_error = str(e) or type(e).__name__
         finally:
             try:
                 if os.path.isfile(wav_path):
@@ -767,6 +805,9 @@ def _continuous_on_silence() -> None:
             _continuous_no_speech_count >= _CONTINUOUS_NO_SPEECH_LIMIT
         )
         no_speech = _continuous_no_speech_count
+
+    if stt_error and not transcript:
+        _report_stt_error(on_error, stt_error)
 
     if transcript and on_transcript:
         try:

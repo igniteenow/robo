@@ -349,7 +349,7 @@ def _try_lazy_install_stt() -> bool:
             "write to the virtual environment. Try running manually as the "
             "venv owner: `stat -c '%%u' '$(dirname $(dirname $(which python3)))'` "
             "then `su - <owner> -c 'VIRTUAL_ENV=/opt/robo/.venv "
-            "uv pip install faster-whisper==1.2.1'`",
+            "uv pip install faster-whisper==1.2.1 av==18.1.0'`",
             exc,
         )
     return False
@@ -1671,6 +1671,59 @@ def _join_confident_segments(segments: Any, local_cfg: Dict[str, Any]) -> str:
     return " ".join(kept).strip()
 
 
+class _PyAVOpenCompat:
+    """Stand-in for the ``av`` module inside ``faster_whisper.audio``.
+
+    faster-whisper (1.2.1 and earlier) decodes audio with
+    ``av.open(path, mode="r", metadata_errors="ignore")``. PyAV 19.0.0
+    (2026-09-29) removed the ``metadata_errors``/``metadata_encoding``
+    arguments, so on an install that picked up PyAV 19 every local
+    transcription raised ``TypeError: open() got an unexpected keyword
+    argument 'metadata_errors'`` — voice silently stopped working. Upstream
+    fixed it in faster-whisper#1495 by dropping the argument for PyAV >= 19;
+    this wrapper does the same until that release is pinned here.
+
+    Everything except ``open`` is forwarded to the real module untouched, and
+    ``open`` only retries (without the two removed arguments) when PyAV itself
+    rejects them, so older PyAV versions behave exactly as before.
+    """
+
+    _REMOVED_OPEN_KWARGS = ("metadata_errors", "metadata_encoding")
+
+    def __init__(self, av_module: Any) -> None:
+        self._robo_real_av = av_module
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._robo_real_av, name)
+
+    def open(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return self._robo_real_av.open(*args, **kwargs)
+        except TypeError as exc:
+            removed = [k for k in self._REMOVED_OPEN_KWARGS if k in kwargs and k in str(exc)]
+            if not removed:
+                raise
+            for key in self._REMOVED_OPEN_KWARGS:
+                kwargs.pop(key, None)
+            return self._robo_real_av.open(*args, **kwargs)
+
+
+def _ensure_faster_whisper_pyav_compat() -> None:
+    """Install :class:`_PyAVOpenCompat` into ``faster_whisper.audio`` once.
+
+    Never raises: without faster-whisper (or with an unexpected layout) the
+    transcription call reports its own error exactly as before.
+    """
+    try:
+        import faster_whisper.audio as fw_audio
+    except Exception:
+        return
+    current = getattr(fw_audio, "av", None)
+    if current is None or isinstance(current, _PyAVOpenCompat):
+        return
+    fw_audio.av = _PyAVOpenCompat(current)
+
+
 def _transcribe_local(file_path: str, model_name: str) -> Dict[str, Any]:
     """Transcribe using faster-whisper (local, free)."""
     global _local_model, _local_model_name
@@ -1706,6 +1759,10 @@ def _transcribe_local(file_path: str, model_name: str) -> Dict[str, Any]:
         stt_config = _load_stt_config()
         local_config = stt_config.get("local") or {}
         transcribe_kwargs = build_local_transcribe_kwargs(stt_config)
+
+        # After the model load above: importing faster_whisper here must not
+        # run before _load_local_whisper_model's KMP_DUPLICATE_LIB_OK guard.
+        _ensure_faster_whisper_pyav_compat()
 
         try:
             segments, info = _local_model.transcribe(file_path, **transcribe_kwargs)

@@ -152,10 +152,16 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
 
     # ─── Speech-to-text providers ──────────────────────────────────────────
     "stt.mistral": ("mistralai==2.4.8",),
+    # av (PyAV) is pinned too: faster-whisper only asks for av>=11, so an
+    # unpinned install pulls the newest PyAV — and PyAV 19.0.0 (2026-09-29)
+    # removed the av.open() argument faster-whisper 1.2.1 passes, which broke
+    # every local transcription. Keep it at the uv.lock version; `robo update`
+    # moves an already-installed PyAV 19 back to it.
     "stt.faster_whisper": (
         "faster-whisper==1.2.1",
         "sounddevice==0.5.5",
         "numpy==2.4.3",
+        "av==18.1.0",
     ),
     # SILK voice-note decoding (WeChat/QQ .silk voice messages). pilk is a
     # small silk-v3 codec binding; installed on first .silk transcription.
