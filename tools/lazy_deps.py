@@ -290,9 +290,11 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
         "google-auth-httplib2==0.3.1",
         # Transitive via google-api-python-client/google-auth-httplib2; keep explicit
         # so lazy installs do not resolve vulnerable transitives: httplib2 0.31.2
-        # (GHSA-j5g9-f88f-gfj3 decompression bomb DoS), stale pyasn1/google-auth.
+        # (GHSA-j5g9-f88f-gfj3 decompression bomb DoS), stale pyasn1/google-auth,
+        # oauthlib 3.x (GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v; via requests-oauthlib).
         "httplib2==0.32.0",
         "pyasn1==0.6.4",
+        "oauthlib==4.0.0",
     ),
     "skill.youtube": ("youtube-transcript-api==1.2.4",),
 

@@ -102,7 +102,7 @@ class TestGoogleWorkspaceSetupDepsPins:
         required_pins = _extract_pins(required_packages)
         pyproject_pins = _extract_pins(pyproject_packages)
 
-        for pkg in ("httplib2", "google-api-python-client", "google-auth-oauthlib", "google-auth-httplib2"):
+        for pkg in ("httplib2", "google-api-python-client", "google-auth-oauthlib", "google-auth-httplib2", "oauthlib"):
             setup_ver = required_pins.get(pkg)
             toml_ver = pyproject_pins.get(pkg)
             if setup_ver is None and toml_ver is None:
@@ -131,7 +131,7 @@ class TestGoogleWorkspaceSetupDepsPins:
         required_pins = _extract_pins(required_packages)
         lazy_pins = _extract_pins(lazy_packages)
 
-        for pkg in ("httplib2", "google-api-python-client", "google-auth-oauthlib", "google-auth-httplib2"):
+        for pkg in ("httplib2", "google-api-python-client", "google-auth-oauthlib", "google-auth-httplib2", "oauthlib"):
             setup_ver = required_pins.get(pkg)
             lazy_ver = lazy_pins.get(pkg)
             if setup_ver is None and lazy_ver is None:
