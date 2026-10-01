@@ -99,7 +99,7 @@
     "cmdk": "1.1.1",
     "d3-force": "3.0.0",
     "dnd-core": "14.0.1",
-    "dompurify": "3.4.13",
+    "dompurify": "3.4.16",
     "emojibase-data": "16.0.3",
     "fflate": "0.8.3",
     "frimousse": "0.3.0",
@@ -147,7 +147,7 @@
     "bippy": "0.5.43",
     "concurrently": "10.0.4",
     "cross-env": "10.1.0",
-    "electron": "41.10.3",
+    "electron": "41.10.6",
     "electron-builder": "26.15.3",
     "esbuild": "0.28.1",
     "jsdom": "29.1.1",
@@ -160,7 +160,7 @@
     "wait-on": "9.0.10"
   },
   "build": {
-    "electronVersion": "41.10.3",
+    "electronVersion": "41.10.6",
     "appId": "com.igniteenow.robo",
     "productName": "Robo",
     "executableName": "Robo",

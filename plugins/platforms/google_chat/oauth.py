@@ -169,6 +169,7 @@ _REQUIRED_PACKAGES = [
     "google-auth-httplib2==0.3.1",
     "httplib2==0.32.0",
     "pyasn1==0.6.4",
+    "oauthlib==4.0.0",  # GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v (via requests-oauthlib)
 ]
 
 # Out-of-band redirect: Google deprecated the ``urn:ietf:wg:oauth:2.0:oob``

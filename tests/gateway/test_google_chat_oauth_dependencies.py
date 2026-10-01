@@ -17,6 +17,7 @@ def test_stale_google_transitives_are_reported_missing(monkeypatch):
         "google-auth-httplib2": "0.3.1",
         "httplib2": "0.31.2",
         "pyasn1": "0.6.3",
+        "oauthlib": "3.3.1",
     }
 
     def fake_version(name):
@@ -31,6 +32,7 @@ def test_stale_google_transitives_are_reported_missing(monkeypatch):
         "google-auth==2.55.1",
         "httplib2==0.32.0",
         "pyasn1==0.6.4",
+        "oauthlib==4.0.0",
     ]
 
 
