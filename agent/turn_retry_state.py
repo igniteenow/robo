@@ -67,6 +67,15 @@ class TurnRetryState:
     primary_recovery_attempted: bool = False
     has_retried_429: bool = False
 
+    # ── Refusal recovery ─────────────────────────────────────────────────
+    # A refusal that carries no explanation at all is usually an automated
+    # provider-side filter rather than the model's own answer, and it is not
+    # always deterministic: the same prompt has been seen to pass on the very
+    # next call. Allow exactly one re-issue of the request before the refusal
+    # is surfaced. A refusal that carries the model's explanation is never
+    # retried.
+    empty_refusal_retry_attempted: bool = False
+
     # ── Auth-failure provider failover ───────────────────────────────────
     # Set once we've escalated a persistent 401/403 (after the per-provider
     # credential-refresh attempt above failed) to the fallback chain, so we

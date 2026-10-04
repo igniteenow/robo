@@ -2450,13 +2450,13 @@ DEFAULT_CONFIG = {
     },
 
     # Remotely-hosted model catalog manifest.  When enabled, the CLI fetches
-    # curated model lists for OpenRouter and Ignitee Now Portal from this URL,
-    # falling back to the in-repo snapshot on network failure.  Lets us
-    # update model picker lists without shipping a robo-engineer release.
-    # The default URL is served by the docs site GitHub Pages deploy.
+    # curated model lists for OpenRouter from this URL, falling back to the
+    # in-repo snapshot on network failure.  Lets us update model picker lists
+    # without shipping a robo-engineer release.  The default is the manifest
+    # in the repository, served raw by GitHub.
     "model_catalog": {
         "enabled": True,
-        "url": "https://robo.igniteenow.com/docs/api/model-catalog.json",
+        "url": "https://raw.githubusercontent.com/igniteenow/robo/main/website/static/api/model-catalog.json",
         # Disk cache TTL in hours.  Beyond this, the CLI refetches on the
         # next /model or `robo model` invocation; network failures
         # silently fall back to the stale cache.

@@ -781,7 +781,7 @@ def cmd_sessions(args, sessions_parser=None):
         resolved_session_id = db.resolve_session_id(args.session_id)
         if not resolved_session_id:
             print(f"Session '{args.session_id}' not found.")
-            return
+            sys.exit(1)
         if not args.yes:
             if not _confirm_prompt(
                 f"Delete session '{resolved_session_id}' and all its messages? [y/N] "
@@ -793,6 +793,7 @@ def cmd_sessions(args, sessions_parser=None):
             print(f"Deleted session '{resolved_session_id}'.")
         else:
             print(f"Session '{args.session_id}' not found.")
+            sys.exit(1)
 
     elif action in ("prune", "archive"):
         from robo_cli.session_filters import (

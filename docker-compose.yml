@@ -23,7 +23,7 @@
 #     supervision tree before any service starts. Bypassing it skips
 #     all of that setup and the gateway will not work correctly.
 #   - The gateway's API server is off unless you uncomment API_SERVER_KEY
-#     and API_SERVER_HOST. See docs/user-guide/api-server.md before doing
+#     and API_SERVER_HOST. See https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/features/api-server.md before doing
 #     this on an internet-facing host.
 #
 services:
@@ -50,7 +50,7 @@ services:
       # - TEAMS_ALLOWED_USERS=${TEAMS_ALLOWED_USERS}
       # - TEAMS_PORT=${TEAMS_PORT:-3978}
       # Google Chat — uncomment and fill in to enable the Google Chat gateway.
-      # See website/docs/user-guide/messaging/google_chat.md for the full setup.
+      # See https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/messaging/google_chat.md for the full setup.
       # The SA JSON path must point to a file mounted into the container —
       # add a volume entry above (e.g. ``- ~/.robo/google-chat-sa.json:/secrets/google-chat-sa.json:ro``)
       # then set GOOGLE_CHAT_SERVICE_ACCOUNT_JSON to that mount path.

@@ -22,6 +22,7 @@ import copy
 from typing import Any, Dict, List, Optional
 
 from robo_cli.fallback_config import get_fallback_chain
+from robo_cli.docs_links import docs_url
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +129,7 @@ def cmd_fallback_list(args) -> None:  # noqa: ARG001
         print(f"    {i}. {_format_entry(entry)}")
     print()
     print("  Tried in order when the primary fails (rate-limit, 5xx, connection errors).")
-    print("  Docs: website/docs/user-guide/features/fallback-providers.md")
+    print(f"  Docs: {docs_url('user-guide/features/fallback-providers.md')}")
     print()
 
 

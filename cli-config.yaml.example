@@ -1169,7 +1169,7 @@ platform_toolsets:
 # =============================================================================
 # Connect to external MCP servers to add tools from the MCP ecosystem.
 # Each server's tools are automatically discovered and registered.
-# See website/docs/user-guide/features/mcp.md for full documentation.
+# See https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/features/mcp.md for full documentation.
 #
 # Stdio servers (spawn a subprocess):
 #   command: the executable to run
@@ -1642,7 +1642,7 @@ display:
 # runs (gateway, cron) need --accept-hooks, ROBO_ACCEPT_HOOKS=1, or the
 # hooks_auto_accept key below.
 #
-# See website/docs/user-guide/features/hooks.md for the full JSON wire
+# See https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/features/hooks.md for the full JSON wire
 # protocol and worked examples.
 #
 # hooks:
@@ -1776,7 +1776,7 @@ updates:
 #     are skipped with a startup warning (never a silent clobber)
 #   - a source's override_existing lets it beat .env/shell values, but
 #     never another secret source's claim
-# Docs: website/docs/user-guide/secrets/
+# Docs: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/secrets/index.md
 #
 # secrets:
 #   # Optional explicit ordering of enabled sources.

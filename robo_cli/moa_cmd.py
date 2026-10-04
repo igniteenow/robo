@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from robo_cli.config import load_config, save_config
@@ -101,6 +102,14 @@ def cmd_moa(args) -> None:
         return
 
     if sub in {"config", "configure"}:
+        if not sys.stdin.isatty():
+            # The pickers fall back to defaults on EOF and the result is
+            # saved: a scripted call used to rewrite the preset silently.
+            print(
+                "Error: 'robo moa configure' requires an interactive terminal.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         moa = normalize_moa_config(cfg.get("moa") if isinstance(cfg, dict) else {})
         preset_name = (getattr(args, "name", None) or moa.get("default_preset") or DEFAULT_MOA_PRESET_NAME).strip()
         current = moa["presets"].get(preset_name, moa["presets"][moa["default_preset"]])

@@ -1,6 +1,6 @@
 # Contributor Quick Reference
 
-For occasional contributors and PR authors. Full developer docs: ../../../../website/docs/developer-guide
+For occasional contributors and PR authors. Full developer docs: https://github.com/igniteenow/robo/tree/main/website/docs/developer-guide
 
 ### Project Layout
 

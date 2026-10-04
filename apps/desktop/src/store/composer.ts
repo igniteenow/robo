@@ -1,6 +1,7 @@
 import { atom } from 'nanostores'
 
 import { triggerHaptic } from '@/lib/haptics'
+import { peekFreshWindowLaunch } from '@/lib/window-launch'
 
 export interface ComposerAttachment {
   id: string
@@ -132,24 +133,39 @@ const cloneDraft = (draft: SessionDraft): SessionDraft => ({
   text: draft.text
 })
 
-function loadPersistedDraftTexts(): [string, SessionDraft][] {
+/**
+ * The persisted draft texts, minus the new-chat draft on a fresh launch: a
+ * fresh start opens on a clean new chat, so text left in the box when the app
+ * was last closed is not brought back. Drafts typed inside existing chats are
+ * kept, like any chat app. A reload of the same window keeps every draft.
+ */
+export function restorableDraftTexts(entries: Record<string, string>, freshLaunch: boolean): [string, SessionDraft][] {
+  return Object.entries(entries)
+    .filter(([key, text]) => typeof text === 'string' && !(freshLaunch && key === NEW_SESSION_DRAFT_KEY))
+    .map(([key, text]) => [key, { attachments: [], text }])
+}
+
+function readPersistedDraftTexts(): Record<string, string> {
   try {
     const raw = window.localStorage.getItem(SESSION_DRAFTS_STORAGE_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : null
 
-    if (!raw) {
-      return []
-    }
-
-    return Object.entries(JSON.parse(raw) as Record<string, string>).map(([key, text]) => [
-      key,
-      { attachments: [], text }
-    ])
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, string>) : {}
   } catch {
-    return []
+    return {}
   }
 }
 
-const draftsBySession = new Map<string, SessionDraft>(loadPersistedDraftTexts())
+const persistedDraftTexts = readPersistedDraftTexts()
+const freshLaunch = peekFreshWindowLaunch()
+const draftsBySession = new Map<string, SessionDraft>(restorableDraftTexts(persistedDraftTexts, freshLaunch))
+
+// A dropped new-chat draft must leave localStorage now, not at the next write:
+// a crash-recovery reload of this window (no pagehide flush) would otherwise
+// read it straight back.
+if (freshLaunch && NEW_SESSION_DRAFT_KEY in persistedDraftTexts) {
+  persistDraftTexts()
+}
 
 function persistDraftTexts() {
   try {

@@ -60,7 +60,12 @@ export function HumanMessageContainer({
 // z-index and pointer-events don't help — so without the carve-out, clicking a
 // bubble there drags the window instead of opening the edit composer.
 export const USER_BUBBLE_BASE_CLASS =
-  'composer-human-message standalone-glass relative flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-y-auto rounded-xl border bg-(--dt-user-bubble) px-3 py-2 text-left [-webkit-app-region:no-drag]'
+  'composer-human-message standalone-glass relative flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-y-auto rounded-[1.125rem] border bg-(--dt-user-bubble) px-4 py-2.5 text-left [-webkit-app-region:no-drag]'
+
+// A sent message sits on the right, sized to its text (up to a reading-width
+// cap), like every chat app — so "what I asked" and "what Robo answered" are
+// told apart at a glance. The inline editor stays full width.
+const USER_BUBBLE_FRAME_CLASS = 'relative ml-auto w-fit min-w-0 max-w-[min(80%,40rem)]'
 
 export const USER_ACTION_ICON_BUTTON_CLASS =
   'grid place-items-center rounded-md bg-transparent text-(--ui-text-secondary) transition-colors hover:bg-(--ui-control-active-background) hover:text-foreground disabled:cursor-default disabled:text-(--ui-text-quaternary) disabled:opacity-70'
@@ -238,7 +243,7 @@ export const UserMessage: FC<{
   const bubbleClassName = cn(
     USER_BUBBLE_BASE_CLASS,
     'cursor-pointer pr-9 text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground/95 transition-colors',
-    'border-(--ui-stroke-tertiary) hover:border-(--ui-stroke-secondary)'
+    'border-(--dt-user-bubble-border) hover:border-(--ui-stroke-primary)'
   )
 
   const bubbleContent = hasBody && (
@@ -249,9 +254,9 @@ export const UserMessage: FC<{
       className={cn(clampActive && 'human-message-clamp')}
       data-clamped={clampActive && bodyClamped ? 'true' : undefined}
     >
-      {/* Match the edit composer's collapsed line box (min-h-[1.25rem]) so
-          clicking to edit can't grow the bubble by a sub-pixel and reflow the
-          turn 1px. */}
+      {/* Match the edit composer's collapsed line box (min-h-[1.25rem]): the
+          bubble is sized to its text and the editor is full width, so the
+          swap can re-wrap, but it never changes a line's height. */}
       <div className="min-h-[1.25rem]" ref={clampInnerRef}>
         <UserMessageText className="wrap-anywhere" text={messageText} />
       </div>
@@ -265,7 +270,7 @@ export const UserMessage: FC<{
           // Attachments render BELOW the bubble in normal flow. Image refs
           // render as thumbnails, file refs as chips; no border.
           attachmentRefs.length > 0 ? (
-            <div className="flex flex-wrap gap-1 -mt-3 mb-2">
+            <div className="flex flex-wrap justify-end gap-1 -mt-3 mb-2">
               <DirectiveContent text={attachmentRefs.join(' ')} />
             </div>
           ) : null
@@ -281,7 +286,7 @@ export const UserMessage: FC<{
               selected={shownReactions.find(reaction => reaction.author === 'user')?.emoji}
             >
               <div
-                className="relative w-full"
+                className={USER_BUBBLE_FRAME_CLASS}
                 onContextMenu={
                   // Right-click is the desktop stand-in for iOS touch-and-hold —
                   // but only when there's nothing selected. A live highlight
@@ -405,7 +410,7 @@ export const UserMessage: FC<{
             />
             <BranchPickerPrimitive.Root
               className={cn(
-                'checkpoint-container flex items-center gap-1 pb-0 pt-1 pl-1.5 text-[0.75rem] leading-none text-(--ui-text-tertiary)',
+                'checkpoint-container flex items-center justify-end gap-1 pb-0 pt-1 pr-1.5 text-[0.75rem] leading-none text-(--ui-text-tertiary)',
                 readOnly && 'hidden'
               )}
               hideWhenSingleBranch

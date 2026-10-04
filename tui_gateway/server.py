@@ -11283,6 +11283,26 @@ def _(rid, params: dict) -> dict:
         _write_config_key("display.battery", nv_b)
         return _ok(rid, {"key": key, "value": "on" if nv_b else "off"})
 
+    if key in {"display.message_reactions", "message_reactions"}:
+        # The desktop's "Message reactions" toggle. The agent's
+        # react_to_message tool and the reaction annotation in the model
+        # context are both gated on this key, so a toggle that was never
+        # stored left the switch on in the UI and off in the agent.
+        raw = str(value or "").strip().lower()
+        cfg0 = _load_cfg()
+        d0 = cfg0.get("display") if isinstance(cfg0.get("display"), dict) else {}
+        cur_b = bool(d0.get("message_reactions", False))
+        if raw in {"", "toggle"}:
+            nv_b = not cur_b
+        elif raw in {"on", "true", "yes", "1"}:
+            nv_b = True
+        elif raw in {"off", "false", "no", "0"}:
+            nv_b = False
+        else:
+            return _err(rid, 4002, f"unknown message_reactions value: {value}")
+        _write_config_key("display.message_reactions", nv_b)
+        return _ok(rid, {"key": "display.message_reactions", "value": "on" if nv_b else "off"})
+
     if key == "theme":
         # TUI light/dark mode pin: 'light'/'dark' beat background
         # auto-detection (xterm.js hosts misreport OSC 11); 'auto' trusts it.

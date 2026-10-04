@@ -14,6 +14,7 @@ import {
   cancelOnboardingFlow,
   copyDeviceCode,
   copyExternalCommand,
+  externalSigninNotice,
   type OnboardingContext,
   type OnboardingFlow,
   recheckExternalSignin,
@@ -97,10 +98,18 @@ export function FlowPanel({
   }
 
   if (flow.status === 'external_pending') {
+    // A provider whose own sign-in was discontinued carries a notice: show it
+    // instead of "run this command", which would be a dead end. "I've signed
+    // in" stays only for a login that already works on this computer.
+    const notice = externalSigninNotice(flow.provider)
+    const deadEnd = Boolean(notice) && !flow.provider.status?.logged_in
+
     return (
       <Step title={t.onboarding.signInWith(title)}>
-        <p className="text-sm text-muted-foreground">{t.onboarding.externalPending(title)}</p>
-        <CodeBlock copied={flow.copied} onCopy={() => void copyExternalCommand()} text={flow.provider.cli_command} />
+        <p className="text-sm text-muted-foreground">{notice ?? t.onboarding.externalPending(title)}</p>
+        {notice ? null : (
+          <CodeBlock copied={flow.copied} onCopy={() => void copyExternalCommand()} text={flow.provider.cli_command} />
+        )}
         <FlowFooter
           left={
             flow.provider.docs_url ? (
@@ -109,7 +118,7 @@ export function FlowPanel({
           }
         >
           <CancelBtn />
-          <Button onClick={() => void recheckExternalSignin(ctx)}>{t.onboarding.signedIn}</Button>
+          {deadEnd ? null : <Button onClick={() => void recheckExternalSignin(ctx)}>{t.onboarding.signedIn}</Button>}
         </FlowFooter>
       </Step>
     )

@@ -47,6 +47,22 @@ def _print_assets(home: Path) -> None:
     print(json.dumps(report, indent=2))
 
 
+def _exit_after_interrupt() -> None:
+    """Ctrl+C that the running command did not handle itself.
+
+    Leave with the usual "interrupted" status and no Python traceback: the
+    person asked the command to stop, which is not an error in Robo. (On
+    Windows a traceback exit also makes the ``robo.cmd`` launcher ask
+    "Terminate batch job (Y/N)?".)
+    """
+    try:
+        sys.stderr.write("\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+    raise SystemExit(130)
+
+
 def main() -> None:
     """Bootstrap and launch Robo."""
 
@@ -73,7 +89,10 @@ def main() -> None:
     sys.argv[0] = "robo"
     from robo_cli.main import main as robo_main
 
-    robo_main()
+    try:
+        robo_main()
+    except KeyboardInterrupt:
+        _exit_after_interrupt()
 
 
 if __name__ == "__main__":

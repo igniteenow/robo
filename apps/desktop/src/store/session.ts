@@ -24,8 +24,9 @@ const COMPOSER_MODEL_SOURCE_KEY = 'robo.desktop.composer.model-source'
 const COMPOSER_EFFORT_KEY = 'robo.desktop.composer.reasoning-effort'
 const COMPOSER_FAST_KEY = 'robo.desktop.composer.fast'
 
-// The last chat the user had open, so a relaunch lands back on it instead of an
-// empty new-chat. Stored (not runtime) id — the route is keyed by stored id.
+// The last chat the user had open, so a window RELOAD lands back on it instead
+// of an empty new-chat (a fresh launch starts on a new chat — see
+// lib/window-launch.ts). Stored (not runtime) id — the route is keyed by stored id.
 //
 // Scoped per profile with an explicit namespace (`.profile.<encoded>`) and
 // encodeURIComponent so a profile name carrying `/` or other reserved chars
@@ -131,7 +132,7 @@ export function rememberedSessionProfile(
 }
 
 // The last non-overlay route (a page like /skills, or a session route), so a
-// relaunch lands back where you were instead of a bare new-chat.
+// window reload lands back where you were instead of a bare new-chat.
 //
 // Scoped per profile for the same reason the remembered session id is: a single
 // global key remembered ONE route across every profile, and a session route

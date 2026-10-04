@@ -123,7 +123,7 @@ Good defaults:
 | **Tencent TokenHub** | Tencent-hosted models | Set `TOKENHUB_API_KEY` |
 | **Ollama Cloud** | Managed Ollama-hosted models | Set `OLLAMA_API_KEY` |
 | **LM Studio** | Local desktop app exposing an OpenAI-compatible API | Set `LM_API_KEY` (and `LM_BASE_URL` if non-default) |
-| **Qwen OAuth** | Qwen Portal browser OAuth — no API key needed | `robo model` → Qwen OAuth |
+| **Qwen OAuth** | Discontinued by Qwen on 2026-04-15; only an existing Qwen Code login still works | Use **Qwen Cloud** (`DASHSCOPE_API_KEY`) instead |
 | **Kilo Code** | KiloCode-hosted models | Set `KILOCODE_API_KEY` |
 | **OpenCode Zen** | Pay-as-you-go access to curated models | Set `OPENCODE_ZEN_API_KEY` |
 | **OpenCode Go** | $10/month subscription for open models | Set `OPENCODE_GO_API_KEY` |

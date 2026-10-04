@@ -8,7 +8,7 @@ pause/resume/run/remove, status, and tick.
 import json
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Any, Iterable, List, Optional
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -354,7 +354,7 @@ def cron_create(args):
         no_agent=getattr(args, "no_agent", False) or None,
     )
     if not result.get("success"):
-        print(color(f"Failed to create job: {result.get('error', 'unknown error')}", Colors.RED))
+        print(color(f"Failed to create job: {_cli_error(result.get('error'))}", Colors.RED))
         return 1
     print(color(f"Created job: {result['job_id']}", Colors.GREEN))
     print(f"  Name: {result['name']}")
@@ -439,10 +439,21 @@ def cron_edit(args):
     return 0
 
 
+# The cron API is shared with the agent's ``cronjob`` tool, whose errors tell
+# the model which tool call to make next. People at a terminal get the
+# command instead.
+_TOOL_HINT = "Use cronjob(action='list') to see available jobs."
+_CLI_HINT = "Run `robo cron list` to see available jobs."
+
+
+def _cli_error(message: Any) -> str:
+    return str(message or "unknown error").replace(_TOOL_HINT, _CLI_HINT)
+
+
 def _job_action(action: str, job_id: str, success_verb: str) -> int:
     result = _cron_api(action=action, job_id=job_id)
     if not result.get("success"):
-        print(color(f"Failed to {action} job: {result.get('error', 'unknown error')}", Colors.RED))
+        print(color(f"Failed to {action} job: {_cli_error(result.get('error'))}", Colors.RED))
         return 1
     job = result.get("job") or result.get("removed_job") or {}
     print(color(f"{success_verb} job: {job.get('name', job_id)} ({job_id})", Colors.GREEN))
@@ -451,8 +462,12 @@ def _job_action(action: str, job_id: str, success_verb: str) -> int:
     if action == "run":
         job = result.get("job", {})
         if job.get("executed"):
-            outcome = "succeeded" if job.get("execution_success") else "failed"
-            print(f"  Ran now: {outcome}.")
+            if job.get("execution_success"):
+                print("  Ran now: succeeded.")
+            else:
+                print(f"  Ran now: failed. {_cli_error(job.get('execution_error'))}".rstrip())
+                print(f"  Details: robo cron runs {job_id}")
+                return 1
         elif job.get("execution_skipped"):
             print(f"  {job['execution_skipped']}")
         else:

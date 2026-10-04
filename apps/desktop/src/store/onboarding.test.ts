@@ -6,6 +6,7 @@ import type { OAuthProvider } from '@/types/robo'
 import {
   $desktopOnboarding,
   type DesktopOnboardingState,
+  externalSigninNotice,
   type OnboardingContext,
   refreshOnboarding,
   requestDesktopOnboarding,
@@ -415,6 +416,25 @@ describe('OAuth onboarding', () => {
     expect(optionsIndex).toBeGreaterThanOrEqual(0)
     expect(recommendedIndex).toBeGreaterThan(optionsIndex)
     expect(setIndex).toBeGreaterThan(recommendedIndex)
+  })
+})
+
+describe('external sign-in with a discontinued provider', () => {
+  const QWEN_NOTICE = 'Qwen discontinued its OAuth sign-in on 2026-04-15, so a new Qwen login is no longer possible.'
+
+  const qwen = (notice?: null | string): OAuthProvider => ({
+    ...provider('qwen-oauth', 'Qwen (via Qwen CLI)'),
+    cli_command: 'robo auth add qwen-oauth',
+    flow: 'external',
+    notice
+  })
+
+  it('has a notice only when the provider sends one', () => {
+    expect(externalSigninNotice(qwen(QWEN_NOTICE))).toBe(QWEN_NOTICE)
+    expect(externalSigninNotice(qwen(`  ${QWEN_NOTICE}  `))).toBe(QWEN_NOTICE)
+    expect(externalSigninNotice(qwen())).toBeNull()
+    expect(externalSigninNotice(qwen(null))).toBeNull()
+    expect(externalSigninNotice(qwen('   '))).toBeNull()
   })
 })
 

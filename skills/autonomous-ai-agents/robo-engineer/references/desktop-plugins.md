@@ -8,7 +8,7 @@ changes. A plugin can also talk to its own Python backend namespace
 system (`~/.robo/plugins/`) is otherwise documented separately.
 
 Full human reference (every export, area payloads, backend, security):
-`website/docs/developer-guide/desktop-plugin-sdk.md`.
+[the desktop plugin SDK guide](https://github.com/igniteenow/robo/blob/main/website/docs/developer-guide/desktop-plugin-sdk.md).
 
 ## When to Use
 

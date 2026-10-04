@@ -267,6 +267,9 @@ def _read_tail(
 
     When filters are active, we read more raw lines to find enough matches.
     """
+    if num_lines <= 0:
+        # ``-n 0`` asks for nothing; ``lines[-0:]`` would be the whole file.
+        return []
     if has_filters:
         # Read more lines to ensure we get enough after filtering.
         # For large files, read last 10K lines and filter down.

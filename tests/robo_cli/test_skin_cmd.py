@@ -122,3 +122,20 @@ def test_set_preserves_a_symlinked_skin_file():
     data = yaml.safe_load(real.read_text(encoding="utf-8"))
     assert data["colors"]["ui_tool"] == "#00FFFF"
     assert data["colors"]["background"] == "#08201f"
+
+
+def test_use_refuses_a_skin_that_does_not_exist(capsys):
+    """Saving an unknown name made startup silently fall back to the brand
+    skin while config.yaml claimed otherwise."""
+    assert skin_cmd._use("nonexistent") == 1
+    err = capsys.readouterr().err
+    assert "no skin named 'nonexistent'" in err
+    assert "ember" in err  # the real choices are listed
+    assert not (get_robo_home() / "config.yaml").exists()
+
+
+def test_use_accepts_builtins_user_skins_and_the_default_alias(capsys):
+    (_skins() / "mine.yaml").write_text("name: mine\ncolors:\n  banner_border: '#112233'\n", encoding="utf-8")
+    for name in ("ember", "mine", "default"):
+        assert skin_cmd._use(name) == 0, name
+    assert yaml.safe_load((get_robo_home() / "config.yaml").read_text(encoding="utf-8"))["display"]["skin"] == "default"

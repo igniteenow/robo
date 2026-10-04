@@ -244,3 +244,92 @@ class TestBundledPluginAssetGate:
                 resp = test_client.get("/dashboard-plugins/goodbundled/dist/index.js")
                 assert resp.status_code == 200
 
+
+
+# ---------------------------------------------------------------------------
+# A plugin with backend routes but no browser bundle gets no dashboard tab
+# ---------------------------------------------------------------------------
+
+
+class TestRoutesOnlyPluginHasNoTab:
+    """The bundled kanban and achievements plugins ship ``plugin_api.py`` for
+    the desktop app and no ``dist/index.js``. The dashboard used to list them
+    anyway and show two tabs that failed with "Could not load this plugin's
+    script"."""
+
+    def _routes_only_plugin(self, tmp_path, name="routesonly"):
+        dashboard_dir = tmp_path / "bundled" / name / "dashboard"
+        dashboard_dir.mkdir(parents=True)
+        (dashboard_dir / "plugin_api.py").write_text(
+            "from fastapi import APIRouter\nrouter = APIRouter()\n"
+        )
+        (dashboard_dir / "manifest.json").write_text(json.dumps({
+            "name": name,
+            "label": name.title(),
+            "entry": "dist/index.js",
+            "css": "dist/style.css",
+            "api": "plugin_api.py",
+            "tab": {"path": f"/{name}"},
+        }))
+        return dashboard_dir
+
+    def _discover(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "robo_cli.plugins.get_bundled_plugins_dir", lambda: tmp_path / "bundled"
+        )
+        monkeypatch.setattr(
+            web_server, "get_process_robo_home", lambda: tmp_path / "nohome"
+        )
+        return web_server._discover_dashboard_plugins()
+
+    def test_discovery_keeps_the_plugin_for_its_routes_but_marks_it_without_ui(self, tmp_path, monkeypatch):
+        self._routes_only_plugin(tmp_path)
+        _make_bundled_plugin(tmp_path, "withui")
+
+        plugins = {p["name"]: p for p in self._discover(tmp_path, monkeypatch)}
+
+        assert plugins["routesonly"]["has_api"] is True
+        assert plugins["routesonly"]["_has_ui"] is False
+        assert plugins["withui"]["_has_ui"] is True
+
+    def test_listing_offers_only_plugins_whose_bundle_exists(self, test_client, tmp_path, monkeypatch):
+        self._routes_only_plugin(tmp_path)
+        _make_bundled_plugin(tmp_path, "withui")
+        discovered = self._discover(tmp_path, monkeypatch)
+
+        with patch.object(web_server, "_get_dashboard_plugins", return_value=discovered), patch(
+            "robo_cli.plugins_cmd._get_enabled_set", return_value=set()
+        ), patch(
+            "robo_cli.plugins_cmd._get_disabled_set", return_value=set()
+        ):
+            resp = test_client.get("/api/dashboard/plugins")
+
+        assert resp.status_code == 200
+        names = [p["name"] for p in resp.json()]
+        assert names == ["withui"]
+        # Internal fields never reach the browser.
+        assert all(not k.startswith("_") for p in resp.json() for k in p)
+
+    def test_bundle_must_live_inside_the_plugin_folder(self, tmp_path):
+        dashboard_dir = tmp_path / "p" / "dashboard"
+        dashboard_dir.mkdir(parents=True)
+        outside = tmp_path / "outside.js"
+        outside.write_text("console.log('x');")
+
+        assert web_server._plugin_entry_exists(dashboard_dir, "../../outside.js") is False
+        assert web_server._plugin_entry_exists(dashboard_dir, "") is False
+        assert web_server._plugin_entry_exists(dashboard_dir, None) is False
+        (dashboard_dir / "dist").mkdir()
+        (dashboard_dir / "dist" / "index.js").write_text("console.log('y');")
+        assert web_server._plugin_entry_exists(dashboard_dir, "dist/index.js") is True
+
+    def test_shipped_routes_only_plugins_are_the_kanban_and_achievements_ones(self):
+        """The real bundled plugins: both have an API and no bundle, so neither
+        may be offered as a tab."""
+        from robo_cli.plugins import get_bundled_plugins_dir
+
+        bundled = get_bundled_plugins_dir()
+        for name in ("kanban", "robo-achievements"):
+            dashboard_dir = bundled / name / "dashboard"
+            assert (dashboard_dir / "plugin_api.py").is_file()
+            assert not web_server._plugin_entry_exists(dashboard_dir, "dist/index.js")

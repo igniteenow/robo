@@ -49,6 +49,7 @@ from robo_cli.config import (
 from robo_constants import OPENROUTER_BASE_URL, secure_parent_dir
 from agent.credential_persistence import sanitize_borrowed_credential_payload
 from utils import atomic_replace, atomic_yaml_write, env_float, is_truthy_value
+from robo_cli.docs_links import docs_url
 
 logger = logging.getLogger(__name__)
 
@@ -111,14 +112,23 @@ XAI_ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 3600
 QWEN_OAUTH_CLIENT_ID = "f0304373b74a44d2b584a3fb70ca9e56"
 QWEN_OAUTH_TOKEN_URL = "https://chat.qwen.ai/api/v1/oauth2/token"
 QWEN_ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 120
+# Qwen discontinued its OAuth sign-in on 2026-04-15. The Qwen Code CLI no
+# longer offers it (its ``qwen auth`` command was removed too), so a missing
+# or dead Qwen login cannot be fixed by signing in again. Every Qwen OAuth
+# error says so and names the routes that still work.
+QWEN_OAUTH_ENDED_HINT = (
+    "Qwen discontinued its OAuth sign-in on 2026-04-15, so a new Qwen login is "
+    "no longer possible. To use Qwen models, run `robo model` and pick Qwen "
+    "Cloud (an Alibaba DashScope API key) or OpenRouter."
+)
 DEFAULT_SPOTIFY_ACCOUNTS_BASE_URL = "https://accounts.spotify.com"
 DEFAULT_SPOTIFY_API_BASE_URL = "https://api.spotify.com/v1"
 DEFAULT_SPOTIFY_REDIRECT_URI = "http://127.0.0.1:43827/spotify/callback"
-SPOTIFY_DOCS_URL = "website/docs/user-guide/features/spotify.md"
+SPOTIFY_DOCS_URL = docs_url("user-guide/features/spotify.md")
 SPOTIFY_DASHBOARD_URL = "https://developer.spotify.com/dashboard"
 SPOTIFY_ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 120
 
-OAUTH_OVER_SSH_DOCS_URL = "website/docs/guides/oauth-over-ssh.md"
+OAUTH_OVER_SSH_DOCS_URL = docs_url("guides/oauth-over-ssh.md")
 DEFAULT_SPOTIFY_SCOPE = " ".join((
     "user-modify-playback-state",
     "user-read-playback-state",
@@ -2205,7 +2215,7 @@ def _read_qwen_cli_tokens() -> Dict[str, Any]:
     auth_path = _qwen_cli_auth_path()
     if not auth_path.exists():
         raise AuthError(
-            "Qwen CLI credentials not found. Run 'qwen auth qwen-oauth' first.",
+            f"No Qwen login was found on this computer ({auth_path}). {QWEN_OAUTH_ENDED_HINT}",
             provider="qwen-oauth",
             code="qwen_auth_missing",
         )
@@ -2269,7 +2279,7 @@ def _refresh_qwen_cli_tokens(tokens: Dict[str, Any], timeout_seconds: float = 20
     refresh_token = str(tokens.get("refresh_token", "") or "").strip()
     if not refresh_token:
         raise AuthError(
-            "Qwen OAuth refresh token missing. Re-run 'qwen auth qwen-oauth'.",
+            f"Qwen OAuth refresh token missing. {QWEN_OAUTH_ENDED_HINT}",
             provider="qwen-oauth",
             code="qwen_refresh_token_missing",
         )
@@ -2298,7 +2308,7 @@ def _refresh_qwen_cli_tokens(tokens: Dict[str, Any], timeout_seconds: float = 20
     if response.status_code >= 400:
         body = response.text.strip()
         raise AuthError(
-            "Qwen OAuth refresh failed. Re-run 'qwen auth qwen-oauth'."
+            f"Qwen OAuth refresh failed. {QWEN_OAUTH_ENDED_HINT}"
             + (f" Response: {body}" if body else ""),
             provider="qwen-oauth",
             code="qwen_refresh_failed",
@@ -2372,7 +2382,7 @@ def resolve_qwen_runtime_credentials(
         access_token = str(tokens.get("access_token", "") or "").strip()
     if not access_token:
         raise AuthError(
-            "Qwen OAuth access token missing. Re-run 'qwen auth qwen-oauth'.",
+            f"Qwen OAuth access token missing. {QWEN_OAUTH_ENDED_HINT}",
             provider="qwen-oauth",
             code="qwen_access_token_missing",
         )

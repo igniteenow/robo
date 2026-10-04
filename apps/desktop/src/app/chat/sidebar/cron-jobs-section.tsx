@@ -254,7 +254,7 @@ function CronJobSidebarRow({
   return (
     <div>
       <ActionsContextMenu ariaLabel={c.actionsTitle} contentClassName="w-44" items={items}>
-        <div className="group/cron relative grid min-h-[1.625rem] grid-cols-[minmax(0,1fr)_auto] items-center rounded-md hover:bg-(--chrome-action-hover)">
+        <div className="group/cron relative grid min-h-8 grid-cols-[minmax(0,1fr)_auto] items-center rounded-md hover:bg-(--chrome-action-hover)">
           {/* Lead with the dot in the same w-3.5 cell + pl-2 the session rows use
               so the cron dots line up with the sessions above; the caret sits next
               to the label (matching the other sidebar disclosures) and the whole

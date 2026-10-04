@@ -166,3 +166,14 @@ def test_run_slash_reclaim_running_task(kanban_home):
 # ---------------------------------------------------------------------------
 
 
+
+
+def test_show_renders_event_payloads_as_key_value_pairs():
+    """`kanban show` printed events as raw Python dicts, None values included."""
+    rendered = kc._fmt_event_payload(
+        {"assignee": None, "status": "ready", "parents": [], "skills": ["a", "b"], "len": 10}
+    )
+    assert rendered == " (status=ready, skills=a,b, len=10)"
+    assert kc._fmt_event_payload({}) == ""
+    assert kc._fmt_event_payload(None) == ""
+    assert kc._fmt_event_payload("note") == " note"

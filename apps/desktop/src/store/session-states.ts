@@ -784,6 +784,14 @@ export function markSelectionRestore() {
   selectionRestoreInFlight = true
 }
 
+/** Bring focus home to the workspace and FRONT its tab — the main chat's pane.
+ *  Primary navigations do this (below); so does a fresh launch, which opens on
+ *  a new chat even when the restored layout last had a session tile in front. */
+export function homeToWorkspace() {
+  noteActiveTreeGroup(null)
+  revealTreePane('workspace')
+}
+
 // Homing also FRONTS the workspace tab: the resumed chat loads in the workspace
 // pane, so a zone parked on a tile tab must switch back or the click looks dead.
 $selectedStoredSessionId.listen(selected => {
@@ -794,8 +802,7 @@ $selectedStoredSessionId.listen(selected => {
     return
   }
 
-  noteActiveTreeGroup(null)
-  revealTreePane('workspace')
+  homeToWorkspace()
 })
 
 // Dev hook for automation (mirrors __ROBO_LAYOUT_TREE__).

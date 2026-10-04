@@ -329,14 +329,17 @@ const DESKTOP_COMMAND_SPECS: readonly DesktopCommandSpec[] = [
 // per reason beats 40 identical object literals.
 const NO_DESKTOP_SURFACE: Record<DesktopUnavailableReason, readonly string[]> = {
   terminal: [
+    '/battery',
     '/busy',
     '/clear',
+    '/compose',
     '/config',
     '/copy',
     '/cron',
     '/density',
     '/details',
     '/exit',
+    '/focus',
     '/footer',
     '/gateway',
     '/history',
@@ -347,6 +350,7 @@ const NO_DESKTOP_SURFACE: Record<DesktopUnavailableReason, readonly string[]> = 
     '/paste',
     '/platforms',
     '/plugins',
+    '/prompt',
     '/quit',
     '/redraw',
     '/reload',
@@ -357,7 +361,9 @@ const NO_DESKTOP_SURFACE: Record<DesktopUnavailableReason, readonly string[]> = 
     '/snap',
     '/snapshot',
     '/statusbar',
+    '/timestamps',
     '/toolsets',
+    '/ts',
     '/update',
     '/verbose'
   ],

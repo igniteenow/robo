@@ -239,7 +239,6 @@ export const ENUM_OPTIONS: Record<string, string[]> = {
   'agent.image_input_mode': ['auto', 'native', 'text'],
   'approvals.mode': ['manual', 'smart', 'off'],
   'code_execution.mode': ['project', 'strict'],
-  'context.engine': ['compressor', 'default', 'custom'],
   // '' = inherit the agent's own effort; the rest is the shared scale.
   'delegation.reasoning_effort': ['', ...REASONING_EFFORTS],
   // NOTE: memory.provider is intentionally NOT listed here. Its options are
@@ -249,8 +248,8 @@ export const ENUM_OPTIONS: Record<string, string[]> = {
   // shadow that and hide user-installed/pip providers (#49513).
   // Terminal execution backends — kept in sync with the dispatch ladder in
   // tools/terminal_tool.py::_create_environment (local/docker/singularity/
-  // modal/daytona/ssh). Remote backends need extra env (image, tokens, host).
-  'terminal.backend': ['local', 'docker', 'singularity', 'modal', 'daytona', 'ssh'],
+  // modal/daytona/ssh/vercel_sandbox). Remote backends need extra env (image, tokens, host).
+  'terminal.backend': ['local', 'docker', 'singularity', 'modal', 'daytona', 'ssh', 'vercel_sandbox'],
   'stt.elevenlabs.model_id': ['scribe_v2', 'scribe_v1'],
   'stt.local.model': ['tiny', 'base', 'small', 'medium', 'large-v3'],
   // Speech-to-text backends — kept in sync with the stt block in

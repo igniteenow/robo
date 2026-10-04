@@ -4,7 +4,7 @@ import type { SyntaxHighlighterProps } from '@assistant-ui/react-streamdown'
 import { type ComponentProps, type FC, lazy, Suspense, useMemo } from 'react'
 import type ShikiHighlighter from 'react-shiki'
 
-import { CodeCard, CodeCardBody } from '@/components/chat/code-card'
+import { CodeCard, CodeCardBody, CodeCardHeader } from '@/components/chat/code-card'
 import { ExpandableBlock } from '@/components/chat/expandable-block'
 import { CopyButton } from '@/components/ui/copy-button'
 import { useI18n } from '@/i18n'
@@ -13,9 +13,9 @@ import { isLikelyProseCodeBlock } from '@/lib/markdown-code'
 /**
  * Streamdown's code adapter renders header + body as inline siblings, so we
  * own the wrapping `<CodeCard>` here and neutralize the upstream
- * `data-streamdown="code-block"` chrome from styles.css. The card is
- * background-only — no header row, no language label — so a fence reads as a
- * tinted slab of the reply; copy is a hover-reveal control in the corner.
+ * `data-streamdown="code-block"` chrome from styles.css. The card carries its
+ * own header bar — the fence's language and an always-visible copy control —
+ * over a framed code well, so code is never mistaken for the user's bubble.
  *
  * `react-shiki` full bundle so all `bundledLanguages` work; theme switches
  * follow the document `color-scheme` via `defaultColor="light-dark()"`.
@@ -146,15 +146,17 @@ export const SyntaxHighlighter: FC<RoboSyntaxHighlighterProps> = ({
 
   return (
     <CodeCard data-streaming={defer ? 'true' : undefined}>
-      <CopyButton
-        appearance="inline"
-        className="absolute right-1.5 top-1.5 z-10 h-5 gap-0 rounded-md px-1 opacity-0 transition-opacity group-hover/code:opacity-100 focus-visible:opacity-100"
-        iconClassName="size-2.5"
-        label={t.assistant.tool.copyCode}
-        showLabel={false}
-        text={trimmed}
-      />
-      <CodeCardBody className="[&_pre]:px-3 [&_pre]:py-2.5">
+      <CodeCardHeader language={language}>
+        <CopyButton
+          appearance="inline"
+          className="h-5 gap-0 rounded-md px-1"
+          iconClassName="size-3"
+          label={t.assistant.tool.copyCode}
+          showLabel={false}
+          text={trimmed}
+        />
+      </CodeCardHeader>
+      <CodeCardBody className="text-[0.8125rem] [&_pre]:px-4 [&_pre]:py-3">
         <ExpandableBlock>
           <Pre className="aui-shiki m-0 overflow-hidden bg-transparent p-0">
             {plain ? (

@@ -1,10 +1,23 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { _resetFreshWindowLaunchForTests } from '@/lib/window-launch'
 import { _resetLegacyDiscardForTests } from '@/store/session'
+import type * as SessionStatesStore from '@/store/session-states'
 import type { SessionInfo } from '@/types/robo'
 
 import { useDesktopIntegrations } from './use-desktop-integrations'
+
+const homeToWorkspace = vi.hoisted(() => vi.fn())
+
+vi.mock('@/store/session-states', async importOriginal => ({
+  ...(await importOriginal<typeof SessionStatesStore>()),
+  homeToWorkspace
+}))
+
+// sessionStorage marker a window sets on its first boot; present = a RELOAD of
+// that window, absent = a fresh launch. See lib/window-launch.ts.
+const WINDOW_BOOTED_KEY = 'robo.desktop.window-booted'
 
 // Pure-jsdom localStorage (no nanostores persistence module needed — the
 // production functions write directly to window.localStorage through the
@@ -41,6 +54,12 @@ describe('useDesktopIntegrations', () => {
   beforeEach(() => {
     window.localStorage.clear()
     _resetLegacyDiscardForTests()
+    // The remembered-navigation suites below describe a window RELOAD (the
+    // window booted before); the fresh-launch suite clears this marker.
+    window.sessionStorage.clear()
+    window.sessionStorage.setItem(WINDOW_BOOTED_KEY, '1')
+    _resetFreshWindowLaunchForTests()
+    homeToWorkspace.mockClear()
     navigate = vi.fn()
 
     // Stub the desktop bridge so the hook's useEffect callbacks don't try to
@@ -115,6 +134,108 @@ describe('useDesktopIntegrations', () => {
       }
     )
   }
+
+  describe('fresh launch (app start or a new window)', () => {
+    beforeEach(() => {
+      window.sessionStorage.clear()
+      _resetFreshWindowLaunchForTests()
+    })
+
+    it('opens on a new chat instead of the remembered one', () => {
+      window.localStorage.setItem('robo.desktop.lastRoute.profile.default', '/remembered-session')
+      window.localStorage.setItem('robo.desktop.lastSessionId.profile.default', 'remembered-session')
+
+      render({ profileReady: true, sessions: [session({ id: 'remembered-session', profile: 'default' })] })
+
+      expect(navigate).not.toHaveBeenCalled()
+      expect(homeToWorkspace).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not wait for the session list before deciding', () => {
+      window.localStorage.setItem('robo.desktop.lastRoute.profile.default', '/remembered-session')
+
+      const result = render({ profileReady: true, sessions: [] })
+
+      result.rerender({
+        activeProfile: 'default',
+        locationPathname: '/',
+        profileReady: true,
+        resumeExhaustedSessionId: null,
+        routedSessionId: null,
+        sessions: [session({ id: 'remembered-session', profile: 'default' })]
+      })
+
+      expect(navigate).not.toHaveBeenCalled()
+      expect(homeToWorkspace).toHaveBeenCalledTimes(1)
+    })
+
+    it('forgets the previous run, so a reload right after launch keeps the new chat', () => {
+      window.localStorage.setItem('robo.desktop.lastRoute.profile.default', '/remembered-session')
+      window.localStorage.setItem('robo.desktop.lastSessionId.profile.default', 'remembered-session')
+
+      render({ profileReady: true, sessions: [session({ id: 'remembered-session', profile: 'default' })] })
+
+      expect(window.localStorage.getItem('robo.desktop.lastSessionId.profile.default')).toBeNull()
+      expect(window.localStorage.getItem('robo.desktop.lastRoute.profile.default')).toBe('/')
+
+      // The window reloads: same sessionStorage, fresh module latch.
+      _resetFreshWindowLaunchForTests()
+      render({ profileReady: true, sessions: [session({ id: 'remembered-session', profile: 'default' })] })
+
+      expect(navigate).not.toHaveBeenCalled()
+    })
+
+    it('still remembers the chat opened afterwards, for a later reload', () => {
+      const sessions = [session({ id: 'opened-later', profile: 'default' })]
+
+      const { rerender } = render({ profileReady: true, sessions })
+
+      rerender({
+        activeProfile: 'default',
+        locationPathname: '/opened-later',
+        profileReady: true,
+        resumeExhaustedSessionId: null,
+        routedSessionId: 'opened-later',
+        sessions
+      })
+
+      expect(window.localStorage.getItem('robo.desktop.lastSessionId.profile.default')).toBe('opened-later')
+      expect(window.localStorage.getItem('robo.desktop.lastRoute.profile.default')).toBe('/opened-later')
+
+      _resetFreshWindowLaunchForTests()
+      render({ profileReady: true, sessions })
+
+      expect(navigate).toHaveBeenCalledWith('/opened-later', { replace: true })
+    })
+
+    it('keeps an explicit destination (deep link / session window) untouched', () => {
+      render({ locationPathname: '/linked-session', profileReady: true, routedSessionId: 'linked-session' })
+
+      expect(navigate).not.toHaveBeenCalled()
+      expect(homeToWorkspace).not.toHaveBeenCalled()
+    })
+
+    it('marks a window that first boots elsewhere, so its later reload on / still restores', () => {
+      const sessions = [session({ id: 'linked-session', profile: 'default' })]
+
+      render({ locationPathname: '/linked-session', profileReady: true, routedSessionId: 'linked-session', sessions })
+
+      expect(window.sessionStorage.getItem(WINDOW_BOOTED_KEY)).toBe('1')
+
+      // The same window reloads after moving to the new-chat route.
+      _resetFreshWindowLaunchForTests()
+      render({ profileReady: true, sessions })
+
+      expect(navigate).toHaveBeenCalledWith('/linked-session', { replace: true })
+      expect(homeToWorkspace).not.toHaveBeenCalled()
+    })
+
+    it('waits for profileReady like the restore does', () => {
+      render({ profileReady: false })
+
+      expect(homeToWorkspace).not.toHaveBeenCalled()
+    })
+  })
 
   describe('profile-ready gate', () => {
     it('does NOT restore before profileReady is true', () => {

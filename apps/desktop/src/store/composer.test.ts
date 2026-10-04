@@ -9,6 +9,7 @@ import {
   migrateSessionDraft,
   removeComposerAttachment,
   requestVoiceConversationStart,
+  restorableDraftTexts,
   SESSION_DRAFTS_STORAGE_KEY,
   stashSessionDraft,
   takeSessionDraft,
@@ -147,5 +148,24 @@ describe('session drafts', () => {
 
     clearSessionDraft('from')
     clearSessionDraft('to')
+  })
+})
+
+describe('restorableDraftTexts', () => {
+  const persisted = { __new__: 'half-typed question', 'session-a': 'reply draft', 'session-b': 'notes' }
+
+  it('drops the new-chat draft on a fresh launch and keeps every chat draft', () => {
+    expect(restorableDraftTexts(persisted, true)).toEqual([
+      ['session-a', { attachments: [], text: 'reply draft' }],
+      ['session-b', { attachments: [], text: 'notes' }]
+    ])
+  })
+
+  it('keeps the new-chat draft across a reload of the same window', () => {
+    expect(restorableDraftTexts(persisted, false).map(([key]) => key)).toEqual(['__new__', 'session-a', 'session-b'])
+  })
+
+  it('handles an empty store', () => {
+    expect(restorableDraftTexts({}, true)).toEqual([])
   })
 })

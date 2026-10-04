@@ -156,7 +156,9 @@ export const subscriptionCommands: SlashCommand[] = [
         .then(
           ctx.guarded<SubscriptionStateResponse>(s => {
             if (!s.logged_in) {
-              sys('Not logged into Ignitee Now Portal — run /portal to log in, then /subscription.')
+              // The gateway says why (billing was removed); there is no /portal
+              // command to send anyone to.
+              sys(s.error || 'Not logged into Ignitee Now Portal.')
 
               return
             }

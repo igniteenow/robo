@@ -2,7 +2,7 @@
 
 Set via `robo model` (picker) or `robo setup`. 35+ provider profiles ship as
 plugins under `plugins/model-providers/`; user plugins of the same name override.
-Full docs: ../../../../website/docs/integrations/providers.md
+Full docs: https://github.com/igniteenow/robo/blob/main/website/docs/integrations/providers.md
 
 ### Providers
 

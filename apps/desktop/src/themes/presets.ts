@@ -122,58 +122,59 @@ const terminal = (
 
 const typography = { fontSans: BRAND_SANS, fontMono: SYSTEM_MONO }
 
-/** Ignitee — the brand. Navy, the logo's indigo for structure, ember to act. */
+/** Ignitee — the brand, on a professional neutral canvas: white and graphite
+ *  surfaces, the logo's indigo for focus, ember to act. */
 export const igniteenowTheme: DesktopTheme = {
   name: 'igniteenow',
   label: 'Ignitee',
-  description: 'Navy and indigo with an ember accent',
+  description: 'Clean white and graphite with an ember accent',
   colors: palette({
-    bg: '#FFF8F1',
-    fg: '#0A1030',
+    bg: '#FFFFFF',
+    fg: '#1C1C21',
     surface: '#FFFFFF',
-    raised: '#F6EADD',
-    dim: '#5C6088',
-    line: '#E3D5C5',
+    raised: '#F2F2F4',
+    dim: '#5F5F6B',
+    line: '#E4E4E8',
     primary: '#B5470F',
     onPrimary: '#FFFFFF',
     accent: '#B5470F',
     stroke: '#3F3E98',
     danger: '#B42332',
     onDanger: '#FFFFFF',
-    sidebar: '#FBF0E4',
-    bubbleLine: '#E2CDB5'
+    sidebar: '#F7F7F8',
+    bubbleLine: '#D9D9DE'
   }),
   darkColors: palette({
-    bg: '#0A1030',
-    fg: '#FFEFE0',
-    surface: '#0E1437',
-    popover: '#121945',
-    raised: '#1E255C',
-    dim: '#A9AECF',
-    line: '#2A2F73',
-    primary: '#EF8A22',
-    onPrimary: '#0A1030',
-    accent: '#EF8A22',
+    bg: '#141417',
+    fg: '#ECECF0',
+    surface: '#1C1C21',
+    popover: '#212127',
+    raised: '#2A2A32',
+    dim: '#A3A3AE',
+    line: '#2E2E36',
+    primary: '#F0932F',
+    onPrimary: '#1A1206',
+    accent: '#F5A64A',
     stroke: '#8E8CE0',
     danger: '#D52734',
     onDanger: '#FFFFFF',
-    sidebar: '#070B24',
-    bubbleLine: '#3F3E98'
+    sidebar: '#0F0F12',
+    bubbleLine: '#3E3E49'
   }),
   typography,
   terminal: terminal(
-    '#0A1030',
+    '#1C1C21',
     '#B5470F',
-    '#F6D9BC',
-    ['#0A1030', '#B42332', '#1E7A46', '#8F5400', '#3F3E98', '#8A2F8F', '#0F6F80', '#5C6088'],
-    ['#4B4F7A', '#D52734', '#2E8F58', '#B5470F', '#5856B8', '#A445A9', '#1B8A9E', '#23264A']
+    '#F3DCC3',
+    ['#1C1C21', '#B42332', '#1E7A46', '#8F5400', '#3F3E98', '#8A2F8F', '#0F6F80', '#5F5F6B'],
+    ['#4B4F7A', '#D52734', '#2E8F58', '#B5470F', '#5856B8', '#A445A9', '#1B8A9E', '#2A2A32']
   ),
   darkTerminal: terminal(
-    '#FFEFE0',
-    '#EF8A22',
-    '#2A2C73',
-    ['#1E255C', '#F0626E', '#3FBF7F', '#F2B441', '#8E8CE0', '#D58CE0', '#5CC8D6', '#E6E3F5'],
-    ['#7C82AD', '#FF8A93', '#6FD9A0', '#F5A13A', '#A3A1EC', '#E6A8EE', '#86DDE8', '#FFEFE0']
+    '#ECECF0',
+    '#F0932F',
+    '#33335C',
+    ['#2A2A32', '#F0626E', '#3FBF7F', '#F2B441', '#8E8CE0', '#D58CE0', '#5CC8D6', '#E6E3F5'],
+    ['#8A8A99', '#FF8A93', '#6FD9A0', '#F5A13A', '#A3A1EC', '#E6A8EE', '#86DDE8', '#ECECF0']
   )
 }
 

@@ -66,6 +66,7 @@ logger = logging.getLogger(__name__)
 # placeholders so tests can patch them (patch.object requires the attribute
 # to exist on the module).
 import importlib.util as _importlib_util
+from robo_cli.docs_links import docs_url
 
 _OAUTH_AVAILABLE = _importlib_util.find_spec("mcp") is not None
 if not _OAUTH_AVAILABLE:
@@ -772,7 +773,7 @@ def _make_redirect_handler(port: int, redirect_uri: str | None = None):
                 f"         ssh -N -L {port}:127.0.0.1:{port} <user>@<this-host>\n"
                 f"       then open the URL above and let it redirect normally.\n"
                 f"\n"
-                f"  See: website/docs/guides/oauth-over-ssh.md\n",
+                f"  See: {docs_url('guides/oauth-over-ssh.md')}\n",
                 file=sys.stderr,
             )
 

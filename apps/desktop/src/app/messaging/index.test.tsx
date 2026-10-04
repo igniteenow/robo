@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MessagingPlatformInfo } from '@/types/robo'
+
+import type * as MessagingModule from './index'
 
 const getMessagingPlatforms = vi.fn()
 const updateMessagingPlatform = vi.fn()
@@ -48,6 +50,15 @@ function platform(patch: Partial<MessagingPlatformInfo> = {}): MessagingPlatform
   }
 }
 
+// The view pulls in most of the settings tree. Import it once, up front, so
+// the first test does not pay the whole transform + import cost against its
+// own 15 s budget (it timed out on a slower laptop).
+let MessagingView: typeof MessagingModule.MessagingView
+
+beforeAll(async () => {
+  ;({ MessagingView } = await import('./index'))
+}, 120_000)
+
 beforeEach(() => {
   updateMessagingPlatform.mockResolvedValue({ ok: true, platform: 'teams' })
   getPairing.mockResolvedValue({ approved: [], pending: [] })
@@ -59,7 +70,6 @@ afterEach(() => {
 })
 
 async function renderMessaging() {
-  const { MessagingView } = await import('./index')
   let result: ReturnType<typeof render>
   await act(async () => {
     result = render(
@@ -87,7 +97,10 @@ describe('MessagingView setup-guide link', () => {
   })
 
   it('opens a real docs URL through the validated external opener', async () => {
-    const docsUrl = 'website/docs/user-guide/messaging/teams.md'
+    // The backend hands out the page on GitHub. A bare repository path
+    // ("website/docs/...") is not a URL: the main process drops it and the
+    // button does nothing.
+    const docsUrl = 'https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/messaging/teams.md'
     getMessagingPlatforms.mockResolvedValue({ platforms: [platform({ docs_url: docsUrl })] })
 
     await renderMessaging()

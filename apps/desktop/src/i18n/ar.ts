@@ -1263,13 +1263,13 @@ export const ar = defineLocale({
         help: 'موصى به. معرّفات مستخدمين مفصولة بفواصل بصيغة @user:server.'
       },
       SIGNAL_HTTP_URL: {
-        label: 'رابط جسر Signal',
+        label: 'عنوان خادم Signal',
         placeholder: 'http://127.0.0.1:8080',
-        help: 'رابط جسر signal-cli REST قيد التشغيل.'
+        help: 'عنوان خدمة signal-cli العاملة في وضع HTTP.'
       },
       SIGNAL_ACCOUNT: {
         label: 'رقم الهاتف',
-        help: 'الرقم المسجّل مع جسر signal-cli الخاص بك.'
+        help: 'الرقم المسجّل في خدمة signal-cli الخاصة بك.'
       },
       SIGNAL_ALLOWED_USERS: {
         label: 'مستخدمو Signal المسموح بهم',

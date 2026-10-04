@@ -234,6 +234,8 @@ def test_launch_tui_exports_model_provider_and_toolsets(monkeypatch, main_mod):
         return 1
 
     monkeypatch.setattr(main_mod.subprocess, "call", fake_call)
+    # The launcher leaves through os._exit (see _end_tui_launcher).
+    monkeypatch.setattr(main_mod.os, "_exit", _raise_exit)
 
     with pytest.raises(SystemExit):
         main_mod._launch_tui(

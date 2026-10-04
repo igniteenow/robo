@@ -172,6 +172,8 @@ export interface SessionInfo {
   model: string
   profile_name?: string
   project?: null | ProjectInfo
+  /** The provider the session runs on, as the gateway resolved it. */
+  provider?: string
   reasoning_effort?: string
   release_date?: string
   service_tier?: string

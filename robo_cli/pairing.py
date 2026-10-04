@@ -8,6 +8,8 @@ Usage:
     robo pairing clear-pending     # Clear all expired/pending codes
 """
 
+import sys
+
 def pairing_command(args):
     """Handle robo pairing subcommands."""
     from gateway.pairing import PairingStore
@@ -18,9 +20,11 @@ def pairing_command(args):
     if action == "list":
         _cmd_list(store)
     elif action == "approve":
-        _cmd_approve(store, args.platform, args.code)
+        if _cmd_approve(store, args.platform, args.code) is False:
+            sys.exit(1)
     elif action == "revoke":
-        _cmd_revoke(store, args.platform, args.user_id)
+        if _cmd_revoke(store, args.platform, args.user_id) is False:
+            sys.exit(1)
     elif action == "clear-pending":
         _cmd_clear_pending(store)
     else:
@@ -78,6 +82,7 @@ def _cmd_approve(store, platform: str, code: str):
         display = f"{name} ({uid})" if name else uid
         print(f"\n  Approved! User {display} on {platform} can now use the bot~")
         print("  They'll be recognized automatically on their next message.\n")
+        return True
     elif store._is_locked_out(platform):
         # Disambiguate: approve_code returns None for both invalid codes
         # and lockout. Tell the operator it's lockout so they don't chase
@@ -99,6 +104,7 @@ def _cmd_approve(store, platform: str, code: str):
     else:
         print(f"\n  Pairing request or code '{code}' not found or expired for platform '{platform}'.")
         print("  Run 'robo pairing list' to see pending requests.\n")
+    return False
 
 
 def _cmd_revoke(store, platform: str, user_id: str):
@@ -107,8 +113,9 @@ def _cmd_revoke(store, platform: str, user_id: str):
 
     if store.revoke(platform, user_id):
         print(f"\n  Revoked access for user {user_id} on {platform}.\n")
-    else:
-        print(f"\n  User {user_id} not found in approved list for {platform}.\n")
+        return True
+    print(f"\n  User {user_id} not found in approved list for {platform}.\n")
+    return False
 
 
 def _cmd_clear_pending(store):

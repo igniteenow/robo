@@ -11,9 +11,9 @@ metadata:
   robo:
     tags: [Teams, Microsoft Graph, Meetings, Productivity, Operations]
     related_docs:
-      - /docs/guides/microsoft-graph-app-registration
-      - /docs/user-guide/messaging/teams-meetings
-      - /docs/guides/operate-teams-meeting-pipeline
+      - https://github.com/igniteenow/robo/blob/main/website/docs/guides/microsoft-graph-app-registration.md
+      - https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/messaging/teams-meetings.md
+      - https://github.com/igniteenow/robo/blob/main/website/docs/guides/operate-teams-meeting-pipeline.md
 ---
 
 # Teams Meeting Pipeline
@@ -47,7 +47,7 @@ MSGRAPH_CLIENT_ID=...
 MSGRAPH_CLIENT_SECRET=...
 ```
 
-If any are missing, direct the user to the Azure app registration guide at `/docs/guides/microsoft-graph-app-registration` — they need an Azure AD app registration with admin-consented Graph application permissions before the pipeline will work.
+If any are missing, direct the user to the Azure app registration guide at https://github.com/igniteenow/robo/blob/main/website/docs/guides/microsoft-graph-app-registration.md — they need an Azure AD app registration with admin-consented Graph application permissions before the pipeline will work.
 
 ## Command reference
 
@@ -99,7 +99,7 @@ Microsoft Graph caps webhook subscriptions at 72 hours and **will not auto-renew
 When the user reports "the pipeline worked yesterday but nothing is arriving today":
 1. Run `robo teams-pipeline subscriptions` — if it's empty or all entries show `expirationDateTime` in the past, that's the cause.
 2. Recreate with `subscribe` as shown above.
-3. **Set up automated renewal immediately** via `robo cron add`, a systemd timer, or plain crontab. The operator runbook at `/docs/guides/operate-teams-meeting-pipeline#automating-subscription-renewal-required-for-production` has all three options. 12-hour interval is safe (6x headroom against the 72h limit).
+3. **Set up automated renewal immediately** via `robo cron add`, a systemd timer, or plain crontab. The operator runbook at https://github.com/igniteenow/robo/blob/main/website/docs/guides/operate-teams-meeting-pipeline.md#automating-subscription-renewal-required-for-production has all three options. 12-hour interval is safe (6x headroom against the 72h limit).
 
 ## Other pitfalls
 
@@ -110,7 +110,7 @@ When the user reports "the pipeline worked yesterday but nothing is arriving tod
 ## Related docs
 
 Point the user to these when they need more depth than this skill covers:
-- Azure app registration walkthrough: `/docs/guides/microsoft-graph-app-registration`
-- Full pipeline setup: `/docs/user-guide/messaging/teams-meetings`
-- Operator runbook (renewal automation, troubleshooting, go-live checklist): `/docs/guides/operate-teams-meeting-pipeline`
-- Webhook listener setup: `/docs/user-guide/messaging/msgraph-webhook`
+- Azure app registration walkthrough: https://github.com/igniteenow/robo/blob/main/website/docs/guides/microsoft-graph-app-registration.md
+- Full pipeline setup: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/messaging/teams-meetings.md
+- Operator runbook (renewal automation, troubleshooting, go-live checklist): https://github.com/igniteenow/robo/blob/main/website/docs/guides/operate-teams-meeting-pipeline.md
+- Webhook listener setup: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/messaging/msgraph-webhook.md

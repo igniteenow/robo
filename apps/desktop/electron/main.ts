@@ -133,8 +133,21 @@ import {
   resolveTimeoutMs,
   TEXT_PREVIEW_SOURCE_MAX_BYTES
 } from './hardening'
+import {
+  isUnpackedBuild,
+  LAUNCHER_NAME,
+  type LauncherState,
+  LINUX_ENTRY_FILE,
+  linuxMenuEntryPath,
+  MAC_LAUNCHER_MARKER,
+  macLauncherScript,
+  parseLauncherState,
+  planLinuxDesktopIcon,
+  planMacLauncher,
+  planWindowsLaunchers
+} from './launcher-shortcuts'
 import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle } from './link-title-window'
-import { ensureMainWindow } from './main-window-lifecycle'
+import { armWindowShowFallback, ensureMainWindow } from './main-window-lifecycle'
 import {
   oauthGuardMayHardFail,
   oauthSessionIsLive,
@@ -234,6 +247,7 @@ import {
   MIN_WIDTH as WINDOW_MIN_WIDTH
 } from './window-state'
 import {
+  isElectronBinary,
   planWindowsAppIdentity,
   shortcutMatches,
   windowsAppUserModelId,
@@ -1059,6 +1073,236 @@ function ensureWindowsSourceShortcut() {
     rememberLog(`[icon] ${outcome} Start Menu shortcut ${plan.path} (icon ${plan.options.icon})`)
   } catch (error) {
     rememberLog(`[icon] Start Menu shortcut skipped: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+// ─── Launcher presence (Start menu / desktop / Applications) ────────────────
+// `robo desktop` runs the app straight from the build folder, so without this
+// nothing put Robo where people look for apps. Planning (and every rule about
+// what we may touch) lives in launcher-shortcuts.ts; this is the I/O. Runs a
+// few seconds after the window opens, best-effort: a failure is logged and
+// costs only the shortcut.
+const LAUNCHER_STATE_FILE = 'launcher-shortcuts.json'
+
+function launcherStatePath() {
+  return path.join(app.getPath('userData'), LAUNCHER_STATE_FILE)
+}
+
+function readLauncherState(): LauncherState {
+  try {
+    return parseLauncherState(fs.readFileSync(launcherStatePath(), 'utf8'))
+  } catch {
+    return {}
+  }
+}
+
+function writeLauncherState(state: LauncherState) {
+  try {
+    fs.writeFileSync(launcherStatePath(), JSON.stringify(state))
+  } catch (error) {
+    rememberLog(`[launcher] could not save state: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function userDesktopDir(): null | string {
+  try {
+    const dir = app.getPath('desktop')
+
+    // Some minimal Linux setups point the XDG desktop at $HOME itself.
+    return dir && path.resolve(dir) !== path.resolve(os.homedir()) ? dir : null
+  } catch {
+    return null
+  }
+}
+
+function isDirectory(dir: null | string) {
+  try {
+    return Boolean(dir) && fs.statSync(dir).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function ensureWindowsLaunchers() {
+  const icon = getAppIconPath()
+
+  const plans = planWindowsLaunchers({
+    desktopDir: userDesktopDir(),
+    execPath: process.execPath,
+    fileExists: filePath => fs.existsSync(filePath),
+    iconPath: icon && /\.ico$/i.test(icon) ? icon : null,
+    packaged: app.isPackaged,
+    programsDir: windowsStartMenuProgramsDir(process.env),
+    readShortcutTarget: linkPath => {
+      try {
+        return shell.readShortcutLink(linkPath).target || null
+      } catch {
+        return null
+      }
+    }
+  })
+
+  for (const plan of plans) {
+    fs.mkdirSync(path.dirname(plan.path), { recursive: true })
+    const written = shell.writeShortcutLink(plan.path, plan.operation, plan.options)
+    rememberLog(`[launcher] ${written ? 'wrote' : 'could not write'} ${plan.path} -> ${plan.options.target}`)
+  }
+}
+
+function ensureLinuxDesktopIcon() {
+  if (!app.isPackaged || isElectronBinary(process.execPath) || !isUnpackedBuild(process.execPath, 'linux')) {
+    return
+  }
+
+  const state = readLauncherState()
+  const desktopDir = userDesktopDir()
+  const desktopEntryExists = Boolean(desktopDir) && fs.existsSync(path.join(desktopDir, LINUX_ENTRY_FILE))
+  let menuEntry = null
+
+  try {
+    menuEntry = fs.readFileSync(linuxMenuEntryPath(process.env, os.homedir()), 'utf8')
+  } catch {
+    menuEntry = null
+  }
+
+  const plan = planLinuxDesktopIcon({
+    desktopDir,
+    desktopDirExists: isDirectory(desktopDir),
+    desktopEntryExists,
+    menuEntry,
+    offered: state.linuxDesktopIconOffered === true
+  })
+
+  if (!plan) {
+    if (desktopEntryExists && !state.linuxDesktopIconOffered) {
+      writeLauncherState({ ...state, linuxDesktopIconOffered: true })
+    }
+
+    return
+  }
+
+  fs.writeFileSync(plan.path, plan.contents, { encoding: 'utf8', mode: 0o755 })
+  fs.chmodSync(plan.path, 0o755)
+  writeLauncherState({ ...state, linuxDesktopIconOffered: true })
+  rememberLog(`[launcher] added desktop icon ${plan.path}`)
+
+  // GNOME (Desktop Icons NG) and Xfce ask before running a launcher nobody
+  // marked trusted. Mark ours where `gio` exists; elsewhere the user can
+  // right-click → Allow Launching once. Both calls are harmless no-ops on
+  // desktops that don't read these keys.
+  const checksum = crypto.createHash('sha256').update(plan.contents).digest('hex')
+
+  for (const args of [
+    ['set', plan.path, 'metadata::trusted', 'true'],
+    ['set', plan.path, 'metadata::xfce-exe-checksum', checksum]
+  ]) {
+    execFile('gio', args, { timeout: 5000 }, () => undefined)
+  }
+}
+
+function ensureMacLauncher() {
+  const state = readLauncherState()
+
+  const plan = planMacLauncher({
+    execPath: process.execPath,
+    exists: filePath => fs.existsSync(filePath),
+    homeDir: os.homedir(),
+    packaged: app.isPackaged,
+    readMarker: bundlePath => {
+      try {
+        return fs.readFileSync(path.join(bundlePath, MAC_LAUNCHER_MARKER), 'utf8')
+      } catch {
+        return null
+      }
+    }
+  })
+
+  // A launcher that failed to build for this exact app is not retried on every
+  // start; it is retried once the app lives somewhere else.
+  if (!plan || state.macLauncherFailedFor === plan.targetBundle) {
+    return
+  }
+
+  void buildMacLauncher(plan).then(
+    () => {
+      rememberLog(`[launcher] added ${plan.launcherPath} -> ${plan.targetBundle}`)
+
+      if (state.macLauncherFailedFor) {
+        writeLauncherState({ ...state, macLauncherFailedFor: undefined })
+      }
+    },
+    error => {
+      rememberLog(`[launcher] Applications entry skipped: ${error instanceof Error ? error.message : String(error)}`)
+      writeLauncherState({ ...state, macLauncherFailedFor: plan.targetBundle })
+    }
+  )
+}
+
+/** Build the launcher in a scratch folder and move it into place only once it
+ *  is complete and validly signed, so ~/Applications never holds a broken one.
+ *  Every step is async: nothing here blocks the main process. */
+async function buildMacLauncher(plan: { launcherPath: string; replace: boolean; targetBundle: string }) {
+  const run = (file: string, args: string[]) =>
+    new Promise<void>((resolve, reject) => {
+      execFile(file, args, { timeout: 30_000 }, error => (error ? reject(error) : resolve()))
+    })
+
+  const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'robo-launcher-'))
+  const built = path.join(staging, `${LAUNCHER_NAME}.app`)
+
+  try {
+    await run('/usr/bin/osacompile', ['-o', built, '-e', macLauncherScript(plan.targetBundle)])
+
+    const resources = path.join(built, 'Contents', 'Resources')
+    const icon = path.join(plan.targetBundle, 'Contents', 'Resources', 'icon.icns')
+
+    // Robo's icon instead of the script-applet one (the asset catalog would
+    // otherwise win over applet.icns on recent macOS).
+    if (fs.existsSync(icon)) {
+      await fs.promises.copyFile(icon, path.join(resources, 'applet.icns'))
+      await fs.promises.rm(path.join(resources, 'Assets.car'), { force: true })
+      // Older applets have no CFBundleIconName; nothing to delete then.
+      await run('/usr/libexec/PlistBuddy', [
+        '-c',
+        'Delete :CFBundleIconName',
+        path.join(built, 'Contents', 'Info.plist')
+      ]).catch(() => undefined)
+    }
+
+    await fs.promises.writeFile(path.join(built, MAC_LAUNCHER_MARKER), plan.targetBundle)
+    // The edits above break the applet's ad-hoc seal; re-seal and verify, so
+    // Apple silicon will run it.
+    await run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', built])
+    await run('/usr/bin/codesign', ['--verify', '--deep', built])
+
+    await fs.promises.mkdir(path.dirname(plan.launcherPath), { recursive: true })
+
+    if (plan.replace) {
+      await fs.promises.rm(plan.launcherPath, { force: true, recursive: true })
+    }
+
+    await run('/usr/bin/ditto', [built, plan.launcherPath])
+  } finally {
+    await fs.promises.rm(staging, { force: true, recursive: true }).catch(() => undefined)
+  }
+}
+
+function ensureLauncherShortcuts() {
+  // Playwright runs (see createWindow) must not touch the runner's menus.
+  if (process.env.TEST_WORKER_INDEX !== undefined) {
+    return
+  }
+
+  try {
+    if (IS_WINDOWS) {
+      ensureWindowsLaunchers()
+    } else if (IS_MAC) {
+      ensureMacLauncher()
+    } else if (process.platform === 'linux') {
+      ensureLinuxDesktopIcon()
+    }
+  } catch (error) {
+    rememberLog(`[launcher] skipped: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -8700,6 +8944,42 @@ function wireCommonWindowHandlers(win, { zoom = true }: { zoom?: boolean } = {})
 // builder live in session-windows.ts so they stay unit-testable.
 const sessionWindows = createSessionWindowRegistry()
 
+// How long a `show: false` window may wait for its first frame before it is
+// shown anyway. Linux is short because that is where `ready-to-show` has been
+// seen to never arrive; elsewhere this is only a distant safety net.
+const WINDOW_SHOW_GRACE_MS = process.platform === 'linux' ? 3000 : 8000
+// On Linux a loaded page is reason enough to show the window: give
+// `ready-to-show` this long after the load, then stop waiting for it. (macOS
+// keeps waiting for the themed first frame — see createWindow.)
+const WINDOW_SHOW_AFTER_LOAD_MS = 250
+
+// Never leave a running app without a window: if `ready-to-show` hasn't shown
+// `win`, show it anyway once its page has loaded (Linux) or the grace period
+// runs out. Disarmed as soon as the window is shown or closed, so a window
+// hidden on purpose stays hidden.
+function showWindowAfterGrace(win, label) {
+  const fallback = armWindowShowFallback({
+    delayMs: WINDOW_SHOW_GRACE_MS,
+    isDestroyed: () => win.isDestroyed(),
+    isVisible: () => win.isVisible(),
+    onFallback: reason => {
+      const waited = reason === 'loaded' ? 'once its page had loaded' : `after ${WINDOW_SHOW_GRACE_MS}ms`
+
+      rememberLog(`[window] ${label} window had no first frame ${waited}; showing it anyway`)
+    },
+    show: () => win.show()
+  })
+
+  win.once('show', fallback.cancel)
+  win.once('closed', fallback.cancel)
+
+  if (process.platform === 'linux') {
+    win.webContents.once('did-finish-load', () => {
+      setTimeout(() => fallback.showNow('loaded'), WINDOW_SHOW_AFTER_LOAD_MS)
+    })
+  }
+}
+
 function focusWindow(win) {
   if (!win || win.isDestroyed()) {
     return
@@ -8751,6 +9031,8 @@ function spawnSecondaryWindow({ sessionId, watch }: { sessionId?: string; watch?
       win.show()
     }
   })
+
+  showWindowAfterGrace(win, 'session')
 
   win.on('enter-full-screen', () => sendWindowStateChanged(true))
   win.on('leave-full-screen', () => sendWindowStateChanged(false))
@@ -8833,6 +9115,8 @@ function createInstanceWindow() {
       win.show()
     }
   })
+
+  showWindowAfterGrace(win, 'instance')
 
   // Per-window fullscreen chrome: send this window its own titlebar inset so its
   // traffic lights hide/show independently of the primary.
@@ -9287,6 +9571,8 @@ function createWindow() {
   if (savedWindowState?.isMaximized) {
     mainWindow.maximize()
   }
+
+  showWindowAfterGrace(mainWindow, 'main')
 
   mainWindow.once('ready-to-show', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -11835,6 +12121,9 @@ app.whenReady().then(() => {
   }
 
   createWindow()
+
+  // Start menu / desktop / Applications presence, off the startup path.
+  setTimeout(ensureLauncherShortcuts, 4000)
 
   // Win/Linux cold start: the launching robo:// URL is in our own argv.
   const _coldStartLink = _extractDeepLink(process.argv)

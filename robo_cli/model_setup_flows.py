@@ -579,13 +579,16 @@ def _model_flow_qwen_oauth(_config, current_model=""):
 
     status = get_qwen_auth_status()
     if not status.get("logged_in"):
-        print("Not logged into Qwen CLI OAuth.")
-        print("Run: qwen auth qwen-oauth")
-        auth_file = status.get("auth_file")
-        if auth_file:
-            print(f"Expected credentials file: {auth_file}")
-        if status.get("error"):
-            print(f"Error: {status.get('error')}")
+        # Qwen discontinued this sign-in, so there is no command to send the
+        # user to; the error already says what to pick instead.
+        from robo_cli.auth import QWEN_OAUTH_ENDED_HINT
+
+        print("No working Qwen OAuth login on this computer.")
+        error = str(status.get("error") or "")
+        if error:
+            print(f"Error: {error}")
+        if QWEN_OAUTH_ENDED_HINT not in error:
+            print(QWEN_OAUTH_ENDED_HINT)
         return
 
     # Try live model discovery, fall back to curated list.

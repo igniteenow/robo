@@ -27,15 +27,32 @@ def _skins_dir() -> Path:
 def _active_skin() -> str:
     from robo_cli.config import load_config
 
-    display = (load_config() or {}).get("display") or {}
+    display = (load_config() or {}).get("display")
+    if not isinstance(display, dict):
+        display = {}
     return str(display.get("skin") or "default")
 
 
-def _use(name: str) -> None:
-    """Activate a skin (persists display.skin via the shared config writer)."""
+def _known_skin_names() -> list[str]:
+    from robo_cli.skin_engine import SKIN_ALIASES, list_skins
+
+    names = [s["name"] for s in list_skins()]
+    return names + [alias for alias in SKIN_ALIASES if alias]
+
+
+def _use(name: str) -> int:
+    """Activate a skin (persists display.skin via the shared config writer).
+
+    An unknown name is refused: saving it would silently fall back to the
+    brand skin at startup while the config claims otherwise."""
     from robo_cli.config import config_command
 
+    known = _known_skin_names()
+    if name not in known:
+        print(f"✗ no skin named {name!r}. Available: {', '.join(sorted(set(known)))}", file=sys.stderr)
+        return 1
     config_command(argparse.Namespace(config_command="set", key="display.skin", value=name, force=True))
+    return 0
 
 
 def _skin_set(key: str, value: str, skin: str | None) -> int:
@@ -102,7 +119,9 @@ def skin_command(args) -> None:
     if verb == "set":
         sys.exit(_skin_set(args.key, args.value, getattr(args, "skin", None)))
     elif verb == "use":
-        _use(args.name)
+        rc = _use(args.name)
+        if rc:
+            sys.exit(rc)
         print(f"✓ active skin → {args.name} (live within ~1s)")
     else:  # list / default
         sys.exit(_skin_list())

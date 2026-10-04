@@ -63,7 +63,16 @@ def masked_secret_prompt(prompt: str, *, mask: str = "*") -> str:
     stdout = sys.stdout
 
     if not _stream_is_tty(stdin) or not _stream_is_tty(stdout):
-        return getpass.getpass(prompt)
+        # No terminal to read from (a pipe, a script, CI): getpass would
+        # raise EOFError once the pipe is empty. Ask once; if nothing comes,
+        # tell the caller instead of crashing.
+        try:
+            return getpass.getpass(prompt)
+        except EOFError:
+            raise SystemExit(
+                "\nNo terminal to read the secret from. Run this in a terminal, "
+                "or pass the value on the command line (for example --api-key)."
+            ) from None
 
     if os.name == "nt":
         try:

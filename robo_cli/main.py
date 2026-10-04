@@ -98,6 +98,8 @@ try:
 except Exception:
     pass
 
+from robo_cli.docs_links import docs_url  # noqa: E402
+
 
 def _exit_after_oneshot(rc: object) -> None:
     """Exit one-shot mode without letting late native finalizers change rc.
@@ -1512,6 +1514,31 @@ def _resolve_session_by_name_or_id(name_or_id: str) -> Optional[str]:
     return None
 
 
+def _exit_quietly_on_sigint(_signum=None, _frame=None) -> None:
+    """SIGINT handler for interpreter shutdown: leave now, without a traceback."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    os._exit(130)
+
+
+def _quiet_sigint_at_exit() -> None:
+    """atexit hook: from here on, Ctrl+C ends the process quietly.
+
+    The command has finished and only shutdown work is left. Ctrl+C still
+    works (a shutdown step that hangs can be cut short), it just no longer
+    raises ``KeyboardInterrupt`` into whatever is being closed.
+    """
+    try:
+        import signal
+
+        signal.signal(signal.SIGINT, _exit_quietly_on_sigint)
+    except Exception:
+        pass
+
+
 def _read_tui_active_session_file(path: Optional[str]) -> Optional[str]:
     if not path:
         return None
@@ -1581,6 +1608,51 @@ def _print_tui_exit_summary(
         f"{total_tokens} (in {input_tokens}, out {output_tokens}, "
         f"cache {cache_read_tokens + cache_write_tokens}, reasoning {reasoning_tokens})"
     )
+
+
+def _print_tui_goodbye() -> None:
+    """One farewell line after the terminal app closes, in the active skin's
+    words (the classic CLI says the same on its way out)."""
+    goodbye = "Robo standing by."
+    try:
+        from robo_cli.config import load_config
+        from robo_cli.skin_engine import get_active_goodbye, init_skin_from_config
+
+        init_skin_from_config(load_config())
+        goodbye = get_active_goodbye(goodbye)
+    except Exception:
+        pass
+    print()
+    print(f"{goodbye} Thank you for using Ignitee Now.")
+
+
+def _end_tui_launcher(code: int, restore_ctrl_c) -> None:
+    """End the ``robo`` command right now, Ctrl+C still switched off.
+
+    A normal exit hands Ctrl+C back first and then spends the interpreter's
+    shutdown (exit hooks, thread joins, module teardown) with it on. A press
+    in that stretch no longer hurts Python, but on Windows the console still
+    turns it into an interrupt for the ``robo.cmd`` launcher, and cmd.exe then
+    asks "Terminate batch job (Y/N)?" once we are gone. So: flush, close the
+    log files, hand Ctrl+C back as the very last step, and leave at once —
+    the same hard exit ``_exit_after_oneshot`` uses, for the same reason that
+    nothing of value happens in this process's teardown (the app that did the
+    work has already exited).
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    try:
+        logging.shutdown()
+    except Exception:
+        pass
+    try:
+        restore_ctrl_c()
+    except Exception:
+        pass
+    os._exit(code)
 
 
 _NPM_LOCK_RUNTIME_KEYS = frozenset({"ideallyInert", "peer"})
@@ -2449,14 +2521,28 @@ def _launch_tui(
 
     argv, cwd = _make_tui_argv(tui_dir, tui_dev)
     code: Optional[int] = None
+    restore_ctrl_c = None
     try:
         try:
             code = subprocess.call(argv, cwd=str(cwd), env=env)
         except KeyboardInterrupt:
             code = 130
 
+        # The terminal app is gone. People press Ctrl+C two or three times to
+        # quit, and the extra presses land here, while the goodbye is printed
+        # and the session files are tidied. There is nothing left for them to
+        # interrupt, so they must not turn the exit into a traceback.
+        from robo_cli.ctrl_c import ignore_ctrl_c
+
+        restore_ctrl_c = ignore_ctrl_c()
+
         if code in {0, 130}:
             _print_tui_exit_summary(resume_session_id, active_session_file)
+            _print_tui_goodbye()
+    except BaseException:
+        if restore_ctrl_c is not None:
+            restore_ctrl_c()
+        raise
     finally:
         try:
             os.unlink(active_session_file)
@@ -2473,14 +2559,28 @@ def _launch_tui(
     # preserve_inherited=False ensures --tui and other flags are NOT carried
     # into the update subcommand.
     if code == 42:
+        if restore_ctrl_c is not None:
+            # The update must stay interruptible...
+            restore_ctrl_c()
+            # ...and a press during the interpreter's own shutdown ends the
+            # process quietly instead of printing a traceback. Registered
+            # last, so it runs first when the process exits.
+            import atexit
+
+            atexit.register(_quiet_sigint_at_exit)
         from robo_cli.relaunch import relaunch
 
         print()
         print("Launching update...")
         print()
         relaunch(["update"], preserve_inherited=False, same_install=True)
+        sys.exit(code)
 
-    sys.exit(code)
+    if restore_ctrl_c is None:
+        sys.exit(code)
+    # Everything is printed and tidied. Leave with Ctrl+C switched off until
+    # the last instant: see _end_tui_launcher.
+    _end_tui_launcher(0 if code is None else code, restore_ctrl_c)
 
 
 def _pin_kanban_board_env() -> None:
@@ -4613,7 +4713,8 @@ def cmd_cron(args):
     """Cron job management."""
     from robo_cli.cron import cron_command
 
-    cron_command(args)
+    # A failed pause/resume/run/remove/create exits non-zero.
+    return cron_command(args)
 
 
 def cmd_sync(args):
@@ -4730,7 +4831,13 @@ def cmd_sync(args):
                 file=sys.stderr,
             )
         if not status.get("logged_in"):
-            print("\nNot logged in — sync is inert.", file=sys.stderr)
+            # There is no sign-in that would change this: the sync service
+            # Robo used to talk to is gone (tools/skills_sync_client.py).
+            print(
+                "\nSkill Sync is not available in this build — there is no "
+                "sync service to talk to, so sync is inert.",
+                file=sys.stderr,
+            )
         elif not status.get("admin_access"):
             print(
                 "\nSync is not enabled for your account yet.",
@@ -9884,6 +9991,11 @@ def cmd_profile(args):
 
         name = args.profile_name
         output = args.output or f"{name}.tar.gz"
+        if Path(output).suffix and not output.lower().endswith((".tar.gz", ".tgz")):
+            # The writer only produces gzip tarballs; silently appending
+            # .tar.gz to "x.zip" gave people a file their tools can't open.
+            print(f"Error: profile archives are .tar.gz files — use -o {Path(output).stem}.tar.gz")
+            sys.exit(1)
         try:
             result_path = export_profile(name, output)
             print(f"✓ Exported '{name}' to {result_path}")
@@ -10122,8 +10234,10 @@ def _render_distribution_plan(plan) -> None:
         )
 
 
-def _report_dashboard_status() -> int:
-    """Print live listening dashboard processes and return the count."""
+def _report_dashboard_status(mode: str = "dashboard") -> int:
+    """Print live listening ``dashboard`` (or ``serve``) processes and return
+    the count. ``robo serve --status`` asks about the headless backend; the
+    browser dashboard is a different process and must not be mistaken for it."""
     from gateway.status import _pid_exists
 
     live: list[tuple[int, str]] = []
@@ -10131,8 +10245,8 @@ def _report_dashboard_status() -> int:
         runtime = _parse_dashboard_runtime(command)
         if runtime is None:
             continue
-        mode, host, port = runtime
-        if mode != "dashboard":
+        found_mode, host, port = runtime
+        if found_mode != mode:
             continue
         if port <= 0 or not _pid_exists(pid):
             continue
@@ -10141,10 +10255,10 @@ def _report_dashboard_status() -> int:
         live.append((pid, command))
 
     if not live:
-        print("No robo dashboard processes running.")
+        print(f"No robo {mode} processes running.")
         return 0
 
-    print(f"{len(live)} robo dashboard process(es) running:")
+    print(f"{len(live)} robo {mode} process(es) running:")
     for pid, command in live:
         print(f"    PID {pid}: {command}")
     return len(live)
@@ -10458,16 +10572,18 @@ def cmd_dashboard(args):
     ):
         raise SystemExit("--ssh-session-token-file cannot be used with --status or --stop")
 
+    _mode = "serve" if getattr(args, "headless_backend", False) else "dashboard"
+
     # --status: report running dashboards and exit, no deps needed.
     if getattr(args, "status", False):
-        count = _report_dashboard_status()
-        sys.exit(0 if count == 0 else 0)  # status is informational, always 0
+        _report_dashboard_status(_mode)
+        sys.exit(0)  # status is informational, always 0
 
     # --stop: kill any running dashboards and exit, no deps needed.
     if getattr(args, "stop", False):
         pids = _find_stale_dashboard_pids()
         if not pids:
-            print("No robo dashboard processes running.")
+            print("No robo dashboard or serve processes running.")
             sys.exit(0)
         # Reuse the same SIGTERM-grace-SIGKILL path used after `robo update`.
         _kill_stale_dashboard_processes(reason="requested via --stop")
@@ -11377,13 +11493,16 @@ def cmd_tools(args):
     if action in {"list", "disable", "enable"}:
         from robo_cli.tools_config import tools_disable_enable_command
 
-        tools_disable_enable_command(args)
+        rc = tools_disable_enable_command(args)
+        if rc:
+            sys.exit(rc)
     elif action == "post-setup":
         from robo_cli.tools_config import run_post_setup_command
 
         sys.exit(run_post_setup_command(args))
     else:
-        _require_tty("tools")
+        if not getattr(args, "summary", False):
+            _require_tty("tools")
         from robo_cli.tools_config import tools_command
 
         tools_command(args)
@@ -11481,6 +11600,11 @@ def cmd_mcp(args):
 
 def main():
     """Main entry point for robo CLI."""
+    # ``robo help`` means ``robo --help``: people type it, and the word is
+    # already reserved as a built-in so it never reaches a plugin.
+    if sys.argv[1:2] == ["help"]:
+        sys.argv[1] = "--help"
+
     # Cosmetic: make the process show up as 'robo' instead of 'python3.11'
     # in ps/top/htop.  Non-fatal — just a nicer UX.
     _set_process_title()
@@ -11572,11 +11696,13 @@ def main():
     fallback_parser = subparsers.add_parser(
         "fallback",
         help="Manage fallback providers (tried when the primary model fails)",
+        # Raw: a wrapped URL is not a link any more.
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
-            "Manage the fallback provider chain.  Fallback providers are tried "
-            "in order when the primary model fails with rate-limit, overload, or "
-            "connection errors.  See: "
-            "website/docs/user-guide/features/fallback-providers.md"
+            "Manage the fallback provider chain.  Fallback providers are tried\n"
+            "in order when the primary model fails with rate-limit, overload, or\n"
+            "connection errors.\n"
+            f"Guide: {docs_url('user-guide/features/fallback-providers.md')}"
         ),
     )
     fallback_subparsers = fallback_parser.add_subparsers(dest="fallback_command")
@@ -11606,11 +11732,12 @@ def main():
     secrets_parser = subparsers.add_parser(
         "secrets",
         help="Manage external secret sources (Bitwarden, 1Password)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
-            "Pull API keys from an external secret manager at process startup "
-            "instead of storing them in ~/.robo/.env.  Supports Bitwarden "
-            "Secrets Manager and 1Password.  See: "
-            "website/docs/user-guide/secrets/index.md"
+            "Pull API keys from an external secret manager at process startup\n"
+            "instead of storing them in ~/.robo/.env.  Supports Bitwarden\n"
+            "Secrets Manager and 1Password.\n"
+            f"Guide: {docs_url('user-guide/secrets/index.md')}"
         ),
     )
     secrets_subparsers = secrets_parser.add_subparsers(dest="secrets_command")
@@ -11656,11 +11783,12 @@ def main():
     egress_parser = subparsers.add_parser(
         "egress",
         help="Manage the iron-proxy egress credential-injection firewall",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
-            "Manage iron-proxy, the optional TLS-intercepting egress firewall "
-            "that swaps proxy tokens for real API credentials before outbound "
-            "requests leave a sandbox.  Disabled by default.  See: "
-            "website/docs/user-guide/egress/iron-proxy.md"
+            "Manage iron-proxy, the optional TLS-intercepting egress firewall\n"
+            "that swaps proxy tokens for real API credentials before outbound\n"
+            "requests leave a sandbox.  Disabled by default.\n"
+            f"Guide: {docs_url('user-guide/egress/iron-proxy.md')}"
         ),
     )
 
