@@ -1,7 +1,7 @@
 # Configuration, Toolsets & Voice
 
 Edit with `robo config edit` or `robo config set section.key value`.
-Full reference: ../../../../website/docs/user-guide/configuration.md
+Full reference: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/configuration.md
 
 ### Config Sections (most-used keys)
 

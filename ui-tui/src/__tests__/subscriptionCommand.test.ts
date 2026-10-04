@@ -81,7 +81,19 @@ describe('/subscription slash command', () => {
     expect(overlay?.screen).toBe('overview')
   })
 
-  it('shows portal-login sys line when not logged in', async () => {
+  it('shows the gateway reason when not logged in, never a /portal hint', async () => {
+    const { run, sys } = buildCtx({
+      'subscription.state': loggedInState({ error: 'Ignitee Now billing is no longer available.', logged_in: false })
+    })
+
+    await run('')
+
+    expect(printed(sys)).toContain('Ignitee Now billing is no longer available.')
+    expect(printed(sys)).not.toContain('/portal')
+    expect(getOverlayState().subscription).toBeNull()
+  })
+
+  it('falls back to a plain line when the gateway gives no reason', async () => {
     const { run, sys } = buildCtx({
       'subscription.state': loggedInState({ logged_in: false })
     })
@@ -92,11 +104,8 @@ describe('/subscription slash command', () => {
     expect(getOverlayState().subscription).toBeNull()
   })
 
-  it('/upgrade alias resolves to the same command', () => {
-    expect(findSlashCommand('upgrade')).toBe(subscriptionCommand)
-  })
-
-  it('/subscription resolves to the same command', () => {
-    expect(findSlashCommand('subscription')).toBe(subscriptionCommand)
+  it('is not registered: Ignitee Now billing was removed', () => {
+    expect(findSlashCommand('subscription')).toBeUndefined()
+    expect(findSlashCommand('upgrade')).toBeUndefined()
   })
 })

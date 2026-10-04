@@ -23,7 +23,7 @@ Load this skill when you're working on:
 - Modifying `cont-init.d` boot scripts (UID remap, volume seeding, profile reconciliation)
 - Changing the rendered run-script for per-profile gateways (Phase 4)
 
-If you're just running the Robo Agent and want to use Docker, see `website/docs/user-guide/docker.md` instead.
+If you're just running the Robo Agent and want to use Docker, see [the Docker guide](https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/docker.md) instead.
 
 ## Architecture at a glance
 

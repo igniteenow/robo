@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { closeActiveTab } from '@/app/chat/close-tab'
 import { openSession } from '@/app/open-session'
 import { storedSessionIdForNotification } from '@/lib/session-ids'
+import { isFreshWindowLaunch } from '@/lib/window-launch'
 import { respondToApprovalAction } from '@/store/native-notifications'
 import { openFolderAsProject } from '@/store/projects'
 import {
@@ -12,6 +13,7 @@ import {
   setRememberedRoute,
   setRememberedSessionId
 } from '@/store/session'
+import { homeToWorkspace } from '@/store/session-states'
 import { onSessionsChanged } from '@/store/session-sync'
 import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '@/store/updates'
 import { isSecondaryWindow } from '@/store/windows'
@@ -87,9 +89,23 @@ export function useDesktopIntegrations({
     }
 
     if (!restoredRef.current) {
-      // Only cold-start navigation at the default route is replaceable; a deep
-      // link or hidden-then-shown window keeps its explicit destination.
-      if (locationPathname === NEW_CHAT_ROUTE) {
+      // A fresh launch (app start, new window) opens on a new chat: the
+      // previous chats stay one click away in the sidebar. Only a reload of
+      // this same window (⌘R, crash recovery, a runtime-profile switch) lands
+      // back where it was. The workspace tab is fronted too, so a restored tab
+      // stack can't put an old chat in front of the new one, and the previous
+      // run's chat is forgotten, so a ⌘R right after launch keeps the new chat.
+      // Read (and mark) the launch on every window's first boot, whatever its
+      // route, so a later reload of that window is never mistaken for a launch.
+      const freshLaunch = isFreshWindowLaunch()
+
+      if (locationPathname === NEW_CHAT_ROUTE && freshLaunch) {
+        restoredRef.current = true
+        setRememberedSessionId(null, activeProfile)
+        homeToWorkspace()
+      } else if (locationPathname === NEW_CHAT_ROUTE) {
+        // Only cold-start navigation at the default route is replaceable; a
+        // deep link or hidden-then-shown window keeps its explicit destination.
         const route = getRememberedRoute(activeProfile)
         const routeSession = route ? routeSessionId(route) : null
         const last = getRememberedSessionId(activeProfile)

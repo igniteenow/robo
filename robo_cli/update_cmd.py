@@ -38,6 +38,7 @@ from typing import Optional
 
 from robo_cli.config import get_robo_home
 from robo_constants import venv_python_path
+from robo_cli.docs_links import docs_url
 
 logger = logging.getLogger(__name__)
 
@@ -417,9 +418,7 @@ def _print_curator_first_run_notice() -> None:
     )
     print("  Preview now:  robo curator run --dry-run")
     print("  Pause it:     robo curator pause")
-    print(
-        "  Docs:         website/docs/user-guide/features/curator.md"
-    )
+    print(f"  Docs:         {docs_url('user-guide/features/curator.md')}")
 
 def _print_fts_optimize_available_notice() -> None:
     """Advertise the opt-in v23 search-index optimization after `robo update`.

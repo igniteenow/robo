@@ -2,7 +2,7 @@
 
 Four systems run alongside the main conversation loop. Quick reference
 here; full developer notes live in `AGENTS.md`, user-facing docs under
-`website/docs/user-guide/features/`.
+<https://github.com/igniteenow/robo/tree/main/website/docs/user-guide/features>.
 
 ### Delegation (`delegate_task`)
 
@@ -42,7 +42,7 @@ the `cronjob` tool, the `robo cron` CLI (`list`, `add`, `edit`,
   header/footer instead of being mirrored into the target gateway
   session (keeps role alternation intact).
 
-User docs: ../../../../website/docs/user-guide/features/cron.md
+User docs: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/features/cron.md
 
 ### Curator (skill lifecycle)
 
@@ -69,7 +69,7 @@ so nothing is lost.
 
 Config: `curator.*` (`enabled`, `interval_hours`, `min_idle_hours`,
 `stale_after_days`, `archive_after_days`, `backup.*`).
-User docs: ../../../../website/docs/user-guide/features/curator.md
+User docs: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/features/curator.md
 
 ### Kanban (multi-agent work queue)
 
@@ -98,4 +98,4 @@ sessions still have zero `kanban_*` schema footprint unless configured.
   `ROBO_KANBAN_BOARD` pinned in env); tenant is a soft namespace
   within a board for workspace-path + memory-key isolation.
 
-User docs: ../../../../website/docs/user-guide/features/kanban.md
+User docs: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/features/kanban.md

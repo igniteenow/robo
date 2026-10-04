@@ -87,6 +87,7 @@ from robo_cli.cli_output import (  # noqa: E402 — late import block
     print_warning as _print_warning,
     prompt as _prompt,
 )
+from robo_cli.docs_links import docs_url  # noqa: E402
 
 # ─── Toolset Registry ─────────────────────────────────────────────────────────
 
@@ -4865,7 +4866,7 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
     print(color("Robo Tool Configuration", Colors.CYAN, Colors.BOLD))
     print(color("  Enable or disable tools per platform.", Colors.DIM))
     print(color("  Tools that need API keys will be configured when enabled.", Colors.DIM))
-    print(color("  Guide: website/docs/user-guide/features/tools.md", Colors.DIM))
+    print(color(f"  Guide: {docs_url('user-guide/features/tools.md')}", Colors.DIM))
     print()
 
     # ── First-time install: linear flow, no platform menu ──
@@ -5378,12 +5379,12 @@ def tools_disable_enable_command(args):
 
     if platform not in PLATFORMS:
         _print_error(f"Unknown platform '{platform}'. Valid: {', '.join(PLATFORMS)}")
-        return
+        return 1
 
     if action == "list":
         _print_tools_list(_get_platform_tools(config, platform, include_default_mcp_servers=False),
                           config.get("mcp_servers") or {}, platform)
-        return
+        return 0
 
     targets: List[str] = args.names
     toolset_targets = [t for t in targets if ":" not in t]
@@ -5430,3 +5431,6 @@ def tools_disable_enable_command(args):
     if successful:
         verb = "Disabled" if action == "disable" else "Enabled"
         _print_success(f"{verb}: {', '.join(successful)}")
+    # Anything the user named that could not be applied is an error exit,
+    # even when other names in the same call succeeded.
+    return 1 if (unknown_toolsets or restricted_targets or failed_servers) else 0

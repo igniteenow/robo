@@ -716,6 +716,21 @@ def _interactive_strategy() -> None:
 
 
 def auth_command(args) -> None:
+    """Run a ``robo auth`` subcommand.
+
+    A sign-in that cannot complete (no credentials to reuse, an expired or
+    revoked login, a provider that turned the request down) is an expected
+    outcome, not a crash: print what went wrong and what to do, and exit 1,
+    instead of a Python traceback.
+    """
+    try:
+        _dispatch_auth_command(args)
+    except auth_mod.AuthError as exc:
+        print(f"✗ {auth_mod.format_auth_error(exc)}", file=sys.stderr)
+        raise SystemExit(1) from None
+
+
+def _dispatch_auth_command(args) -> None:
     action = getattr(args, "auth_action", "")
     if action == "add":
         auth_add_command(args)

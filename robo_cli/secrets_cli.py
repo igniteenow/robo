@@ -124,30 +124,12 @@ def cmd_setup(args: argparse.Namespace) -> int:
         Panel.fit(
             "[bold]Bitwarden Secrets Manager setup[/bold]\n\n"
             "Need an access token? In the Bitwarden web app:\n"
-            "  Secrets Manager → Machine accounts → [your account] →\n"
+            "  Secrets Manager → Machine accounts → \\[your account] →\n"
             "  Access tokens → Create access token\n\n"
             "Copy the token (starts with [cyan]0.[/cyan]…) — it cannot be retrieved later.",
             border_style="cyan",
         )
     )
-
-    # ------------------------------------------------------------------ binary
-    console.print()
-    console.print("[bold]Step 1[/bold]  Install the bws CLI")
-    try:
-        binary = bw.find_bws(install_if_missing=False)
-        if binary is None:
-            console.print("  No bws on PATH — downloading…")
-            binary = bw.install_bws()
-        version = _bws_version(binary)
-        console.print(f"  [green]✓[/green] {binary}  ({version})")
-    except Exception as exc:  # noqa: BLE001
-        console.print(f"  [red]✗ Could not install bws: {exc}[/red]")
-        console.print(
-            "  Manual install: "
-            "https://github.com/bitwarden/sdk-sm/releases"
-        )
-        return 1
 
     # -- non-interactive guard --
     if not sys.stdin.isatty():
@@ -171,6 +153,25 @@ def cmd_setup(args: argparse.Namespace) -> int:
                 "      --project-id 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'"
             )
             return 1
+
+    # ------------------------------------------------------------------ binary
+    console.print()
+    console.print("[bold]Step 1[/bold]  Install the bws CLI")
+    try:
+        binary = bw.find_bws(install_if_missing=False)
+        if binary is None:
+            console.print("  No bws on PATH — downloading…")
+            binary = bw.install_bws()
+        version = _bws_version(binary)
+        console.print(f"  [green]✓[/green] {binary}  ({version})")
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"  [red]✗ Could not install bws: {exc}[/red]")
+        console.print(
+            "  Manual install: "
+            "https://github.com/bitwarden/sdk-sm/releases"
+        )
+        return 1
+
 
     # ------------------------------------------------------------------- token
     console.print()

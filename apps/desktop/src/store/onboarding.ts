@@ -722,6 +722,15 @@ export async function copyExternalCommand() {
   await copyAndFlash(flow.provider.cli_command, f => f.status === 'external_pending' && f.provider.id === id)
 }
 
+/**
+ * The provider's notice, when its own sign-in can no longer be completed (it
+ * was discontinued, say). The sign-in dialog shows it instead of "run this
+ * command", so nobody is sent to a command that cannot succeed.
+ */
+export function externalSigninNotice(provider: Pick<OAuthProvider, 'notice'>): null | string {
+  return provider.notice?.trim() || null
+}
+
 export async function recheckExternalSignin(ctx: OnboardingContext) {
   const { flow } = $desktopOnboarding.get()
 
@@ -736,6 +745,7 @@ export async function recheckExternalSignin(ctx: OnboardingContext) {
       provider,
       message:
         reason?.trim() ||
+        externalSigninNotice(provider) ||
         `Robo still cannot reach ${provider.name}. Run \`${provider.cli_command}\` in a terminal first.`
     })
   )

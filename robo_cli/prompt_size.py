@@ -14,6 +14,7 @@ calls ``build_system_prompt_parts`` / inspects ``agent.tools`` offline.
 from __future__ import annotations
 
 import json
+import sys
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -244,6 +245,13 @@ def compute_prompt_breakdown(platform: str = "cli") -> Dict[str, Any]:
 
     agent = _build_inspection_agent(platform)
 
+    # The prompt is built twice below (parts, then the joined text). Any
+    # context-file truncation notice would be printed twice through the
+    # agent's status channel, straight into stdout, ahead of ``--json``
+    # output. Collect the notices instead; the caller prints them once.
+    notices: list = []
+    agent._emit_status = lambda message: notices.append(str(message))
+
     parts = build_system_prompt_parts(agent)
     full = build_system_prompt(agent)
 
@@ -293,6 +301,7 @@ def compute_prompt_breakdown(platform: str = "cli") -> Dict[str, Any]:
         "sections": sections,
         "skills_breakdown": _compute_skills_breakdown(skills_index),
         "toolsets_breakdown": _compute_toolsets_breakdown(tools),
+        "warnings": list(dict.fromkeys(notices)),
     }
 
 
@@ -369,6 +378,9 @@ def cmd_prompt_size(args: Any) -> None:
     except Exception as e:
         print(f"Could not compute prompt-size breakdown: {e}")
         return
+    # Notices go to stderr, once, so ``--json`` stdout stays parseable.
+    for warning in data.get("warnings", []):
+        print(warning, file=sys.stderr)
     if as_json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
     else:

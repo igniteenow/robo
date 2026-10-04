@@ -45,6 +45,17 @@ describe('desktop slash command curation', () => {
     expect(isDesktopSlashSuggestion('/curator')).toBe(false)
   })
 
+  it('hides the classic-terminal display toggles and the $EDITOR composer', () => {
+    // These only change the terminal status bar / transcript or open the
+    // user's $EDITOR; in the desktop they would run in the slash worker and
+    // change nothing the user can see.
+    for (const command of ['/battery', '/timestamps', '/ts', '/focus', '/prompt', '/compose']) {
+      expect(isDesktopSlashSuggestion(command)).toBe(false)
+      expect(isDesktopSlashCommand(command)).toBe(false)
+      expect(desktopSlashUnavailableMessage(command)).toContain('terminal interface')
+    }
+  })
+
   it('routes /compact to /compress (context compression), not the TUI display toggle', () => {
     expect(resolveDesktopCommand('/compact')?.name).toBe('/compress')
     expect(isDesktopSlashCommand('/compact')).toBe(true)

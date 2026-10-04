@@ -2836,7 +2836,10 @@ def _normalize_max_turns_config(config: Dict[str, Any]) -> Dict[str, Any]:
     it — that makes the default sticky and blocks future schema changes.
     """
     config = dict(config)
-    agent_config = dict(config.get("agent") or {})
+    raw_agent = config.get("agent")
+    # ``robo config set agent <scalar> --force`` can leave a string here; a
+    # non-mapping is treated as an empty section rather than a crash.
+    agent_config = dict(raw_agent) if isinstance(raw_agent, dict) else {}
 
     had_root = "max_turns" in config
     had_agent = "max_turns" in agent_config
@@ -4250,7 +4253,7 @@ def show_config():
 
     print()
     print(color("┌─────────────────────────────────────────────────────────┐", Colors.CYAN))
-    print(color("│              Robo Configuration                    │", Colors.CYAN))
+    print(color("│                    Robo Configuration                   │", Colors.CYAN))
     print(color("└─────────────────────────────────────────────────────────┘", Colors.CYAN))
 
     # Managed scope: surface that some settings are administrator-pinned so the
@@ -4497,7 +4500,15 @@ def edit_config():
         print("No editor found. Config file is at:")
         print(f"  {config_path}")
         return
-    
+
+    import sys as _sys
+    if not (_sys.stdin.isatty() and _sys.stdout.isatty()):
+        # A terminal editor started from a pipe or a script just dumps escape
+        # codes and dies ("Standard input is not a terminal").
+        print("No terminal to open an editor in. Config file is at:")
+        print(f"  {config_path}")
+        raise SystemExit(1)
+
     print(f"Opening {config_path} in {editor}...")
     subprocess.run([editor, str(config_path)])
 

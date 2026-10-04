@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Dict, List
+from robo_cli.docs_links import docs_url
 
 
 def hooks_command(args) -> None:
@@ -59,7 +60,7 @@ def _cmd_list(_args) -> None:
     if not specs and not outbound:
         print("No shell hooks or outbound webhooks configured in ~/.robo/config.yaml.")
         print("See `robo hooks --help` or")
-        print("    website/docs/user-guide/features/hooks.md")
+        print(f"    {docs_url('user-guide/features/hooks.md')}")
         print("for the config schema and worked examples.")
         return
 
@@ -327,7 +328,7 @@ def _cmd_revoke(args) -> None:
     removed = shell_hooks.revoke(args.command)
     if removed == 0:
         print(f"No allowlist entry found for command: {args.command}")
-        return
+        raise SystemExit(1)
     print(f"Removed {removed} allowlist entry/entries for: {args.command}")
     print(
         "Note: currently running CLI / gateway processes keep their "

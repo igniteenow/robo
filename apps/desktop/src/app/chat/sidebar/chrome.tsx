@@ -15,16 +15,16 @@ export function SidebarSectionMeta({ children }: { children: React.ReactNode }) 
 
 // ── Row geometry (session row is canonical — everything composes these) ─────
 //
-// Height lives ONLY on SidebarRowShell (min-h-[1.625rem]). Inset children
+// Height lives ONLY on SidebarRowShell (min-h-8). Inset children
 // stretch to fill the cell and center content internally — never items-center
 // on the shell grid, or short clusters (projects) float 1–2px off sessions.
 
-const rowMinH = 'min-h-[1.625rem]'
+const rowMinH = 'min-h-8'
 const rowPadX = 'pl-2 pr-1'
 const rowGap = 'gap-1.5'
 const rowLead = 'grid size-3.5 shrink-0 place-items-center'
 const rowInset = cn(rowPadX, rowGap, 'flex h-full min-w-0 items-center self-stretch py-0.5')
-const rowLabel = 'min-w-0 truncate text-[0.8125rem] leading-none text-(--ui-text-secondary)'
+const rowLabel = 'min-w-0 truncate text-[0.875rem] leading-none text-(--ui-text-secondary)'
 
 /** Codicon size in sidebar row leads — matches the file tree (`tree.tsx`). */
 export const SIDEBAR_LEAD_ICON_SIZE = '0.875rem' as const
@@ -46,8 +46,8 @@ export function SidebarRowNest({ className, ...props }: React.ComponentProps<'di
  */
 export function SidebarDateDivider({ className, label, ...props }: React.ComponentProps<'div'> & { label: string }) {
   return (
-    <div className={cn('flex select-none items-center gap-2 px-2 pb-0.5 pt-2', className)} {...props}>
-      <span className="shrink-0 text-[0.64rem] font-semibold uppercase tracking-[0.12em] text-(--ui-text-quaternary)">
+    <div className={cn('flex select-none items-center gap-2 px-2 pb-1 pt-3', className)} {...props}>
+      <span className="shrink-0 text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-(--ui-text-quaternary)">
         {label}
       </span>
       <span aria-hidden="true" className="h-px flex-1 bg-(--ui-stroke-tertiary)" />

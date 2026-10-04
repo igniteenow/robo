@@ -4,16 +4,15 @@ import { debugCommands } from './commands/debug.js'
 import { opsCommands } from './commands/ops.js'
 import { sessionCommands } from './commands/session.js'
 import { setupCommands } from './commands/setup.js'
-import { subscriptionCommands } from './commands/subscription.js'
-import { topupCommands } from './commands/topup.js'
 import { wakeCommands } from './commands/wake.js'
 import type { SlashCommand } from './types.js'
 
+// Ignitee Now billing was removed, so the /topup and /subscription commands
+// (commands/topup.ts, commands/subscription.ts) are no longer registered:
+// there is nothing for them to show or change.
 export const SLASH_COMMANDS: SlashCommand[] = [
   ...coreCommands,
-  ...topupCommands,
   ...sessionCommands,
-  ...subscriptionCommands,
   ...opsCommands,
   ...wakeCommands,
   ...attachCommands,

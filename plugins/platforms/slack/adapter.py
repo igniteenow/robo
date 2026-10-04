@@ -58,6 +58,7 @@ from gateway.platforms.base import (
     cache_document_from_bytes,
     cache_video_from_bytes,
 )
+from robo_cli.docs_links import docs_url
 
 try:  # sibling module; support both package and flat plugin-dir import
     from .block_kit import render_blocks, sanitize_blocks
@@ -8916,7 +8917,7 @@ def interactive_setup() -> None:
     print_info("   3. Install to Workspace: Settings → Install App")
     print_info("   4. After installing, invite the bot to channels: /invite @YourBot")
     print()
-    print_info("   Full guide: website/docs/user-guide/messaging/slack.md")
+    print_info(f"   Full guide: {docs_url('user-guide/messaging/slack.md')}")
     print()
 
     # Generate and write manifest up-front so the user can paste it into

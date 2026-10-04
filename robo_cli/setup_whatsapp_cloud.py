@@ -38,6 +38,7 @@ import re
 import secrets
 import sys
 from typing import Optional
+from robo_cli.docs_links import docs_url
 
 
 # ---------------------------------------------------------------------------
@@ -477,8 +478,14 @@ def run_whatsapp_cloud_setup() -> int:
     print("       Alternatives: ngrok, or your own domain + reverse proxy")
     print("       with TLS.")
     print()
+    try:
+        from robo_cli.config import get_env_value as _env
+
+        webhook_port = int(_env("WHATSAPP_CLOUD_WEBHOOK_PORT") or 8090)
+    except Exception:
+        webhook_port = 8090
     print("    2. Start the tunnel in a separate terminal:")
-    print("         cloudflared tunnel --url http://localhost:8090")
+    print(f"         cloudflared tunnel --url http://localhost:{webhook_port}")
     print("       Note the printed https://<random>.trycloudflare.com URL.")
     print()
     print("    3. Start the Robo gateway in another terminal:")
@@ -535,7 +542,6 @@ def run_whatsapp_cloud_setup() -> int:
     print("        Requires Meta's business verification process —")
     print("        Business Manager → Security Center → Start Verification.")
     print()
-    print("  Docs: website/docs/user-guide/")
-    print("        messaging/whatsapp-cloud")
+    print(f"  Docs: {docs_url('user-guide/messaging/whatsapp-cloud.md')}")
     print()
     return 0

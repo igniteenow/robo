@@ -461,6 +461,26 @@ def test_accounts_offers_every_oauth_provider_from_catalog():
 
 
 
+def test_qwen_card_carries_a_discontinued_notice():
+    """Qwen discontinued its OAuth sign-in, so the Qwen card tells people that
+    instead of leaving them with "run this command" (a dead end). No other card
+    has a notice."""
+    resp = client.get("/api/providers/oauth", headers=HEADERS)
+    assert resp.status_code == 200, resp.text
+    providers = {p["id"]: p for p in resp.json()["providers"]}
+
+    notice = providers["qwen-oauth"]["notice"]
+    assert "2026-04-15" in notice
+    assert "Qwen Cloud" in notice
+    assert "qwen auth" not in notice
+    # The card itself stays: an existing Qwen login keeps working.
+    assert providers["qwen-oauth"]["flow"] == "external"
+
+    for provider_id, row in providers.items():
+        if provider_id != "qwen-oauth":
+            assert row["notice"] is None, provider_id
+
+
 def test_oauth_catalog_marks_external_providers_not_disconnectable():
     """External CLI credentials are visible in Accounts but cannot be removed by Robo."""
     resp = client.get("/api/providers/oauth", headers=HEADERS)

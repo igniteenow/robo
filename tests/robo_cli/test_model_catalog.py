@@ -131,17 +131,25 @@ class TestFetchFailure:
 
 class TestFallbackChain:
     """``_fetch_manifest_with_fallback`` walks ``DEFAULT_CATALOG_FALLBACK_URLS``
-    when the primary URL fails. Regression: the Docusaurus site behind Vercel
-    occasionally returns HTTP 403 + x-vercel-mitigated: challenge for urllib;
-    without a fallback URL the user's disk cache freezes and new model
-    releases (opus 4.8, etc.) never reach the picker.
+    when the primary URL fails, so one unreachable host never freezes the
+    user's disk cache (new model releases would stop reaching the picker).
     """
 
-    PRIMARY = "https://robo.igniteenow.com/docs/api/model-catalog.json"
-    FALLBACK = (
+    PRIMARY = (
         "https://raw.githubusercontent.com/igniteenow/robo"
         "/main/website/static/api/model-catalog.json"
     )
+    FALLBACK = "https://robo.igniteenow.com/docs/api/model-catalog.json"
+
+    def test_default_catalog_url_is_the_manifest_in_the_repository(self):
+        """There is no documentation website; the default must be an address
+        that serves the manifest today."""
+        from robo_cli import model_catalog
+        from robo_cli.config_defaults import DEFAULT_CONFIG
+
+        assert model_catalog.DEFAULT_CATALOG_URL == self.PRIMARY
+        assert DEFAULT_CONFIG["model_catalog"]["url"] == self.PRIMARY
+        assert self.PRIMARY not in model_catalog.DEFAULT_CATALOG_FALLBACK_URLS
 
     def test_uses_primary_when_it_succeeds(self, isolated_home):
         from robo_cli import model_catalog
@@ -157,14 +165,14 @@ class TestFallbackChain:
         assert result is not None
         assert calls == [self.PRIMARY], "fallback URLs must not be touched on primary success"
 
-    def test_falls_through_to_raw_github_on_primary_failure(self, isolated_home):
+    def test_falls_through_to_the_next_url_on_primary_failure(self, isolated_home):
         from robo_cli import model_catalog
         calls: list[str] = []
 
         def fake_fetch(url, timeout):
             calls.append(url)
             if url == self.PRIMARY:
-                return None  # simulate Vercel 403
+                return None  # the primary host is unreachable
             return _valid_manifest()
 
         with patch.object(model_catalog, "_fetch_manifest", side_effect=fake_fetch):

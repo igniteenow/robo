@@ -638,7 +638,7 @@ def cmd_mcp_remove(args):
         servers = list(existing.keys())
         if servers:
             _info(f"Available servers: {', '.join(servers)}")
-        return
+        return 1
 
     if not _confirm(f"Remove server '{name}'?", default=True):
         _info("Cancelled.")
@@ -739,7 +739,7 @@ def cmd_mcp_test(args):
         available = list(servers.keys())
         if available:
             _info(f"Available: {', '.join(available)}")
-        return
+        return 1
 
     cfg = servers[name]
     print()
@@ -913,7 +913,7 @@ def cmd_mcp_login(args):
         _error(f"Server '{name}' not found in config.")
         if servers:
             _info(f"Available servers: {', '.join(servers)}")
-        return
+        return 1
 
     _reauth_oauth_server(name, servers[name])
 
@@ -963,7 +963,7 @@ def cmd_mcp_reauth(args):
         _error(f"Server '{name}' not found in config.")
         if servers:
             _info(f"Available servers: {', '.join(servers)}")
-        return
+        return 1
 
     _reauth_oauth_server(name, servers[name])
 
@@ -984,7 +984,7 @@ def cmd_mcp_configure(args):
         available = list(servers.keys())
         if available:
             _info(f"Available: {', '.join(available)}")
-        return
+        return 1
 
     cfg = servers[name]
 
@@ -1121,7 +1121,12 @@ def mcp_command(args):
 
     handler = handlers.get(action)
     if handler:
-        handler(args)
+        rc = handler(args)
+        if isinstance(rc, int) and rc:
+            # A missing server (remove/test/login/reauth/configure) is an
+            # error for scripts too, not just a red line.
+            import sys as _sys
+            _sys.exit(rc)
     else:
         # No subcommand — drop the user into the catalog picker. This is the
         # "try enabling and it flows you into setup" UX matching `robo plugin`.

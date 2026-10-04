@@ -112,7 +112,7 @@ def show_status(args):
 
     print()
     print(color("┌─────────────────────────────────────────────────────────┐", Colors.CYAN))
-    print(color("│                 Robo Status                  │", Colors.CYAN))
+    print(color("│                       Robo Status                       │", Colors.CYAN))
     print(color("└─────────────────────────────────────────────────────────┘", Colors.CYAN))
 
     # =========================================================================
@@ -229,7 +229,7 @@ def show_status(args):
     qwen_logged_in = bool(qwen_status.get("logged_in"))
     print(
         f"  {'Qwen OAuth':<12}  {check_mark(qwen_logged_in)} "
-        f"{'logged in' if qwen_logged_in else 'not logged in (run: qwen auth qwen-oauth)'}"
+        f"{'logged in' if qwen_logged_in else 'not logged in'}"
     )
     qwen_auth_file = qwen_status.get("auth_file")
     if qwen_auth_file:

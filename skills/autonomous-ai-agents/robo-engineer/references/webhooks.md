@@ -83,7 +83,7 @@ robo webhook subscribe todoist-robo \
   --deliver telegram --deliver-chat-id "12345"
 ```
 
-Full filter syntax: ../../../../website/docs/user-guide/messaging/webhooks.md#payload-filters
+Full filter syntax: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/messaging/webhooks.md#payload-filters
 
 ### List subscriptions
 ```bash

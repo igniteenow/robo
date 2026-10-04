@@ -179,6 +179,20 @@ export function updateNotice(behind: number | null | undefined): string | null {
   return `\u2191 ${behind} ${behind === 1 ? 'update' : 'updates'} behind`
 }
 
+/**
+ * What the banner's "provider" cell shows. A `vendor/model` slug names its
+ * vendor; any other model (`deepseek-v4-pro` on a custom endpoint, say) has no
+ * prefix to read, so the provider the gateway resolved for the session is used
+ * instead of leaving the cell empty.
+ */
+export function bannerProvider(info: Pick<SessionInfo, 'model' | 'provider'>): string {
+  if (info.model.includes('/')) {
+    return info.model.split('/')[0]
+  }
+
+  return (info.provider ?? '').trim()
+}
+
 export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
   const updateLine = updateNotice(info.update_behind)
   const term = useStdout().stdout?.columns ?? 100
@@ -284,7 +298,7 @@ export function SessionPanel({ info, maxWidth, sid, t }: SessionPanelProps) {
 
   // ── Facts grid ──
   const contextMax = (info as { context_max?: number }).context_max
-  const provider = info.model.includes('/') ? info.model.split('/')[0] : ''
+  const provider = bannerProvider(info)
   const modelShort = info.model.split('/').pop() ?? info.model
   const ruleWidth = Math.max(8, Math.min(w, 100) - 2)
   const half = Math.max(24, Math.floor((Math.min(w, 100) - 4) / 2))

@@ -15,7 +15,7 @@
 
 [Unit]
 Description=Robo Kanban dispatcher (DEPRECATED standalone daemon — prefer gateway-embedded dispatch)
-Documentation=website/docs/user-guide/features/kanban.md
+Documentation=https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/features/kanban.md
 After=network.target
 
 [Service]

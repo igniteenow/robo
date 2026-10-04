@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
-_DOCS_BASE = "website/docs/index.mdx"
 
 
 def _model_config_dict(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -165,6 +164,7 @@ from robo_cli.cli_output import (  # noqa: E402
     print_warning,
 )
 from robo_cli.secret_prompt import masked_secret_prompt  # noqa: E402
+from robo_cli.docs_links import docs_url
 
 
 def is_interactive_stdin() -> bool:
@@ -866,7 +866,7 @@ def setup_model_provider(config: dict, *, quick: bool = False):
 
     print_header("Inference Provider")
     print_info("Choose how to connect to your main chat model.")
-    print_info(f"   Guide: {_DOCS_BASE}/integrations/providers")
+    print_info(f"   Guide: {docs_url('integrations/providers.md')}")
     print()
 
     # Delegate to the shared robo model flow — handles provider picker,
@@ -1296,7 +1296,7 @@ def setup_terminal_backend(config: dict):
     print_header("Terminal Backend")
     print_info("Choose where Robo runs shell commands and code.")
     print_info("This affects tool execution, file access, and isolation.")
-    print_info(f"   Guide: {_DOCS_BASE}/user-guide/configuration#terminal-backend-configuration")
+    print_info(f"   Guide: {docs_url('user-guide/configuration.md#terminal-backend-configuration')}")
     print()
 
     current_backend = cfg_get(config, "terminal", "backend", default="local")
@@ -1623,7 +1623,7 @@ def setup_agent_settings(config: dict):
     """Configure agent behavior: iterations, progress display, compression, session reset."""
 
     print_header("Agent Settings")
-    print_info(f"   Guide: {_DOCS_BASE}/user-guide/configuration")
+    print_info(f"   Guide: {docs_url('user-guide/configuration.md')}")
     print()
 
     # ── Max Iterations ──
@@ -2052,7 +2052,7 @@ def _setup_webhooks():
     print_warning("   internet. For security, run the gateway in a sandboxed environment")
     print_warning("   (Docker, VM, etc.) to limit blast radius from prompt injection.")
     print()
-    print_info("   Full guide: website/docs/user-guide/messaging/webhooks.md")
+    print_info(f"   Full guide: {docs_url('user-guide/messaging/webhooks.md')}")
     print()
 
     port = prompt("Webhook port (default 8644)")
@@ -2074,14 +2074,19 @@ def _setup_webhooks():
     print()
     print_success("Webhooks enabled! Next steps:")
     from robo_constants import display_robo_home as _dhh
+    try:
+        from robo_cli.webhook import _get_webhook_config
+
+        webhook_port = int((_get_webhook_config().get("extra") or {}).get("port") or 8644)
+    except Exception:
+        webhook_port = 8644
     print_info(f"   1. Define webhook routes in {_dhh()}/config.yaml")
     print_info("   2. Point your service (GitHub, GitLab, etc.) at:")
-    print_info("      http://your-server:8644/webhooks/<route-name>")
+    print_info(f"      http://your-server:{webhook_port}/webhooks/<route-name>")
     print()
     print_info("   Route configuration guide:")
-    print_info("   website/docs/user-guide/messaging/webhooks.md#configuring-routes")
+    print_info(f"   {docs_url('user-guide/messaging/webhooks.md#configuring-routes')}")
     print()
-    print_info("   Open config in your editor:  robo config edit")
     print_info("   Open config in your editor:  robo config edit")
 
 

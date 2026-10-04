@@ -4533,6 +4533,74 @@ class TestRetryExhaustion:
         # exactly one API call, no empty-response retry loop.
         assert agent.client.chat.completions.create.call_count == 1
 
+    @staticmethod
+    def _empty_refusal_response():
+        """An HTTP-200 refusal that carries no explanation at all."""
+        return SimpleNamespace(
+            choices=[SimpleNamespace(
+                message=SimpleNamespace(
+                    content=None, tool_calls=None, reasoning=None,
+                    reasoning_content=None, refusal=None,
+                ),
+                finish_reason="content_filter",
+            )],
+            model="test/model",
+            usage=None,
+            id="resp_refused",
+        )
+
+    def test_unexplained_refusal_is_retried_once_and_recovers(self, agent):
+        """A refusal with no explanation is re-issued once; when the second
+        call answers, the turn completes normally and the user never sees the
+        refusal.
+
+        Regression: a plain "Hey!" as the first message of a session came back
+        as an explanation-less refusal from a messages-API endpoint,
+        and the identical message answered normally a moment later.
+        """
+        self._setup_agent(agent)
+        ok_resp = _mock_response(content="Hey! How can I help?", finish_reason="stop")
+        agent.client.chat.completions.create.side_effect = [
+            self._empty_refusal_response(),
+            ok_resp,
+        ]
+        statuses = []
+        with (
+            patch.object(agent, "_persist_session"),
+            patch.object(agent, "_save_trajectory"),
+            patch.object(agent, "_cleanup_task_resources"),
+            patch.object(agent, "_emit_status", side_effect=statuses.append),
+        ):
+            result = agent.run_conversation("Hey!")
+        assert result.get("completed") is True
+        assert result.get("final_response") == "Hey! How can I help?"
+        assert agent.client.chat.completions.create.call_count == 2
+        # A retry that succeeds is silent: no refusal notice reaches the user.
+        assert not any("declined" in s for s in statuses)
+        # The refused attempt left nothing behind in the transcript.
+        assert [m["role"] for m in result["messages"]] == ["user", "assistant"]
+
+    def test_unexplained_refusal_is_retried_only_once(self, agent):
+        """Two explanation-less refusals in a row: exactly one retry, then the
+        refusal is surfaced as before (never a retry loop)."""
+        self._setup_agent(agent)
+        agent.client.chat.completions.create.side_effect = [
+            self._empty_refusal_response(),
+            self._empty_refusal_response(),
+            AssertionError("a refusal must not be retried more than once"),
+        ]
+        with (
+            patch.object(agent, "_persist_session"),
+            patch.object(agent, "_save_trajectory"),
+            patch.object(agent, "_cleanup_task_resources"),
+        ):
+            result = agent.run_conversation("Hey!")
+        assert agent.client.chat.completions.create.call_count == 2
+        assert result.get("completed") is False
+        assert result.get("failed") is True
+        assert "content_policy_blocked" in result.get("error", "")
+        assert "The model returned no explanation." in (result.get("final_response") or "")
+
 
     def test_build_api_kwargs_error_no_unbound_local(self, agent):
         """When _build_api_kwargs raises, except handler must not crash with UnboundLocalError.

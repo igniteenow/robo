@@ -65,6 +65,10 @@ export interface OAuthProvider {
   flow: 'device_code' | 'external' | 'pkce'
   id: string
   name: string
+  /** Shown in place of the sign-in instructions when the provider's own
+   *  sign-in can no longer be completed (it was discontinued, say), so nobody
+   *  is sent to a command that cannot succeed. */
+  notice?: null | string
   status: OAuthProviderStatus
 }
 

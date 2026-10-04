@@ -26,6 +26,7 @@ from typing import Any, Optional
 
 from robo_cli import kanban_db as kb
 from robo_cli import kanban_swarm as ks
+from robo_cli.docs_links import docs_url
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +42,23 @@ _STATUS_ICONS = {
     "done":     "✓",
     "archived": "—",
 }
+
+
+def _fmt_event_payload(payload) -> str:
+    """Render an event payload as ``key=value`` pairs (unset keys dropped)
+    instead of a raw Python dict."""
+    if not payload:
+        return ""
+    if not isinstance(payload, dict):
+        return f" {payload}"
+    parts = []
+    for key, value in payload.items():
+        if value is None or value == [] or value == {}:
+            continue
+        if isinstance(value, (list, tuple)):
+            value = ",".join(str(v) for v in value)
+        parts.append(f"{key}={value}")
+    return f" ({', '.join(parts)})" if parts else ""
 
 
 def _fmt_ts(ts: Optional[int]) -> str:
@@ -221,12 +239,13 @@ def build_parser(parent_subparsers: argparse._SubParsersAction) -> argparse.Argu
     kanban_parser = parent_subparsers.add_parser(
         "kanban",
         help="Multi-profile collaboration board (tasks, links, comments)",
+        # Raw: a wrapped URL is not a link any more.
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
-            "Durable SQLite-backed task board shared across Robo profiles. "
-            "Tasks are claimed atomically, can depend on other tasks, and "
-            "are executed by a named profile in an isolated workspace. "
-            "See website/docs/user-guide/features/kanban.md "
-            "or website/docs/user-guide/features/kanban.md for the full guide."
+            "Durable SQLite-backed task board shared across Robo profiles.\n"
+            "Tasks are claimed atomically, can depend on other tasks, and\n"
+            "are executed by a named profile in an isolated workspace.\n"
+            f"Guide: {docs_url('user-guide/features/kanban.md')}"
         ),
     )
     # --- global --board flag ---
@@ -1367,7 +1386,9 @@ def _cmd_boards_set_default_workdir(args: argparse.Namespace) -> int:
         print(f"kanban boards set-default-workdir: board {args.slug!r} does not exist",
               file=sys.stderr)
         return 1
-    meta = kb.write_board_metadata(normed, default_workdir=args.path)
+    # ``write_board_metadata`` reads None as "leave it alone"; an empty string
+    # clears the value, which is what omitting the path means here.
+    meta = kb.write_board_metadata(normed, default_workdir=args.path or "")
     new_val = meta.get("default_workdir")
     if new_val:
         print(f"Board {normed!r} default workdir set to {new_val!r}.")
@@ -1767,7 +1788,7 @@ def _cmd_show(args: argparse.Namespace) -> int:
         print()
         print(f"Events ({len(events)}):")
         for e in events[-20:]:
-            pl = f" {e.payload}" if e.payload else ""
+            pl = _fmt_event_payload(e.payload)
             run_tag = f" [run {e.run_id}]" if e.run_id else ""
             print(f"  [{_fmt_ts(e.created_at)}]{run_tag} {e.kind}{pl}")
     if runs:

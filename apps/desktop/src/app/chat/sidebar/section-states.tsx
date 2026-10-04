@@ -9,7 +9,7 @@ export function SidebarSessionSkeletons() {
     <div aria-hidden="true" className="grid gap-px">
       {['w-32', 'w-40', 'w-28', 'w-36', 'w-24'].map((width, i) => (
         <div
-          className="grid min-h-[1.625rem] grid-cols-[minmax(0,1fr)_1.375rem] items-center rounded-md pl-2"
+          className="grid min-h-8 grid-cols-[minmax(0,1fr)_1.375rem] items-center rounded-md pl-2"
           key={`${width}-${i}`}
         >
           <Skeleton className={cn('h-3 rounded-sm', width)} />

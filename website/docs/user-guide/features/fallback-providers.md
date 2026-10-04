@@ -67,7 +67,7 @@ Each entry requires both `provider` and `model`. Entries missing either field ar
 | xAI (Grok) | `xai` (alias `grok`) | `XAI_API_KEY` (optional: `XAI_BASE_URL`) |
 | xAI Grok OAuth (SuperGrok) | `xai-oauth` (alias `grok-oauth`) | `robo model` → xAI Grok OAuth (browser login; SuperGrok subscription) |
 | AWS Bedrock | `bedrock` | Standard boto3 auth (`AWS_REGION` + `AWS_PROFILE` or `AWS_ACCESS_KEY_ID`) |
-| Qwen Portal (OAuth) | `qwen-oauth` | `robo model` (Qwen Portal OAuth; optional: `ROBO_QWEN_BASE_URL`) |
+| Qwen Portal (OAuth) | `qwen-oauth` | An existing Qwen Code login only (Qwen discontinued the sign-in on 2026-04-15; optional: `ROBO_QWEN_BASE_URL`) |
 | MiniMax (OAuth) | `minimax-oauth` | `robo model` (MiniMax portal OAuth) |
 | OpenCode Zen | `opencode-zen` | `OPENCODE_ZEN_API_KEY` |
 | OpenCode Go | `opencode-go` | `OPENCODE_GO_API_KEY` |

@@ -1,7 +1,7 @@
 # Robo CLI Reference
 
 Live sources when anything looks stale: `robo --help`, `robo <command> --help`,
-../../../../website/docs/reference/cli-commands.md
+https://github.com/igniteenow/robo/blob/main/website/docs/reference/cli-commands.md
 
 ### Global Flags
 
@@ -79,7 +79,7 @@ robo gateway run|install|start|stop|restart|status|setup
 ```
 
 20+ platforms: Telegram, Discord, Slack, WhatsApp (Baileys + Business Cloud API), iMessage (Photon — `robo photon setup`), Signal, Email, SMS, Matrix, Mattermost, Teams, LINE, SimpleX, ntfy, Google Chat, Home Assistant, DingTalk, Feishu, WeCom, Weixin, API Server, Webhooks. Open WebUI connects via the API Server adapter. Most adapters ship under `plugins/platforms/`.
-Docs: ../../../../website/docs/user-guide/messaging/index.md
+Docs: https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/messaging/index.md
 
 ### Sessions
 
@@ -141,10 +141,10 @@ Plugin- and provider-supplied subcommands (e.g. `robo photon setup`) only appear
 
 | Looking for... | Location |
 |---|---|
-| Config options | `robo config edit` · [Configuration docs](../../../../website/docs/user-guide/configuration.md) |
-| Tools / toolsets | `robo tools list` · [Tools reference](../../../../website/docs/reference/tools-reference.md) |
-| Skills catalog | `robo skills browse` · [Skills catalog](../../../../website/docs/reference/skills-catalog.md) |
-| Provider setup | `robo model` · [Providers guide](../../../../website/docs/integrations/providers.md) |
-| Env variables | `robo config env-path` · [Env vars reference](../../../../website/docs/reference/environment-variables.md) |
+| Config options | `robo config edit` · [Configuration docs](https://github.com/igniteenow/robo/blob/main/website/docs/user-guide/configuration.md) |
+| Tools / toolsets | `robo tools list` · [Tools reference](https://github.com/igniteenow/robo/blob/main/website/docs/reference/tools-reference.md) |
+| Skills catalog | `robo skills browse` · [Skills catalog](https://github.com/igniteenow/robo/blob/main/website/docs/reference/skills-catalog.md) |
+| Provider setup | `robo model` · [Providers guide](https://github.com/igniteenow/robo/blob/main/website/docs/integrations/providers.md) |
+| Env variables | `robo config env-path` · [Env vars reference](https://github.com/igniteenow/robo/blob/main/website/docs/reference/environment-variables.md) |
 | Gateway logs | `~/.robo/logs/gateway.log` (or `robo logs`) |
 | Sessions | `robo sessions browse` (reads state.db) |

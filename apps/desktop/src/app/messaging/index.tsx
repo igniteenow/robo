@@ -791,7 +791,7 @@ const PLATFORM_INTRO: Record<string, string> = {
     'On your Mattermost server, create a bot account or personal access token, then paste the server URL and token here.',
   matrix: 'Sign in to your homeserver with the bot account, then copy the access token, user ID, and homeserver URL.',
   signal:
-    'Run a signal-cli REST bridge somewhere reachable, then point Robo at the URL and the registered phone number.',
+    'Run signal-cli as a daemon in HTTP mode (signal-cli daemon --http 127.0.0.1:8080), then point Robo at that address and the registered phone number.',
   whatsapp:
     'Start the WhatsApp bridge that ships with Robo, scan the QR code on first run, then enable the platform.',
   bluebubbles:
@@ -805,7 +805,7 @@ const PLATFORM_INTRO: Record<string, string> = {
   feishu:
     'Create a Feishu / Lark app, configure the bot capability, and copy the App ID, App secret, and event encryption keys.',
   wecom:
-    'Add a group robot in WeCom and copy its webhook key as WECOM_BOT_ID. Send-only — use the WeCom (app) option for two-way.',
+    'Create an AI Bot in the WeCom admin console and copy its Bot ID and Secret. Robo connects through the AI Bot WebSocket gateway, so messages flow both ways.',
   wecom_callback:
     'Set up a WeCom self-built app, expose its callback URL, and provide the corp ID, secret, agent ID, and AES key.',
   weixin:

@@ -7,7 +7,13 @@ import { configure } from '@testing-library/react'
 // accessor shadows jsdom's Storage and every `localStorage.getItem(...)` in a
 // test throws "Cannot read properties of undefined". Install a real in-memory
 // Storage when the global resolves to nothing, before any test module reads it.
-if (typeof (globalThis as any).localStorage === 'undefined') {
+// sessionStorage gets the same guard, so window-scoped state (the fresh-launch
+// marker) is testable on every Node the suite runs on.
+for (const name of ['localStorage', 'sessionStorage'] as const) {
+  if (typeof (globalThis as any)[name] !== 'undefined') {
+    continue
+  }
+
   const store = new Map<string, string>()
   const storage: Storage = {
     get length() {
@@ -20,7 +26,7 @@ if (typeof (globalThis as any).localStorage === 'undefined') {
     clear: () => store.clear(),
   }
   for (const target of [globalThis, (globalThis as any).window].filter(Boolean)) {
-    Object.defineProperty(target, 'localStorage', {
+    Object.defineProperty(target, name, {
       value: storage,
       configurable: true,
       writable: true,

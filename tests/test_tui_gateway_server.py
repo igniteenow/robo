@@ -1155,6 +1155,38 @@ def test_config_set_battery_toggles_and_persists(monkeypatch):
     assert writes == {"display.battery": True}
 
 
+def test_config_set_message_reactions_persists_the_desktop_toggle(monkeypatch):
+    """The desktop sends ``display.message_reactions`` (the key the agent's
+    react_to_message tool reads). It used to be an unknown key, so the toggle
+    looked on in the UI while the agent never reacted."""
+    writes: dict[str, object] = {}
+    monkeypatch.setattr(server, "_load_cfg", lambda: {"display": {}})
+    monkeypatch.setattr(
+        server, "_write_config_key", lambda k, v: writes.__setitem__(k, v)
+    )
+
+    resp = server.dispatch(
+        {"id": "c1", "method": "config.set",
+         "params": {"key": "display.message_reactions", "value": "true"}}
+    )
+
+    assert resp["result"] == {"key": "display.message_reactions", "value": "on"}
+    assert writes == {"display.message_reactions": True}
+
+    resp = server.dispatch(
+        {"id": "c2", "method": "config.set",
+         "params": {"key": "display.message_reactions", "value": "false"}}
+    )
+    assert resp["result"]["value"] == "off"
+    assert writes == {"display.message_reactions": False}
+
+    resp = server.dispatch(
+        {"id": "c3", "method": "config.set",
+         "params": {"key": "display.message_reactions", "value": "sometimes"}}
+    )
+    assert "error" in resp
+
+
 def test_config_set_battery_explicit_off(monkeypatch):
     writes: dict[str, object] = {}
     monkeypatch.setattr(server, "_load_cfg", lambda: {"display": {"battery": True}})

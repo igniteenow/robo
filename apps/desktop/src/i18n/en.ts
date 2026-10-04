@@ -1468,11 +1468,11 @@ export const en: Translations = {
         help: 'Recommended. Comma-separated user IDs in @user:server format.'
       },
       SIGNAL_HTTP_URL: {
-        label: 'Signal bridge URL',
+        label: 'Signal daemon URL',
         placeholder: 'http://127.0.0.1:8080',
-        help: 'URL of a running signal-cli REST bridge.'
+        help: 'Address of a running signal-cli daemon started in HTTP mode.'
       },
-      SIGNAL_ACCOUNT: { label: 'Phone number', help: 'The number registered with your signal-cli bridge.' },
+      SIGNAL_ACCOUNT: { label: 'Phone number', help: 'The number registered with your signal-cli daemon.' },
       SIGNAL_ALLOWED_USERS: { label: 'Allowed Signal users', help: 'Recommended. Comma-separated Signal identifiers.' },
       WHATSAPP_ENABLED: {
         label: 'Enable WhatsApp bridge',

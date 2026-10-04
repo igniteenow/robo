@@ -1642,11 +1642,11 @@ export const zh: Translations = {
       MATRIX_USER_ID: { label: 'Bot 用户 ID', placeholder: '@robo:example.org' },
       MATRIX_ALLOWED_USERS: { label: '允许的 Matrix 用户 ID', help: '推荐。@user:server 格式的逗号分隔用户 ID。' },
       SIGNAL_HTTP_URL: {
-        label: 'Signal 桥接 URL',
+        label: 'Signal 守护进程 URL',
         placeholder: 'http://127.0.0.1:8080',
-        help: '运行中的 signal-cli REST 桥接的 URL。'
+        help: '以 HTTP 模式运行的 signal-cli 守护进程地址。'
       },
-      SIGNAL_ACCOUNT: { label: '电话号码', help: '在 signal-cli 桥接中注册的号码。' },
+      SIGNAL_ACCOUNT: { label: '电话号码', help: '在 signal-cli 守护进程中注册的号码。' },
       SIGNAL_ALLOWED_USERS: { label: '允许的 Signal 用户', help: '推荐。逗号分隔的 Signal 标识符。' },
       WHATSAPP_ENABLED: { label: '启用 WhatsApp 桥接', help: '由下方开关自动设置。除非确知需要，否则请勿改动。' },
       WHATSAPP_MODE: { label: '桥接模式' },
@@ -1660,7 +1660,7 @@ export const zh: Translations = {
       slack: '创建 Slack 应用，启用 Socket Mode，安装到你的工作区，然后复制 bot 令牌和 app 级令牌。',
       mattermost: '在你的 Mattermost 服务器上，创建机器人账户或个人访问令牌，然后在此粘贴服务器 URL 和令牌。',
       matrix: '用机器人账户登录你的 homeserver，然后复制访问令牌、用户 ID 和 homeserver URL。',
-      signal: '在可访问的位置运行 signal-cli REST 桥接，然后把 Robo 指向该 URL 和已注册的电话号码。',
+      signal: '以 HTTP 模式运行 signal-cli 守护进程（signal-cli daemon --http 127.0.0.1:8080），然后把 Robo 指向该地址和已注册的电话号码。',
       whatsapp: '启动 Robo 自带的 WhatsApp 桥接，首次运行时扫描二维码，然后启用该平台。',
       bluebubbles:
         '在装有 iMessage 的 Mac 上运行 BlueBubbles Server，暴露其 API，然后用服务器密码把 Robo 指向该 URL。',
@@ -1669,7 +1669,7 @@ export const zh: Translations = {
       sms: '从 Twilio 控制台获取你的 Account SID 和 Auth Token，以及一个可发送短信的电话号码。',
       dingtalk: '在开发者控制台创建钉钉应用，然后在此复制 Client ID(App key) 和 Client Secret。',
       feishu: '创建飞书 / Lark 应用，配置机器人能力，复制 App ID、App secret 和事件加密密钥。',
-      wecom: '在企业微信中添加群机器人，复制其 webhook key 作为 WECOM_BOT_ID。仅可发送——双向请用企业微信 (应用) 选项。',
+      wecom: '在企业微信管理后台创建智能机器人，复制其 Bot ID 和 Secret。Robo 通过智能机器人 WebSocket 网关连接，消息可双向收发。',
       wecom_callback: '设置一个企业微信自建应用，暴露其回调 URL，并提供 corp ID、secret、agent ID 和 AES key。',
       weixin:
         '运行 `robo gateway setup`，选择 Weixin，然后使用个人微信账号扫描并确认二维码。Robo 会通过腾讯 iLink Bot API 连接并保存凭据。',

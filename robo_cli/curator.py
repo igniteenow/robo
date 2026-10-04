@@ -308,6 +308,9 @@ def _cmd_unpin(args) -> int:
             "there's nothing to unpin (curator only tracks agent-created skills)"
         )
         return 1
+    if not skill_usage.get_record(args.skill).get("pinned"):
+        print(f"curator: '{args.skill}' is not pinned")
+        return 1
     skill_usage.set_pinned(args.skill, False)
     print(f"curator: unpinned '{args.skill}'")
     return 0

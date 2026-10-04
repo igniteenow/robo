@@ -89,10 +89,26 @@ describe('/billing slash command (overlay-driven)', () => {
     resetOverlayState()
   })
 
-  it('not logged in → prompts to log in, no overlay', async () => {
+  it('not logged in → prints the gateway reason, no overlay', async () => {
+    const { run, sys } = buildCtx({
+      'billing.state': {
+        ...ownerState(),
+        error: 'Ignitee Now billing is no longer available.',
+        logged_in: false,
+        ok: true
+      }
+    })
+    await run('')
+    expect(printed(sys)).toContain('Ignitee Now billing is no longer available.')
+    expect(printed(sys)).not.toContain('/portal')
+    expect(getOverlayState().billing).toBeNull()
+  })
+
+  it('not logged in with no reason → one plain line, no overlay', async () => {
     const { run, sys } = buildCtx({ 'billing.state': { ...ownerState(), logged_in: false, ok: true } })
     await run('')
     expect(printed(sys)).toContain('Not logged into Ignitee Now Portal')
+    expect(printed(sys)).not.toContain('/portal')
     expect(getOverlayState().billing).toBeNull()
   })
 

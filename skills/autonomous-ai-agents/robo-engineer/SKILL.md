@@ -28,7 +28,7 @@ What makes Robo different:
 
 **This skill is a hub.** The body covers identity, quick start, spawning/orchestration, and hard invariants. Everything else lives in reference files — **load the matching reference (below) before answering**; do not answer detail questions from the body alone.
 
-**Docs:** ../../../website/docs/index.mdx
+**Docs:** https://github.com/igniteenow/robo/tree/main/website/docs
 
 ## Scope & Verification
 
@@ -37,7 +37,7 @@ This skill is a concise operating guide, not the complete source of truth for ev
 Good verification targets:
 
 - CLI commands: `robo --help`, `robo <command> --help`, and `robo_cli/main.py`
-- User documentation: ../../../website/docs/index.mdx
+- User documentation: https://github.com/igniteenow/robo/tree/main/website/docs
 - Source tree: https://github.com/igniteenow/robo
 
 ## Quick Start

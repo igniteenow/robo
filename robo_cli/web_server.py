@@ -46,6 +46,7 @@ import urllib.error
 import urllib.parse
 import zipfile
 
+from robo_cli.docs_links import docs_url as _docs_url
 from robo_cli._subprocess_compat import windows_detach_flags, windows_hide_flags
 import urllib.request
 from pathlib import Path
@@ -1017,13 +1018,15 @@ _SCHEMA_OVERRIDES: Dict[str, Dict[str, Any]] = {
     },
     "context.engine": {
         "type": "select",
-        "description": "Context management engine",
-        "options": ["default", "custom"],
+        "description": "Context management engine: the built-in compressor, or an installed context-engine plugin",
+        # The built-in engine; installed engines are merged in per request.
+        "options": ["compressor"],
     },
     "human_delay.mode": {
         "type": "select",
-        "description": "Simulated typing delay mode",
-        "options": ["off", "typing", "fixed"],
+        "description": "Simulated typing delay: off, natural (0.8-2.5s), or custom (min_ms/max_ms)",
+        # The values the gateway reads (ROBO_HUMAN_DELAY_MODE).
+        "options": ["off", "natural", "custom"],
     },
     "logging.level": {
         "type": "select",
@@ -1317,6 +1320,26 @@ def _memory_provider_schema_options(cfg: Dict[str, Any]) -> List[str]:
     return options
 
 
+def _context_engine_schema_options(cfg: Dict[str, Any]) -> List[str]:
+    """``context.engine`` choices: the built-in compressor plus every engine
+    that is installed right now, plus whatever the config names (so a value
+    set by hand still shows as selected)."""
+    options = ["compressor"]
+    try:
+        from robo_cli.plugins_cmd import _discover_context_engines
+
+        for name, _desc in _discover_context_engines():
+            if name and name not in options:
+                options.append(name)
+    except Exception:
+        pass
+    context_cfg = cfg.get("context") if isinstance(cfg.get("context"), dict) else {}
+    current = str(context_cfg.get("engine") or "").strip()
+    if current and current not in options:
+        options.append(current)
+    return options
+
+
 def _schema_with_dynamic_provider_options() -> Dict[str, Dict[str, Any]]:
     """Return CONFIG_SCHEMA with per-request discovery-driven options merged.
 
@@ -1354,6 +1377,7 @@ def _schema_with_dynamic_provider_options() -> Dict[str, Dict[str, Any]]:
             merge(f"{kind}.provider", _custom_provider_options(kind, list(existing), cfg))
 
     merge("memory.provider", _memory_provider_schema_options(cfg))
+    merge("context.engine", _context_engine_schema_options(cfg))
 
     if not overlay:
         return CONFIG_SCHEMA
@@ -7728,14 +7752,14 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "telegram": {
         "name": "Telegram",
         "description": "Run Robo from Telegram DMs, groups, and topics.",
-        "docs_url": "https://core.telegram.org/bots/features#botfather",
+        "docs_url": _docs_url("user-guide/messaging/telegram.md"),
         "env_vars": ("TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS", "TELEGRAM_PROXY"),
         "required_env": ("TELEGRAM_BOT_TOKEN",),
     },
     "discord": {
         "name": "Discord",
         "description": "Connect Robo to Discord DMs, channels, and threads.",
-        "docs_url": "https://discord.com/developers/applications",
+        "docs_url": _docs_url("user-guide/messaging/discord.md"),
         "env_vars": (
             "DISCORD_BOT_TOKEN",
             "DISCORD_ALLOWED_USERS",
@@ -7745,21 +7769,21 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "slack": {
         "name": "Slack",
         "description": "Use Robo from Slack via Socket Mode. Add allowed Slack member IDs so connected bots can respond.",
-        "docs_url": "https://api.slack.com/apps",
+        "docs_url": _docs_url("user-guide/messaging/slack.md"),
         "env_vars": ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_ALLOWED_USERS"),
         "required_env": ("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"),
     },
     "mattermost": {
         "name": "Mattermost",
         "description": "Connect Robo to Mattermost channels and direct messages.",
-        "docs_url": "https://mattermost.com/deploy/",
+        "docs_url": _docs_url("user-guide/messaging/mattermost.md"),
         "env_vars": ("MATTERMOST_URL", "MATTERMOST_TOKEN", "MATTERMOST_ALLOWED_USERS"),
         "required_env": ("MATTERMOST_URL", "MATTERMOST_TOKEN"),
     },
     "matrix": {
         "name": "Matrix",
         "description": "Use Robo in Matrix rooms and direct messages.",
-        "docs_url": "https://matrix.org/ecosystem/servers/",
+        "docs_url": _docs_url("user-guide/messaging/matrix.md"),
         "env_vars": (
             "MATRIX_HOMESERVER",
             "MATRIX_ACCESS_TOKEN",
@@ -7770,15 +7794,15 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "signal": {
         "name": "Signal",
-        "description": "Connect through a signal-cli REST bridge.",
-        "docs_url": "https://github.com/bbernhard/signal-cli-rest-api",
+        "description": "Connect through a signal-cli daemon running in HTTP mode.",
+        "docs_url": _docs_url("user-guide/messaging/signal.md"),
         "env_vars": ("SIGNAL_HTTP_URL", "SIGNAL_ACCOUNT", "SIGNAL_ALLOWED_USERS"),
         "required_env": ("SIGNAL_HTTP_URL", "SIGNAL_ACCOUNT"),
     },
     "whatsapp": {
         "name": "WhatsApp",
         "description": "Use Robo through the bundled WhatsApp bridge with QR-based auth.",
-        "docs_url": "https://github.com/tulir/whatsmeow",
+        "docs_url": _docs_url("user-guide/messaging/whatsapp.md"),
         "env_vars": (
             "WHATSAPP_ENABLED",
             "WHATSAPP_MODE",
@@ -7790,14 +7814,14 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "homeassistant": {
         "name": "Home Assistant",
         "description": "Control your smart home from Robo via Home Assistant.",
-        "docs_url": "https://www.home-assistant.io/docs/authentication/",
+        "docs_url": _docs_url("user-guide/messaging/homeassistant.md"),
         "env_vars": ("HASS_URL", "HASS_TOKEN"),
         "required_env": ("HASS_URL", "HASS_TOKEN"),
     },
     "email": {
         "name": "Email",
         "description": "Talk to Robo through an IMAP/SMTP mailbox.",
-        "docs_url": "website/docs/user-guide/messaging/index.md",
+        "docs_url": _docs_url("user-guide/messaging/email.md"),
         "env_vars": (
             "EMAIL_ADDRESS",
             "EMAIL_PASSWORD",
@@ -7814,21 +7838,21 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "sms": {
         "name": "SMS (Twilio)",
         "description": "Send and receive text messages via Twilio.",
-        "docs_url": "https://www.twilio.com/console",
+        "docs_url": _docs_url("user-guide/messaging/sms.md"),
         "env_vars": ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"),
         "required_env": ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"),
     },
     "dingtalk": {
         "name": "DingTalk",
         "description": "Connect Robo to DingTalk groups (钉钉).",
-        "docs_url": "https://open.dingtalk.com/document/orgapp/the-robot-development-process",
+        "docs_url": _docs_url("user-guide/messaging/dingtalk.md"),
         "env_vars": ("DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"),
         "required_env": ("DINGTALK_CLIENT_ID", "DINGTALK_CLIENT_SECRET"),
     },
     "feishu": {
         "name": "Feishu / Lark",
         "description": "Use Robo inside Feishu / Lark.",
-        "docs_url": "https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/intro",
+        "docs_url": _docs_url("user-guide/messaging/feishu.md"),
         "env_vars": (
             "FEISHU_APP_ID",
             "FEISHU_APP_SECRET",
@@ -7840,19 +7864,19 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "google_chat": {
         "name": "Google Chat",
         "description": "Connect Robo to Google Chat via Cloud Pub/Sub.",
-        "docs_url": "website/docs/user-guide/messaging/google_chat.md",
+        "docs_url": _docs_url("user-guide/messaging/google_chat.md"),
     },
     "wecom": {
-        "name": "WeCom (group bot)",
-        "description": "Send-only WeCom group bot via webhook.",
-        "docs_url": "https://developer.work.weixin.qq.com/document/path/91770",
+        "name": "WeCom (AI Bot)",
+        "description": "Two-way WeCom integration via the AI Bot WebSocket gateway.",
+        "docs_url": _docs_url("user-guide/messaging/wecom.md"),
         "env_vars": ("WECOM_BOT_ID", "WECOM_SECRET"),
         "required_env": ("WECOM_BOT_ID",),
     },
     "wecom_callback": {
         "name": "WeCom (app)",
         "description": "Two-way WeCom integration via callback app.",
-        "docs_url": "https://developer.work.weixin.qq.com/document/path/90930",
+        "docs_url": _docs_url("user-guide/messaging/wecom-callback.md"),
         "env_vars": (
             "WECOM_CALLBACK_CORP_ID",
             "WECOM_CALLBACK_CORP_SECRET",
@@ -7869,14 +7893,14 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "weixin": {
         "name": "Weixin / WeChat (Personal)",
         "description": "Connect a personal WeChat account through Tencent's iLink Bot API.",
-        "docs_url": "website/docs/user-guide/messaging/weixin.md",
+        "docs_url": _docs_url("user-guide/messaging/weixin.md"),
         "env_vars": ("WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN", "WEIXIN_BASE_URL"),
         "required_env": ("WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN"),
     },
     "bluebubbles": {
         "name": "BlueBubbles (iMessage)",
         "description": "Use Robo through iMessage via a BlueBubbles server.",
-        "docs_url": "https://bluebubbles.app/",
+        "docs_url": _docs_url("user-guide/messaging/bluebubbles.md"),
         "env_vars": (
             "BLUEBUBBLES_SERVER_URL",
             "BLUEBUBBLES_PASSWORD",
@@ -7887,7 +7911,7 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "qqbot": {
         "name": "QQ Bot",
         "description": "Connect Robo to a QQ Bot from the QQ Open Platform.",
-        "docs_url": "https://q.qq.com",
+        "docs_url": _docs_url("user-guide/messaging/qqbot.md"),
         "env_vars": ("QQ_APP_ID", "QQ_CLIENT_SECRET", "QQ_ALLOWED_USERS"),
         "required_env": ("QQ_APP_ID", "QQ_CLIENT_SECRET"),
     },
@@ -7896,45 +7920,45 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     # Channels page can point at the Microsoft Teams setup guide.
     "teams": {
         "description": "Connect Robo to Microsoft Teams chats via the Bot Framework.",
-        "docs_url": "website/docs/user-guide/messaging/teams.md",
+        "docs_url": _docs_url("user-guide/messaging/teams.md"),
     },
     # Bundled platform plugins: name comes from the plugin registry label;
     # give each a human description (the registry's install_hint is a
     # dependency note, not a description) and a docs link.
     "irc": {
         "description": "Relay messages between an IRC channel (or DMs) and Robo.",
-        "docs_url": "website/docs/user-guide/messaging/irc.md",
+        "docs_url": _docs_url("user-guide/messaging/irc.md"),
     },
     "line": {
         "description": "Use Robo from LINE via the LINE Messaging API webhook.",
-        "docs_url": "website/docs/user-guide/messaging/line.md",
+        "docs_url": _docs_url("user-guide/messaging/line.md"),
     },
     "ntfy": {
         "description": "Chat with Robo over ntfy push topics (ntfy.sh or self-hosted).",
-        "docs_url": "website/docs/user-guide/messaging/ntfy.md",
+        "docs_url": _docs_url("user-guide/messaging/ntfy.md"),
     },
     "photon": {
         "description": "Use Robo through iMessage via Photon's managed Spectrum platform.",
-        "docs_url": "website/docs/user-guide/messaging/photon.md",
+        "docs_url": _docs_url("user-guide/messaging/photon.md"),
     },
     "raft": {
         "description": "Join a Raft workspace as an external agent.",
-        "docs_url": "website/docs/user-guide/messaging/raft.md",
+        "docs_url": _docs_url("user-guide/messaging/raft.md"),
     },
     "simplex": {
         "description": "Talk to Robo over SimpleX Chat via a local simplex-chat daemon.",
-        "docs_url": "website/docs/user-guide/messaging/simplex.md",
+        "docs_url": _docs_url("user-guide/messaging/simplex.md"),
     },
     "yuanbao": {
         "name": "Yuanbao (元宝)",
         "description": "Connect Robo to Tencent Yuanbao.",
-        "docs_url": "",
+        "docs_url": _docs_url("user-guide/messaging/yuanbao.md"),
         "required_env": (),
     },
     "api_server": {
         "name": "API server",
         "description": "Expose Robo as an OpenAI-compatible HTTP API for tools like Open WebUI.",
-        "docs_url": "website/docs/user-guide/messaging/index.md",
+        "docs_url": _docs_url("user-guide/features/api-server.md"),
         "env_vars": (
             "API_SERVER_ENABLED",
             "API_SERVER_KEY",
@@ -7947,25 +7971,35 @@ _PLATFORM_OVERRIDES: dict[str, dict[str, Any]] = {
     "webhook": {
         "name": "Webhooks",
         "description": "Receive events from GitHub, GitLab, and other webhook sources.",
-        "docs_url": "website/docs/user-guide/messaging/webhooks.md",
+        "docs_url": _docs_url("user-guide/messaging/webhooks.md"),
         "env_vars": ("WEBHOOK_ENABLED", "WEBHOOK_PORT", "WEBHOOK_SECRET"),
         "required_env": (),
     },
     "msgraph_webhook": {
         "name": "Microsoft Graph Webhook",
         "description": "Receive Microsoft Graph change notifications (Teams meetings, Outlook, …).",
-        "docs_url": "website/docs/user-guide/messaging/msgraph-webhook.md",
+        "docs_url": _docs_url("user-guide/messaging/msgraph-webhook.md"),
         "required_env": (),
     },
     "whatsapp_cloud": {
         "name": "WhatsApp Cloud API",
         "description": "Use Robo via Meta's hosted WhatsApp Cloud API (no local bridge).",
-        "docs_url": "website/docs/user-guide/messaging/whatsapp-cloud.md",
+        "docs_url": _docs_url("user-guide/messaging/whatsapp-cloud.md"),
+    },
+    "a2a": {
+        "name": "A2A",
+        "description": "Expose Robo to other agents over the Agent-to-Agent protocol.",
+        "docs_url": _docs_url("user-guide/messaging/a2a.md"),
+    },
+    "buzz": {
+        "name": "Buzz",
+        "description": "Talk to Robo over Buzz, Block's agent messaging network.",
+        "docs_url": _docs_url("user-guide/messaging/buzz.md"),
     },
     "relay": {
         "name": "Relay (experimental)",
         "description": "Generic relay adapter fronted by the Robo Relay connector.",
-        "docs_url": "",
+        "docs_url": _docs_url("user-guide/messaging/relay.md"),
         "required_env": (),
     },
 }
@@ -7992,8 +8026,20 @@ _PLATFORM_ORDER: tuple[str, ...] = (
     "weixin",
     "qqbot",
     "yuanbao",
+    "teams",
+    "irc",
+    "line",
+    "ntfy",
+    "photon",
+    "raft",
+    "simplex",
+    "a2a",
+    "buzz",
     "api_server",
     "webhook",
+    "msgraph_webhook",
+    "whatsapp_cloud",
+    "relay",
 )
 
 # Display labels for env vars not in OPTIONAL_ENV_VARS (HOME_CHANNEL_*, bridge
@@ -8001,9 +8047,9 @@ _PLATFORM_ORDER: tuple[str, ...] = (
 # falls back here so the UI can still render a friendly label.
 _MESSAGING_ENV_FALLBACKS: dict[str, dict[str, Any]] = {
     "SIGNAL_HTTP_URL": {
-        "description": "signal-cli REST API base URL, e.g. http://127.0.0.1:8080",
-        "prompt": "Signal bridge URL",
-        "url": "https://github.com/bbernhard/signal-cli-rest-api",
+        "description": "signal-cli daemon HTTP address, e.g. http://127.0.0.1:8080",
+        "prompt": "Signal daemon URL",
+        "url": _docs_url("user-guide/messaging/signal.md"),
     },
     "SIGNAL_ACCOUNT": {
         "description": "Signal account phone number registered with the bridge",
@@ -9873,7 +9919,19 @@ _OAUTH_PROVIDER_CATALOG: tuple[Dict[str, Any], ...] = (
         "name": "Qwen (via Qwen CLI)",
         "flow": "external",
         "cli_command": "robo auth add qwen-oauth",
-        "docs_url": "https://github.com/QwenLM/qwen-code",
+        "docs_url": _docs_url("integrations/providers.md"),
+        # Qwen discontinued this sign-in, so "run this command, then come
+        # back" is a dead end for anyone without an existing login. The card
+        # stays (an existing login keeps working); the notice replaces the
+        # sign-in instructions so nobody is sent to a command that cannot
+        # succeed.
+        "notice": (
+            "Qwen discontinued its OAuth sign-in on 2026-04-15, so a new "
+            "Qwen login is no longer possible. This option only works on a "
+            "computer that still has a working Qwen Code login. To use Qwen "
+            "models, add a Qwen Cloud (Alibaba DashScope) or OpenRouter API "
+            "key instead."
+        ),
         "status_fn": None,  # dispatched via auth.get_qwen_auth_status
     },
     {
@@ -9886,7 +9944,7 @@ _OAUTH_PROVIDER_CATALOG: tuple[Dict[str, Any], ...] = (
         # extension that doesn't change the operator experience.
         "flow": "device_code",
         "cli_command": "robo auth add minimax-oauth",
-        "docs_url": "https://www.minimax.io",
+        "docs_url": _docs_url("guides/minimax-oauth.md"),
         "status_fn": None,  # dispatched via auth.get_minimax_oauth_auth_status
     },
     {
@@ -9897,7 +9955,7 @@ _OAUTH_PROVIDER_CATALOG: tuple[Dict[str, Any], ...] = (
         # 127.0.0.1 callback.
         "flow": "device_code",
         "cli_command": "robo auth add xai-oauth",
-        "docs_url": "website/docs/guides/xai-grok-oauth.md",
+        "docs_url": _docs_url("guides/xai-grok-oauth.md"),
         "status_fn": None,  # dispatched via auth.get_xai_oauth_auth_status
     },
     {
@@ -10113,6 +10171,9 @@ async def list_oauth_providers(profile: Optional[str] = None):
         name            human label
         flow            "pkce" | "device_code" | "external"
         cli_command     fallback CLI command for users to run manually
+        notice          optional sentence shown instead of the sign-in
+                        instructions (e.g. a sign-in the provider has
+                        discontinued), else null
         disconnect_command  shell command that clears an external provider's
                             creds (run in the embedded terminal), else null
         docs_url        external docs/portal link for the "Learn more" link
@@ -10138,6 +10199,7 @@ async def list_oauth_providers(profile: Optional[str] = None):
                 "name": p["name"],
                 "flow": p["flow"],
                 "cli_command": p["cli_command"],
+                "notice": p.get("notice"),
                 "docs_url": p["docs_url"],
                 "disconnect_hint": disconnect_hint,
                 "disconnect_command": _oauth_provider_disconnect_command(p),
@@ -16800,6 +16862,18 @@ def _safe_plugin_api_relpath(api_field: Any, *, dashboard_dir: Path) -> Optional
     return api_field
 
 
+def _plugin_entry_exists(dashboard_dir: Path, entry: Any) -> bool:
+    """True when the manifest's browser bundle is a real file inside
+    ``dashboard_dir`` (a path that escapes the folder does not count)."""
+    if not isinstance(entry, str) or not entry.strip():
+        return False
+    try:
+        candidate = (dashboard_dir / entry).resolve()
+        return candidate.is_relative_to(dashboard_dir.resolve()) and candidate.is_file()
+    except (OSError, ValueError):
+        return False
+
+
 def _discover_dashboard_plugins() -> list:
     """Scan plugins/*/dashboard/manifest.json for dashboard extensions.
 
@@ -16887,6 +16961,19 @@ def _discover_dashboard_plugins() -> list:
                         "not be mounted",
                         name, raw_api,
                     )
+                entry = data.get("entry", "dist/index.js")
+                # A plugin may ship only its backend routes (``api``) and no
+                # browser bundle; the bundled kanban and achievements plugins
+                # do, for the desktop app. Their routes still mount below,
+                # but the dashboard must not offer a tab whose script can
+                # never load.
+                has_ui = _plugin_entry_exists(dashboard_dir, entry)
+                if not has_ui:
+                    _log.debug(
+                        "Dashboard plugin %s has no browser bundle at %s; "
+                        "routes only, no tab",
+                        name, entry,
+                    )
                 plugins.append({
                     "name": name,
                     "label": data.get("label", name),
@@ -16895,12 +16982,13 @@ def _discover_dashboard_plugins() -> list:
                     "version": data.get("version", "0.0.0"),
                     "tab": tab_info,
                     "slots": slots,
-                    "entry": data.get("entry", "dist/index.js"),
+                    "entry": entry,
                     "css": data.get("css"),
                     "has_api": bool(safe_api),
                     "source": source,
                     "_dir": str(dashboard_dir),
                     "_api_file": safe_api,
+                    "_has_ui": has_ui,
                 })
             except Exception as exc:
                 _log.warning("Bad dashboard plugin manifest %s: %s", manifest_file, exc)
@@ -16943,6 +17031,8 @@ async def get_dashboard_plugins():
     def _is_active(p: dict) -> bool:
         name = p.get("name", "")
         if name in hidden:
+            return False
+        if not p.get("_has_ui", True):
             return False
         if p.get("source") == "user":
             if name in disabled_set:

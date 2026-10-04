@@ -1642,8 +1642,10 @@ def do_snapshot_export(output_path: str, console: Optional[Console] = None) -> N
     installed = lock.list_installed()
     tap_list = taps.list_taps()
 
+    from robo_runtime.version import ROBO_VERSION
+
     snapshot = {
-        "robo_version": "0.1.0",
+        "robo_version": ROBO_VERSION,
         "exported_at": __import__("datetime").datetime.now(
             __import__("datetime").timezone.utc
         ).isoformat(),
@@ -1941,16 +1943,16 @@ def skills_command(args) -> None:
         elif snap_action == "import":
             do_snapshot_import(args.input, force=getattr(args, "force", False))
         else:
-            _console.print("Usage: robo skills snapshot [export|import]\n")
+            _console.print("Usage: robo skills snapshot \\[export|import]\n")
     elif action == "tap":
         tap_action = getattr(args, "tap_action", None)
         repo = getattr(args, "repo", "") or getattr(args, "name", "")
         if not tap_action:
-            _console.print("Usage: robo skills tap [list|add|remove]\n")
+            _console.print("Usage: robo skills tap \\[list|add|remove]\n")
             return
         do_tap(tap_action, repo=repo)
     else:
-        _console.print("Usage: robo skills [browse|search|install|inspect|list|list-modified|diff|check|update|audit|uninstall|reset|opt-out|opt-in|publish|snapshot|tap]\n")
+        _console.print("Usage: robo skills \\[browse|search|install|inspect|list|list-modified|diff|check|update|audit|uninstall|reset|opt-out|opt-in|publish|snapshot|tap]\n")
         _console.print("Run 'robo skills <command> --help' for details.\n")
 
 

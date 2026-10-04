@@ -828,8 +828,21 @@ def run_doctor(
     binary = resolve_cua_driver_cmd(driver_cmd)
     if not binary:
         looked_for = driver_cmd or "cua-driver (PATH and canonical install paths)"
-        print(f"cua-driver: not installed (looked for {looked_for!r}).")
-        print("  Run: robo computer-use install")
+        if json_output:
+            # A caller that asked for JSON must get JSON on stdout, not prose.
+            json.dump(
+                {
+                    "overall": "unavailable",
+                    "checks": [],
+                    "error": f"cua-driver is not installed (looked for {looked_for})",
+                    "hint": "robo computer-use install",
+                },
+                sys.stdout, indent=2, sort_keys=True,
+            )
+            sys.stdout.write("\n")
+        else:
+            print(f"cua-driver: not installed (looked for {looked_for!r}).")
+            print("  Run: robo computer-use install")
         return 2
 
     try:
@@ -837,7 +850,14 @@ def run_doctor(
             binary, include=include, skip=skip,
         )
     except RuntimeError as e:
-        print(f"cua-driver health_report failed: {e}", file=sys.stderr)
+        if json_output:
+            json.dump(
+                {"overall": "unavailable", "checks": [], "error": f"cua-driver health_report failed: {e}"},
+                sys.stdout, indent=2, sort_keys=True,
+            )
+            sys.stdout.write("\n")
+        else:
+            print(f"cua-driver health_report failed: {e}", file=sys.stderr)
         return 2
 
     identity = _build_identity(binary, report)

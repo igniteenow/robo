@@ -48,7 +48,7 @@ You need at least one way to connect to an LLM. Use `robo model` to switch provi
 | **AWS Bedrock** | `robo model` → "AWS Bedrock" (provider: `bedrock`; standard AWS credentials chain via boto3) |
 | **NVIDIA Build** | `NVIDIA_API_KEY` in `~/.robo/.env` (provider: `nvidia`; NIM-hosted models on build.nvidia.com) |
 | **Ollama Cloud** | `robo model` → "Ollama Cloud" (provider: `ollama-cloud`; cloud-hosted Ollama API) |
-| **Qwen OAuth** | `robo model` → "Qwen OAuth" (provider: `qwen-oauth`; browser PKCE login) |
+| **Qwen OAuth** | Discontinued by Qwen on 2026-04-15 (provider: `qwen-oauth`). Only a Qwen Code login that already exists on the machine is still picked up; use **Qwen Cloud** (`alibaba`) for Qwen models |
 | **MiniMax OAuth** | `robo model` → "MiniMax (OAuth)" (provider: `minimax-oauth`; browser PKCE login) |
 | **StepFun** | `STEPFUN_API_KEY` in `~/.robo/.env` (provider: `stepfun`) |
 | **LM Studio** | `robo model` → "LM Studio" (provider: `lmstudio`, optional `LM_API_KEY`) |
@@ -397,29 +397,21 @@ vertex:
 
 ### Qwen Portal (OAuth)
 
-Alibaba's Qwen Portal with browser-based OAuth login. Pick **Qwen OAuth (Portal)** in `robo model`, sign in through the browser, and Robo persists the refresh token.
+:::caution Discontinued by Qwen
+Qwen discontinued its OAuth sign-in on 2026-04-15. The Qwen Code CLI no longer offers it, so a new Qwen login cannot be created. To use Qwen models, pick **Qwen Cloud** in `robo model` (the `alibaba` provider, with a `DASHSCOPE_API_KEY`) or use OpenRouter.
+:::
 
-```bash
-robo model
-# → pick "Qwen OAuth (Portal)"
-# → browser opens; sign in with your Alibaba account
-# → confirm — credentials are saved to ~/.robo/auth.json
+The `qwen-oauth` provider reuses a login the Qwen Code CLI saved earlier (`~/.qwen/oauth_creds.json`). Robo does not run a Qwen sign-in of its own. If that file is present Robo still uses it, but Qwen has said requests on this sign-in are rejected after the cut-off, so do not rely on it:
 
-robo chat   # uses portal.qwen.ai/v1 endpoint
-```
-
-Or configure `config.yaml`:
 ```yaml
 model:
   provider: "qwen-oauth"
   default: "qwen3-coder-plus"
 ```
 
-Set `ROBO_QWEN_BASE_URL` only if the portal endpoint relocates (default: `https://portal.qwen.ai/v1`).
+Without it, `robo auth add qwen-oauth` and `robo model` → Qwen OAuth say that no Qwen login was found and point to Qwen Cloud instead.
 
-:::tip Qwen OAuth vs Qwen Cloud (Alibaba DashScope)
-`qwen-oauth` uses the consumer-facing Qwen Portal with OAuth login — ideal for individual users. The `alibaba` provider uses Qwen Cloud (Alibaba DashScope) with a `DASHSCOPE_API_KEY` — ideal for programmatic / production workloads. Both route to Qwen-family models but live at different endpoints.
-:::
+Set `ROBO_QWEN_BASE_URL` only if the portal endpoint relocates (default: `https://portal.qwen.ai/v1`).
 
 ### Alibaba Cloud (Coding Plan)
 

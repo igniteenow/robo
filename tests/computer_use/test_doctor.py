@@ -267,6 +267,20 @@ class TestJsonOutput:
         assert "robo_identity" in parsed
         assert parsed["robo_identity"]["resolved_binary"]
 
+    def test_json_output_when_driver_is_missing_is_still_json(self):
+        """`--json` promises a machine-readable stdout; the missing-binary
+        path used to print prose there."""
+        from tools.computer_use import doctor
+
+        with patch("tools.computer_use.cua_backend.resolve_cua_driver_cmd", return_value=None), \
+             patch("sys.stdout", new_callable=StringIO) as out:
+            code = doctor.run_doctor(json_output=True)
+        assert code == 2
+        parsed = json.loads(out.getvalue())
+        assert parsed["overall"] == "unavailable"
+        assert "not installed" in parsed["error"]
+        assert parsed["checks"] == []
+
 
 # ── ROBO_CUA_DRIVER_CMD resolution ───────────────────────────────────────
 

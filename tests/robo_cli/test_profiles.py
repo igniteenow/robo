@@ -921,3 +921,32 @@ class TestProfilesToServe:
 
 
 
+
+
+class TestExportCommandOutputName:
+    """`robo profile export -o x.zip` silently wrote `x.zip.tar.gz`; the only
+    archive format is tar.gz, so another extension is refused up front."""
+
+    def _run(self, output, monkeypatch, capsys):
+        from robo_cli import main as robo_main
+
+        called = []
+        monkeypatch.setattr("robo_cli.profiles.export_profile", lambda name, out: called.append(out) or Path(out))
+        args = types.SimpleNamespace(profile_action="export", profile_name="demo", output=output)
+        try:
+            robo_main.cmd_profile(args)
+            code = 0
+        except SystemExit as e:
+            code = e.code
+        return code, called, capsys.readouterr().out
+
+    def test_zip_name_is_refused(self, monkeypatch, capsys):
+        code, called, out = self._run("x.zip", monkeypatch, capsys)
+        assert code == 1
+        assert called == []
+        assert "x.tar.gz" in out
+
+    def test_tar_gz_and_plain_names_go_through(self, monkeypatch, capsys):
+        for name in ("x.tar.gz", "backup.tgz", "plain"):
+            code, called, _ = self._run(name, monkeypatch, capsys)
+            assert code == 0 and called == [name], name

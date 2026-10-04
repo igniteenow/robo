@@ -43,6 +43,28 @@ one-off at the call site.
 7. **Immediate feedback.** Direct manipulation updates the view first. Network
    or disk persistence reconciles afterward and rolls back visibly on failure.
 
+## Scale
+
+The numbers that make the app read as a modern chat client. They live in
+`src/styles.css` `:root` and are the contract for every surface:
+
+- **Radius:** `--radius-scalar: 0.8` — 8px controls and rows (`rounded-md`),
+  10px cards and menus (`rounded-lg`), 13px panels (`rounded-xl`), 19px for
+  the composer (`rounded-2xl`). Icon buttons keep their literal 4px; text
+  buttons stay square.
+- **Reading column:** `--composer-width: 48rem` (768px), shared by the
+  transcript and the composer.
+- **Type:** app chrome (menus, settings, dialogs) at 13px; the transcript and
+  the composer at 15px, prose at 1.6 leading (`[data-slot='aui_thread-content']`
+  re-declares `--conversation-text-font-size`); markdown headings 20/17/16/15px;
+  code 13px mono; sidebar rows 14px on a 32px row.
+- **Rhythm:** `--conversation-turn-gap: 1rem` between turns,
+  `--paragraph-gap: 0.875rem` inside a reply.
+- **Palette:** the default skin (`igniteenow`) is white and graphite — a pure
+  white chat surface, a `#F7F7F8` sidebar, `#141417` in dark — with ember for
+  primary actions and the brand indigo for focus. Every built-in skin passes
+  `presets.audit.test.ts` (7:1 reading text, 4.5:1 secondary, 3:1 marks).
+
 ## Information architecture
 
 - **Chat is the home surface.** The transcript and composer stay primary; tools,
@@ -96,6 +118,8 @@ for call-site shadow or border inventions.
 | `--ui-text-primary / -secondary / -tertiary` | text hierarchy |
 | `--ui-bg-quaternary` | soft control fill (secondary button) |
 | `--ui-widget-surface-background` | fill for inline chat widgets (`WIDGET_SHELL_CLASS`) |
+| `--dt-user-bubble`, `--dt-user-bubble-border` | the user's message bubble — the skin's `userBubble` / `userBubbleBorder`, unmixed in both modes |
+| `--ui-code-block-background`, `-header-background`, `-border`, `-label` | fenced code (`CodeCard`): a neutral well, its header bar, hairline and language label |
 | `--chrome-action-hover` | hover fill for quiet controls |
 | `--theme-primary`, `--ui-accent` | brand/accent |
 
@@ -202,9 +226,22 @@ Notes:
   (`src/components/chat/widget-shell.ts`): shared radius, the
   `--ui-widget-surface-background` fill, no border. Its actions sit *outside*
   the panel, below it. Don't give one widget its own radius or fill.
-- Bordered surfaces in the transcript (tables, fences, callouts, attachments)
+- **Who said what must read at a glance.** The user's message is a bubble on
+  the right, sized to its text up to a reading-width cap, in the skin's bubble
+  colour; the inline editor that replaces it stays full width. Robo's reply is
+  unboxed prose on the left. Nothing else in the transcript wears the bubble
+  colour.
+- **Fenced code is a `CodeCard`**: a framed well in the `--ui-code-block-*`
+  tokens with a `CodeCardHeader` bar — the fence's language on the left (drawn
+  from `data-language` by CSS, so it never joins selected or copied text) and
+  an always-visible copy control on the right. Never give code the bubble's
+  colour or shape.
+- Other bordered surfaces in the transcript (tables, callouts, attachments)
   use `--ui-stroke-tertiary`. Not `border-border` — that's the app-wide
   default and reads too hot against the thread.
+- The transcript background is a clean surface. The decorative backdrop image
+  is an opt-in (Settings → Appearance), off by default: behind a dark theme it
+  turned the whole thread murky.
 - A tool result may expose an inline action that opens a preview. It must not
   open the rail automatically.
 - Install, onboarding, connecting, boot failure, and reauthentication are

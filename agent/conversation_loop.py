@@ -2855,6 +2855,19 @@ def run_conversation(
                     if not _refusal_text:
                         _refusal_text = (agent._extract_reasoning(_refusal_result) or "").strip()
 
+                    # A refusal with no explanation at all (no text, no
+                    # reasoning) is usually an automated provider-side filter,
+                    # and it is not always deterministic: the same prompt has
+                    # been seen to pass on the very next call. Re-issue the
+                    # request once before giving up. A configured fallback
+                    # still goes first, and a refusal that carries the model's
+                    # explanation is never retried.
+                    _retry_empty_refusal = (
+                        not _refusal_text
+                        and not _retry.empty_refusal_retry_attempted
+                        and not agent._has_pending_fallback()
+                    )
+
                     agent._invoke_api_request_error_hook(
                         task_id=effective_task_id,
                         turn_id=turn_id,
@@ -2867,7 +2880,7 @@ def run_conversation(
                         status_code=None,
                         retry_count=retry_count,
                         max_retries=max_retries,
-                        retryable=False,
+                        retryable=_retry_empty_refusal,
                         reason=FailoverReason.content_policy_blocked.value,
                     )
 
@@ -2877,7 +2890,23 @@ def run_conversation(
                     if agent.thinking_callback:
                         agent.thinking_callback("")
 
-                    # Deterministic for the unchanged prompt — never retry.
+                    if _retry_empty_refusal:
+                        _retry.empty_refusal_retry_attempted = True
+                        logger.warning(
+                            "%sModel declined to respond with no explanation "
+                            "(finish_reason=content_filter); retrying once. "
+                            "model=%s provider=%s",
+                            agent.log_prefix, agent.model, agent.provider,
+                        )
+                        # Buffered: shown only if the turn still fails, so a
+                        # retry that succeeds is silent.
+                        agent._buffer_status(
+                            "⚠️ The model declined to respond and gave no reason — tried once more."
+                        )
+                        continue
+
+                    # A refusal that explains itself is deterministic for the
+                    # unchanged prompt — never retry it.
                     # Try a configured fallback once (a different model may not
                     # refuse); otherwise surface the refusal terminally.
                     if agent._has_pending_fallback():

@@ -55,6 +55,32 @@ class TestDashboardStatus:
         assert "PID 12346" in out
 
 
+    def test_serve_status_reports_serve_backends_not_dashboards(self, capsys):
+        """`robo serve --status` is about the headless backend. A browser
+        dashboard on another port is not it, and a running `serve` must not be
+        reported as "no dashboard"."""
+        processes = [
+            (12345, "robo dashboard --port 9119"),
+            (12346, "python -m robo_cli.main serve --host 127.0.0.1 --port 9120"),
+        ]
+        with patch("robo_cli.main._scan_dashboard_processes", return_value=processes), \
+             patch("gateway.status._pid_exists", return_value=True), \
+             patch("robo_cli.main._dashboard_listening", return_value=True), \
+             pytest.raises(SystemExit) as exc:
+            cmd_dashboard(_ns(status=True, headless_backend=True))
+        assert exc.value.code == 0
+        out = capsys.readouterr().out
+        assert "1 robo serve process(es) running" in out
+        assert "PID 12346" in out
+        assert "PID 12345" not in out
+
+    def test_serve_status_with_nothing_running_names_serve(self, capsys):
+        with patch("robo_cli.main._scan_dashboard_processes", return_value=[]), \
+             pytest.raises(SystemExit) as exc:
+            cmd_dashboard(_ns(status=True, headless_backend=True))
+        assert exc.value.code == 0
+        assert "No robo serve processes running" in capsys.readouterr().out
+
     def test_status_does_not_try_to_import_fastapi(self):
         """`--status` must not require dashboard runtime deps — it's a
         process-table scan only.  We prove this by making fastapi import
