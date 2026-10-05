@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import stat
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -547,6 +548,82 @@ class TestRuntimeRepair:
         )
         leftovers = list(root.glob(f"{live.name}.stale.runtime-*"))
         assert leftovers == [], f"no stale markers may remain: {leftovers}"
+
+
+def _parked_venv(root: Path, name: str, *, age_seconds: float) -> Path:
+    parked = root / name
+    (parked / "bin").mkdir(parents=True)
+    (parked / "bin" / "python").write_text("old", encoding="utf-8")
+    when = time.time() - age_seconds
+    os.utime(parked, (when, when))
+    return parked
+
+
+class TestSweepParkedVenvs:
+    """``robo update`` reclaims parked venvs before it reads the working tree."""
+
+    def test_reclaims_old_parked_venvs_of_both_layouts(self, tmp_path):
+        from robo_cli.managed_uv import sweep_parked_venvs
+
+        root, live, sentinel = _make_runtime_install(tmp_path)
+        dot_live = root / ".venv"
+        (dot_live / "bin").mkdir(parents=True)
+        (dot_live / "bin" / "python").write_text("live", encoding="utf-8")
+        old_managed = _parked_venv(root, "venv.stale.runtime-1-2-aaaa", age_seconds=7200)
+        old_dot = _parked_venv(root, ".venv.stale.runtime-1790690355-8556-1744368d", age_seconds=5 * 86400)
+
+        removed = sweep_parked_venvs(root)
+
+        assert sorted(removed) == sorted([old_managed, old_dot])
+        assert not old_managed.exists()
+        assert not old_dot.exists()
+        # The live venvs are never touched.
+        assert sentinel.read_text(encoding="utf-8") == "live"
+        assert (dot_live / "bin" / "python").read_text(encoding="utf-8") == "live"
+
+    def test_keeps_a_fresh_backup_a_repair_may_still_roll_back_to(self, tmp_path):
+        from robo_cli.managed_uv import sweep_parked_venvs
+
+        root, _live, _sentinel = _make_runtime_install(tmp_path)
+        fresh = _parked_venv(root, ".venv.stale.runtime-9-9-bbbb", age_seconds=60)
+        just_parked = _parked_venv(root, f".venv.stale.runtime-{int(time.time()) - 60}-7-cccc", age_seconds=60)
+
+        assert sweep_parked_venvs(root) == []
+        assert fresh.exists()
+        assert just_parked.exists()
+
+    def test_parking_time_in_the_name_beats_a_refreshed_mtime(self, tmp_path):
+        """An autostash restore rewrites the folder with a fresh mtime; the
+        token in its name still says when it was parked, and that is what
+        the age gate is about - in both sweeps."""
+        from robo_cli.managed_uv import _sweep_stale_runtime_backups, sweep_parked_venvs
+
+        root, live, sentinel = _make_runtime_install(tmp_path)
+        parked_long_ago = int(time.time()) - 5 * 86400
+        restored_dot = _parked_venv(root, f".venv.stale.runtime-{parked_long_ago}-8556-1744368d", age_seconds=0)
+        restored_managed = _parked_venv(root, f"venv.stale.runtime-{parked_long_ago}-1-dddd", age_seconds=0)
+
+        assert sorted(sweep_parked_venvs(root)) == sorted([restored_managed, restored_dot])
+        assert not restored_dot.exists()
+        assert not restored_managed.exists()
+        assert sentinel.read_text(encoding="utf-8") == "live"
+
+        again = _parked_venv(root, f"venv.stale.runtime-{parked_long_ago}-2-eeee", age_seconds=0)
+        _sweep_stale_runtime_backups(live, root=root)
+        assert not again.exists()
+
+    def test_only_directories_count_and_a_missing_root_is_fine(self, tmp_path):
+        from robo_cli.managed_uv import sweep_parked_venvs
+
+        root, _live, _sentinel = _make_runtime_install(tmp_path)
+        stray = root / ".venv.stale.runtime-0-0-cccc"
+        stray.write_text("not a venv", encoding="utf-8")
+        when = time.time() - 7200
+        os.utime(stray, (when, when))
+
+        assert sweep_parked_venvs(root) == []
+        assert stray.exists()
+        assert sweep_parked_venvs(tmp_path / "nowhere") == []
 
 
 class TestRuntimeCutover:

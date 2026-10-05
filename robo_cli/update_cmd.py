@@ -3947,6 +3947,20 @@ def _cmd_update_impl(args, gateway_mode: bool):
     # dirt on a managed checkout, so clear it (and stop generating it) before
     # the stash/branch logic rather than autostashing the entire tree.
     _normalize_managed_eol(git_cmd, _m().PROJECT_ROOT)
+    # Also runtime leftovers: the venv a runtime repair parked next to the
+    # live one. Reclaim it here, before the working tree is inspected, so
+    # the autostash below never carries a whole venv along (and the
+    # restore never hands it back with a fresh mtime - see
+    # managed_uv.sweep_parked_venvs).
+    try:
+        from robo_cli.managed_uv import sweep_parked_venvs
+
+        parked = sweep_parked_venvs(_m().PROJECT_ROOT)
+    except Exception as exc:
+        logger.debug("Parked venv sweep skipped: %s", exc)
+        parked = []
+    if parked:
+        print(f"→ Removed {len(parked)} old venv folder(s) parked by an earlier runtime repair")
 
     # Detect if we're updating from a fork (before any branch logic)
     origin_url = _m()._get_origin_url(git_cmd, _m().PROJECT_ROOT)
@@ -4507,7 +4521,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                     from robo_constants import display_robo_home as _dhh
                     print(f"  Full build log: {_dhh()}/logs/update.log")
                 else:
-                    print("  ✓ Desktop app up to date")
+                    print("  ✓ Desktop app rebuilt")
 
         print()
         print("✓ Code updated!")

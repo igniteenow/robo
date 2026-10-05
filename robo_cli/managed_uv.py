@@ -1050,6 +1050,31 @@ def project_venv_dir(project_root: Path | None = None) -> Path:
     return _default_live_venv(Path(project_root) if project_root is not None else _PROJECT_ROOT)
 
 
+# Parked-venv tokens are ``<epoch>-<pid>-<hex>``; an epoch below this is not a
+# timestamp (test fixtures and hand-made names use small numbers).
+_PARKED_TOKEN_MIN_EPOCH = 1_600_000_000
+
+
+def _parked_venv_age(candidate: Path, now: float) -> float | None:
+    """Seconds since *candidate* (``<venv>.stale.runtime-<token>``) was parked.
+
+    The token's first field is the parking time, which is what the age gate
+    is about; the mtime is only a fallback because ``git stash`` restores a
+    tree with fresh mtimes, so a parked venv that an autostash carried along
+    looked brand new on every update.  ``None`` when neither is available.
+    """
+    marker = ".stale.runtime-"
+    stamp = candidate.name.split(marker, 1)[1].split("-", 1)[0] if marker in candidate.name else ""
+    if stamp.isdigit():
+        epoch = int(stamp)
+        if _PARKED_TOKEN_MIN_EPOCH <= epoch <= now + 300:
+            return now - epoch
+    try:
+        return now - candidate.stat().st_mtime
+    except OSError:
+        return None
+
+
 def _sweep_stale_runtime_backups(
     live: Path,
     *,
@@ -1080,13 +1105,58 @@ def _sweep_stale_runtime_backups(
     for candidate in candidates:
         if keep is not None and candidate == keep:
             continue
-        try:
-            age = now - candidate.stat().st_mtime
-        except OSError:
-            continue
-        if age < min_age_seconds:
+        age = _parked_venv_age(candidate, now)
+        if age is None or age < min_age_seconds:
             continue
         _remove_tree(candidate, boundary=root)
+
+
+def sweep_parked_venvs(
+    root: Path | None = None,
+    *,
+    min_age_seconds: float = 3600.0,
+) -> list[Path]:
+    """Reclaim parked ``venv.stale.runtime-*`` / ``.venv.stale.runtime-*`` venvs.
+
+    A runtime repair parks the previous venv next to the live one and
+    ``repair_vulnerable_runtime`` sweeps such leftovers once the runtime
+    is confirmed safe.  That sweep runs late in ``robo update`` - after
+    the updater has already taken ``git status`` as the list of local
+    changes - and on ``.venv`` installs the parked copy was not
+    gitignored, so every update autostashed the whole parked venv
+    (about 1 GB) and restored it with a fresh mtime, which kept it
+    younger than the age gate forever.  ``robo update`` now calls this
+    before it looks at the working tree, for both venv names, and the
+    age comes from the parking time in the folder's name.
+
+    Returns the parked venvs that are gone afterwards.  ``min_age_seconds``
+    keeps a backup a concurrent repair may still roll back to.  Best-effort:
+    never raises.
+    """
+    base = Path(root) if root is not None else _PROJECT_ROOT
+    removed: list[Path] = []
+    now = time.time()
+    for name in (_VENV_NAME, _ALT_VENV_NAME):
+        try:
+            candidates = sorted(base.glob(f"{name}.stale.runtime-*"))
+        except OSError:
+            continue
+        for candidate in candidates:
+            try:
+                if not candidate.is_dir():
+                    continue
+            except OSError:
+                continue
+            age = _parked_venv_age(candidate, now)
+            if age is None or age < min_age_seconds:
+                continue
+            _remove_tree(candidate, boundary=base)
+            try:
+                if not candidate.exists():
+                    removed.append(candidate)
+            except OSError:
+                continue
+    return removed
 
 
 def repair_vulnerable_runtime(
