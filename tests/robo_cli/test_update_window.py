@@ -102,6 +102,24 @@ class TestUpdateProgress:
             last = current
         assert last < 1.0  # only a finished update fills it
 
+    @pytest.mark.parametrize(
+        ("line", "detail"),
+        [
+            ("→ Closing the Robo desktop app...", "Closing the Robo desktop app…"),
+            ("→ Stopping 2 other Robo process(es)...", "Stopping 2 other Robo process(es)…"),
+            ("→ Stopping 1 Robo process(es)...", "Stopping 1 Robo process(es)…"),
+        ],
+    )
+    def test_closing_what_is_still_open_counts_as_getting_ready(self, line, detail):
+        """The update closes other Robo windows itself (update_blockers); the
+        window shows that as a step instead of sitting on "Waiting"."""
+        progress = _progress()
+        progress.feed(line)
+
+        assert progress.phase.key == "preparing"
+        assert progress.detail == detail
+        assert progress.errors == []
+
     def test_an_earlier_step_printed_late_does_not_rewind(self):
         progress = _progress()
         progress.feed("→ Building web UI...")

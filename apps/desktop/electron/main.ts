@@ -236,7 +236,12 @@ import {
   spawnUpdaterProcess,
   stagedUpdaterSupportsPrewrittenMarker
 } from './updater-process'
-import { formatBlockerMessage, formatProbeFailedMessage, scanVenvBlockers } from './venv-blocker-scan'
+import {
+  closeBlockersQuestion,
+  formatBlockerMessage,
+  formatProbeFailedMessage,
+  scanVenvBlockers
+} from './venv-blocker-scan'
 import { fetchMarketplaceThemes, searchMarketplaceThemes } from './vscode-marketplace'
 import { createWakeIndicatorWindowController } from './wake-indicator-window'
 import {
@@ -3306,7 +3311,10 @@ async function applyUpdates(opts = {}) {
     if (IS_WINDOWS) {
       const scanOutcome = await scanVenvBlockers(updateRoot)
 
-      if (scanOutcome.kind === 'blocked') {
+      // The staged updater runs `robo update --yes`, which closes what is in
+      // the way itself (robo_cli/update_blockers.py), but only the user can
+      // say whether that is acceptable right now.
+      if (scanOutcome.kind === 'blocked' && !(await confirmClosingBlockers(scanOutcome.result))) {
         const message = formatBlockerMessage(scanOutcome.result)
 
         rememberLog(`[updates] venv-blocked: ${scanOutcome.result.processes.length} process(es) hold the install`)
@@ -3429,6 +3437,32 @@ function readTextFile(file) {
   }
 }
 
+// "Update now" found other Robo processes holding the install open (a terminal
+// running robo, a dashboard, a second window). The update can close them, but
+// never without asking: one may be a chat mid-reply or a server other devices
+// use. True only on an explicit yes.
+async function confirmClosingBlockers(result) {
+  const { detail, message } = closeBlockersQuestion(result)
+
+  const options = {
+    buttons: ['Cancel', 'Close them and update'],
+    cancelId: 0,
+    defaultId: 1,
+    detail,
+    message,
+    type: 'question' as const
+  }
+
+  try {
+    const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+    const { response } = parent ? await dialog.showMessageBox(parent, options) : await dialog.showMessageBox(options)
+
+    return response === 1
+  } catch {
+    return false
+  }
+}
+
 // Windows, CLI install: run the update for the user instead of asking them
 // to paste a command. `robo update` can't run while this app is open (the app,
 // its backend and its own files are what it replaces), so we hand it to the
@@ -3476,7 +3510,20 @@ async function applyUpdatesWindowsInWindow(updateRoot, branch) {
     return { ok: false, error: 'venv-locked', message }
   }
 
-  if (scanOutcome.kind !== 'clear') {
+  // Other Robo windows are in the way. Offer to close them: on a yes the
+  // update goes ahead and closes them itself before it touches anything
+  // (it runs with --yes; robo_cli/update_blockers.py).
+  let closingBlockers = false
+
+  if (scanOutcome.kind === 'blocked') {
+    closingBlockers = await confirmClosingBlockers(scanOutcome.result)
+
+    if (closingBlockers) {
+      rememberLog(`[updates] the update will close ${scanOutcome.result.processes.length} other Robo process(es)`)
+    }
+  }
+
+  if (scanOutcome.kind !== 'clear' && !closingBlockers) {
     const blocked = scanOutcome.kind === 'blocked'
     const message = blocked ? formatBlockerMessage(scanOutcome.result) : formatProbeFailedMessage()
 

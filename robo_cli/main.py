@@ -5234,6 +5234,7 @@ from robo_cli.update_cmd import (  # noqa: F401
     _run_pre_update_backup,
     _should_skip_upstream_prompt,
     _stash_apply_failed_only_on_existing_untracked,
+    _local_changes,
     _stash_local_changes_if_needed,
     _sync_fork_with_upstream,
     _sync_with_upstream_if_needed,
@@ -9493,8 +9494,21 @@ def cmd_update(args):
     finally:
         _update_lock.release()
         _finalize_update_output(_update_io_state)
+        if getattr(args, "closed_for_update", False):
+            # The update closed other Robo windows to free the install's files
+            # (update_blockers). Only the desktop app is reopened.
+            print()
+            print("Robo windows that were closed for this update stay closed.")
+            print("  Start them again when you need them:  robo   /   robo dashboard")
         if reopen_desktop:
             _reopen_desktop_after_update(reopen_desktop, succeeded=succeeded)
+        elif getattr(args, "reopen_desktop_closed_here", False):
+            # Not the desktop's own "Update now": this update closed the app
+            # to get at its files, so it puts it back. The window is the
+            # update's own only when the update was handed off to a new one.
+            _reopen_desktop_after_update(
+                args.reopen_desktop, succeeded=succeeded, owns_window=bool(handoff_pids)
+            )
 
 
 def _coalesce_session_name_args(argv: list) -> list:

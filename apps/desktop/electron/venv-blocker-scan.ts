@@ -211,6 +211,31 @@ export function formatBlockerMessage(result: VenvBlockerScanResult): string {
 }
 
 /**
+ * The question "Update now" asks when other Robo processes hold the install
+ * open. Robo can close them itself (the update runs with `--yes`, see
+ * robo_cli/update_blockers.py), but only after the user has said so: one of
+ * them may be a chat in the middle of a reply, or a server other devices use.
+ */
+export function closeBlockersQuestion(result: VenvBlockerScanResult): { detail: string; message: string } {
+  const shown = result.processes.slice(0, 5).map(proc => `  ${proc.name} (PID ${proc.pid})`)
+
+  if (result.processes.length > shown.length) {
+    shown.push(`  ... and ${result.processes.length - shown.length} more`)
+  }
+
+  return {
+    detail: [
+      'A terminal running robo, a dashboard or another Robo window is using this installation, and Windows cannot update files that are in use:',
+      '',
+      ...shown,
+      '',
+      'Robo can close them and then update. Chats are saved as you go. A reply that is being written there right now, or a command it is running, stops. A server other devices connect to stays off until you start it again.'
+    ].join('\n'),
+    message: 'Robo is also open somewhere else'
+  }
+}
+
+/**
  * Build a probe-failure error message.
  */
 export function formatProbeFailedMessage(): string {

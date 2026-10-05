@@ -44,7 +44,9 @@ If your local checkout is on a different branch, Robo auto-stashes any uncommitt
 
 ### Local changes on non-interactive updates
 
-When you run `robo update` in a terminal, Robo stashes any uncommitted source-tree changes, pulls, then **asks** whether to restore them — exactly as it always has. Nothing changes for interactive updates.
+When you run `robo update` in a terminal, Robo stashes any uncommitted changes to its own source files, pulls, then **asks** whether to restore them — exactly as it always has. Nothing changes for interactive updates.
+
+Files that are not part of Robo — anything you, or Robo working in that folder for you, created inside the install folder — are not "local changes": the update never touches them, so they are left where they are and no question is asked about them. The one exception is a file whose path the new version also carries (a hand-copied patch, say); that one is stashed like a source edit so it can be restored.
 
 When the update runs **without a terminal** — from the desktop/chat app's "Update" button or a gateway-triggered update — there's no prompt to answer. The `updates.non_interactive_local_changes` setting decides what happens to your stashed changes:
 
@@ -86,27 +88,24 @@ updates:
 Update backups protect an in-place update. If you're migrating your whole setup to different hardware, use `robo backup` + `robo import` instead — see [Exporting Robo to another machine](/reference/faq#exporting-robo-to-another-machine) and [`robo backup` vs `robo profile export`](/reference/faq#robo-backup-vs-robo-profile-export).
 :::
 
-### Windows: another `robo.exe` is running
+### Windows: Robo is still open
 
-On Windows, `robo update` will refuse to run if it detects another `robo.exe` process holding the venv's entry-point executable open — most commonly the Robo Desktop app's spawned backend, an open `robo` REPL in another terminal, or a running gateway:
+Windows keeps a running program's files locked, so `robo update` cannot replace them while the desktop app, a dashboard or another `robo` terminal is running from the same install. When it finds any, it says what is open and offers to close it:
 
 ```
-$ robo update
-✗ Another robo.exe is running:
-    PID 12345  robo.exe
-
-  Updating now would fail to overwrite ...\venv\Scripts\robo.exe because
-  Windows blocks REPLACE on a running executable.
-
-  Close Robo Desktop, exit any open `robo` REPLs, and
-  stop the gateway (`robo gateway stop`) before retrying.
-  Override with `robo update --force` if you've already
-  confirmed those processes will not write to the venv.
+Robo is still open, and Windows cannot update files that are in use:
+    - the Robo desktop app (it reopens when the update is done)
+    - a Robo terminal session (PID 4242)
+  Chats are saved as you go. A reply that is being written right now, or a
+  command one of them is running, stops with it.
+Close them and continue the update? [Y/n]
 ```
 
-Close the listed processes and re-run. If you're sure the concurrent process won't interfere (rare — usually only useful when an antivirus shim is mis-attributed), pass `--force` to skip the check. In that case the updater will still retry the `.exe` rename with exponential backoff and, on stubborn locks, schedule the replacement for next reboot via `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` so the update can complete.
+Press Enter and the update closes them, carries on, and reopens the desktop app when it has finished. Other windows it closed (a dashboard, a terminal chat) stay closed; start them again when you need them. Answer `n` and nothing is closed.
 
-A second, separate guard refuses to touch the venv while any process is running from its Python interpreter (the Desktop app's backend, a gateway, a Python REPL). Those processes keep native extension files (`.pyd`) locked, and a dependency sync that dies partway on an access-denied error strands the install between versions. This guard is **not** bypassed by `--force`; if you're certain the detected holders are false positives, use the explicit `robo update --force-venv`.
+`robo update --yes` closes them without asking. The update still stops and lists the processes, as it always did, when it cannot ask and `--yes` was not given (an update started from the dashboard or from a chat platform), or when it was started from inside Robo's own terminal: close them yourself and run it again from a normal terminal window.
+
+If you're certain the listed processes are false positives (rare: usually an antivirus shim that is mis-attributed), `--force` skips the check for another `robo.exe` and `--force-venv` skips the check for processes running from the venv's Python. With `--force` the updater still retries the `.exe` rename with exponential backoff and, on stubborn locks, schedules the replacement for the next reboot via `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)`. With `--force-venv` a dependency sync that hits a locked native extension (`.pyd`) can stop partway and leave the install between versions.
 
 Expected output looks like:
 
