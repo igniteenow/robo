@@ -23,6 +23,8 @@ node_modules
 **/node_modules
 .venv
 **/.venv
+.venv.stale.runtime-*
+venv.stale.runtime-*
 .notebooklm-cli-venv/
 .notebooklm-playwright/
 .pip-cache/

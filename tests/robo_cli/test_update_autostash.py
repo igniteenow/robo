@@ -280,6 +280,84 @@ def test_bootstrap_marker_not_autostashed_by_update(tmp_path):
     assert ".robo-bootstrap-complete" not in status
 
 
+@pytest.mark.parametrize("parked", ["venv.stale.runtime-1-2-aaaa", ".venv.stale.runtime-1790690355-8556-1744368d"])
+def test_parked_venv_backup_not_autostashed_by_update(tmp_path, parked):
+    """A runtime repair parks the previous venv as ``<venv>.stale.runtime-*``
+    next to the live one. Only the managed ``venv`` spelling was gitignored,
+    so on ``.venv`` installs ``robo update`` autostashed the parked copy
+    (about 1 GB) and restored it on every run - with a fresh mtime that
+    kept it out of reach of the age-gated sweep for good. Both spellings
+    must be invisible to the stash invocation the updater uses.
+    """
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:
+        pytest.skip("git not available")
+
+    repo_gitignore = Path(robo_main.__file__).resolve().parents[1] / ".gitignore"
+
+    def git(*args):
+        return subprocess.run(
+            ["git", *args], cwd=tmp_path, capture_output=True, text=True, check=True
+        )
+
+    git("init", "-q")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / ".gitignore").write_text(repo_gitignore.read_text())
+    (tmp_path / "tracked.txt").write_text("x\n")
+    git("add", "-A")
+    git("commit", "-qm", "init")
+
+    backup = tmp_path / parked / "lib" / "site-packages"
+    backup.mkdir(parents=True)
+    (backup / "robo.pth").write_text("old venv\n")
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert parked not in status, (
+        f"{parked} shows up as a local change - it must be listed in .gitignore"
+    )
+    # Exact flags used by robo update: nothing to stash, so nothing moves.
+    git("stash", "push", "--include-untracked", "-m", "robo-update-autostash")
+    assert (backup / "robo.pth").exists()
+
+
+def test_cmd_update_sweeps_parked_venvs_before_looking_for_local_changes(monkeypatch, tmp_path):
+    """The parked venv is reclaimed BEFORE the updater reads the working tree,
+    so the autostash never carries it - whatever the checkout's .gitignore
+    says (an install that is still on an older checkout has the old one)."""
+    import os
+    import time
+
+    _setup_update_mocks(monkeypatch, tmp_path)
+    old = tmp_path / ".venv.stale.runtime-1790690355-8556-1744368d"
+    (old / "Scripts").mkdir(parents=True)
+    (old / "Scripts" / "python.exe").write_text("old")
+    when = time.time() - 5 * 86400
+    os.utime(old, (when, when))
+    fresh = tmp_path / ".venv.stale.runtime-9-9-bbbb"
+    (fresh / "Scripts").mkdir(parents=True)
+
+    seen_at_stash = {}
+
+    def fake_stash(*a, **kw):
+        seen_at_stash["old"] = old.exists()
+        seen_at_stash["fresh"] = fresh.exists()
+        return None
+
+    monkeypatch.setattr(robo_main, "_stash_local_changes_if_needed", fake_stash)
+    side_effect, _ = _make_update_side_effect(ff_only_fails=True, reset_fails=True)
+    monkeypatch.setattr(robo_main.subprocess, "run", side_effect)
+
+    with pytest.raises(SystemExit):
+        robo_main.cmd_update(SimpleNamespace())
+
+    assert seen_at_stash == {"old": False, "fresh": True}, seen_at_stash
+
+
 # ---------------------------------------------------------------------------
 # Permission-denied autostash class: undeletable untracked files (root-owned
 # packaging/ etc.) must not abort the update when the stash entry was created.
