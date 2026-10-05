@@ -91,6 +91,7 @@ _STEP_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
         (r"^Updating Robo", "preparing"),
         (r"^◆ (Pre-update|Creating pre-update)", "preparing"),
         (r"^→ Stopping .*gateway", "preparing"),
+        (r"^→ (Closing the Robo desktop app|Stopping \d+ (other )?Robo process)", "preparing"),
         (r"^→ Fetching (updates|from origin|from upstream)", "checking"),
         (r"^→ Found \d+ new commit", "downloading"),
         (r"^→ (Pulling|Fetching upstream|Syncing fork|Local changes detected|Downloading latest|Extracting)", "downloading"),

@@ -36,6 +36,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from robo_cli import update_blockers
 from robo_cli.config import get_robo_home
 from robo_constants import venv_python_path
 from robo_cli.docs_links import docs_url
@@ -1132,16 +1133,96 @@ def _update_via_zip(args):
     # git-update path for rationale (#30271).
     _finish_dashboard_update_cleanup(node_failures)
 
-def _stash_local_changes_if_needed(git_cmd: list[str], cwd: Path) -> Optional[str]:
+def _local_changes(git_cmd: list[str], cwd: Path) -> tuple[list[str], list[str]]:
+    """``(changed tracked paths, untracked files)`` of the working tree.
+
+    ``-z`` so paths with spaces or non-ASCII names come through intact (the
+    default output quotes them), ``-uall`` so an untracked directory is listed
+    file by file (``?? notes/`` says nothing about what is inside it).
+    """
     status = subprocess.run(
-        git_cmd + ["status", "--porcelain"],
+        git_cmd + ["status", "--porcelain", "-z", "-uall"],
         cwd=cwd,
         capture_output=True,
         text=True, encoding="utf-8", errors="replace",
         check=True,
     )
-    if not status.stdout.strip():
+    tracked: list[str] = []
+    untracked: list[str] = []
+    fields = status.stdout.split("\0")
+    i = 0
+    while i < len(fields):
+        entry = fields[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        code, path = entry[:2], entry[3:]
+        if code == "??":
+            untracked.append(path)
+            continue
+        if code == "!!":
+            continue
+        tracked.append(path)
+        if "R" in code or "C" in code:
+            # A rename or copy carries the original path as the next field.
+            if i < len(fields) and fields[i]:
+                tracked.append(fields[i])
+            i += 1
+    return tracked, untracked
+
+
+def _untracked_files_the_update_would_overwrite(
+    git_cmd: list[str], cwd: Path, untracked: list[str], target: str
+) -> list[str]:
+    """The untracked files whose path the new version (*target*) also has.
+
+    An update moves the checkout to *target*. A file that is not part of
+    Robo and has no counterpart there is never touched by that move, so
+    there is nothing to put aside. One that *target* does carry (a file the
+    user copied in by hand, an earlier try of a change that is now released)
+    would be overwritten, and is stashed as before so it can be restored.
+    An unreadable *target* keeps every untracked file in the stash, as before.
+    """
+    if not untracked:
+        return []
+    diff = subprocess.run(
+        git_cmd + ["diff", "--name-only", "-z", "HEAD", target],
+        cwd=cwd,
+        capture_output=True,
+        text=True, encoding="utf-8", errors="replace",
+    )
+    if diff.returncode != 0:
+        return list(untracked)
+    incoming = {path for path in diff.stdout.split("\0") if path}
+    colliding = []
+    for path in untracked:
+        if path in incoming or any(other.startswith(path.rstrip("/") + "/") for other in incoming):
+            colliding.append(path)
+    return colliding
+
+
+def _stash_local_changes_if_needed(
+    git_cmd: list[str], cwd: Path, target: str = "FETCH_HEAD"
+) -> Optional[str]:
+    """Put local changes aside before the checkout moves to *target*.
+
+    Returns the stash ref, or ``None`` when nothing had to be stashed. Edits
+    to Robo's own files are always stashed (and offered back afterwards).
+    Files that are not Robo's - whatever a user, or Robo working in this
+    folder for them, created here - are left exactly where they are, unless
+    the new version brings a file of the same name; only those are stashed,
+    so the update's own "Local changes detected" / "Restore local changes?"
+    is never about files the update would not have touched.
+    """
+    tracked, untracked = _local_changes(git_cmd, cwd)
+    if not tracked and not untracked:
         return None
+    colliding = _untracked_files_the_update_would_overwrite(git_cmd, cwd, untracked, target)
+    if not tracked and not colliding:
+        return None
+    # Everything to stash, by path. Untracked files that are not in the
+    # way stay out of it (and so does the restore question about them).
+    pathspec = tracked + colliding
 
     # If the index has unmerged entries (e.g. from an interrupted merge/rebase),
     # git stash will fail with "needs merge / could not write index".  Clear the
@@ -1169,24 +1250,41 @@ def _stash_local_changes_if_needed(git_cmd: list[str], cwd: Path) -> Optional[st
         capture_output=True,
         text=True, encoding="utf-8", errors="replace",
     ).stdout.strip()
+    def _probe_stash() -> tuple[str, bool]:
+        probe = subprocess.run(
+            git_cmd + ["rev-parse", "--verify", "refs/stash"],
+            cwd=cwd,
+            capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
+        )
+        ref = probe.stdout.strip()
+        return ref, probe.returncode == 0 and bool(ref) and ref != prev_stash
+
+    # The paths go in through stdin: a long list (a whole folder of untracked
+    # files) would not fit on a Windows command line.
     push = subprocess.run(
-        git_cmd + ["stash", "push", "--include-untracked", "-m", stash_name],
+        git_cmd + [
+            "stash", "push", "--include-untracked", "-m", stash_name,
+            "--pathspec-from-file=-", "--pathspec-file-nul",
+        ],
         cwd=cwd,
+        input="\0".join(pathspec) + "\0",
         capture_output=True,
         text=True, encoding="utf-8", errors="replace",
     )
+    stash_ref, stash_created = _probe_stash()
+    if push.returncode != 0 and not stash_created:
+        # A git too old for --pathspec-from-file (before 2.26): stash the
+        # whole tree, untracked files included, as this always did.
+        push = subprocess.run(
+            git_cmd + ["stash", "push", "--include-untracked", "-m", stash_name],
+            cwd=cwd,
+            capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
+        )
+        stash_ref, stash_created = _probe_stash()
     if push.stdout.strip():
         print(push.stdout.strip())
-    stash_probe = subprocess.run(
-        git_cmd + ["rev-parse", "--verify", "refs/stash"],
-        cwd=cwd,
-        capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
-    )
-    stash_ref = stash_probe.stdout.strip()
-    stash_created = (
-        stash_probe.returncode == 0 and bool(stash_ref) and stash_ref != prev_stash
-    )
 
     if push.returncode != 0:
         if stash_created:
@@ -3121,12 +3219,14 @@ def _pause_before_window_closes() -> None:
 REOPEN_WINDOW_CLOSE_SECONDS = 5
 
 
-def _reopen_desktop_after_update(mode: str, *, succeeded: bool) -> None:
+def _reopen_desktop_after_update(mode: str, *, succeeded: bool, owns_window: bool = True) -> None:
     """Finish the desktop's "Update now": reopen the app it quit, or say how.
 
     *mode* is how the app was running: ``packaged`` or ``source`` (a
     ``robo desktop --source`` build). Only a finished update reopens it; after
-    a failure the window stays open on the error.
+    a failure the window stays open on the error. *owns_window* is false when
+    the update runs in the user's own terminal (it closed the app itself, see
+    ``update_blockers``): that window is theirs and does not close.
     """
     if not succeeded:
         print()
@@ -3152,7 +3252,7 @@ def _reopen_desktop_after_update(mode: str, *, succeeded: bool) -> None:
     import atexit
 
     atexit.unregister(_pause_before_window_closes)
-    if sys.stdout is not None and sys.stdout.isatty():
+    if owns_window and sys.stdout is not None and sys.stdout.isatty():
         print(f"This window closes in {REOPEN_WINDOW_CLOSE_SECONDS} seconds.")
         _time.sleep(REOPEN_WINDOW_CLOSE_SECONDS)
 
@@ -3834,13 +3934,24 @@ def _cmd_update_impl(args, gateway_mode: bool):
     # open. Continuing would result in a string of WinError 32 warnings and
     # then either a deferred-rename leftover or a failed git-pull fast path
     # that silently falls back to the slower ZIP route. See issue #26670.
+    _recheck_shims_in = None
     if _m()._is_windows() and not getattr(args, "force", False):
         scripts_dir = _m()._venv_scripts_dir()
         if scripts_dir is not None:
             concurrent = _m()._detect_concurrent_robo_instances(scripts_dir)
-            if concurrent:
+            # A robo.exe is also a venv process, so the venv guard further down
+            # sees these again, along with everything else that is open, and
+            # offers to close the lot in one question. Stop here only when that
+            # offer cannot be made: nobody to ask and no --yes, or the venv
+            # guard is switched off. Otherwise this check runs once more after
+            # that guard (below), so it still has the last word.
+            _venv_guard_can_close = not getattr(args, "force_venv", False) and update_blockers.can_offer(args)
+            if concurrent and not _venv_guard_can_close:
                 print(_format_concurrent_instances_message(concurrent, scripts_dir))
+                if not assume_yes and not getattr(args, "force_venv", False):
+                    print("  Or let Robo close them for you:  robo update --yes")
                 sys.exit(2)
+            _recheck_shims_in = scripts_dir if concurrent else None
 
     # Pre-update backup — runs before any git/file mutation so users can
     # always roll back to the exact state they had before this update.
@@ -3859,13 +3970,15 @@ def _cmd_update_impl(args, gateway_mode: bool):
 
     # With gateways paused, anything still running from the venv interpreter
     # (most commonly the Desktop app's `robo serve` backend) will keep .pyd
-    # files locked and corrupt the dependency sync below. Refuse rather than
-    # race: killing the desktop backend is futile (the app supervises and
-    # respawns it), so the user must close the app. Deliberately NOT bypassed
-    # by plain --force: the desktop bootstrap updater passes --force to skip
-    # the robo.exe shim guard above, but its lock probe only checks the shim
-    # and app.asar — a non-desktop venv python holding a .pyd would sail
-    # through and corrupt the sync (the exact failure this guard exists for).
+    # files locked and corrupt the dependency sync below. Never race it:
+    # offer to close what is open (update_blockers: the desktop app first,
+    # because it supervises and respawns its backend), and refuse when that
+    # is declined, cannot be offered, or leaves something behind.
+    # Deliberately NOT bypassed by plain --force: the desktop bootstrap
+    # updater passes --force to skip the robo.exe shim guard above, but its
+    # lock probe only checks the shim and app.asar — a non-desktop venv python
+    # holding a .pyd would sail through and corrupt the sync (the exact
+    # failure this guard exists for).
     # --force-venv is the explicit escape hatch.
     if _m()._is_windows() and not getattr(args, "force_venv", False):
         _venv_holders = _m()._detect_venv_python_processes()
@@ -3894,7 +4007,47 @@ def _cmd_update_impl(args, gateway_mode: bool):
                 _time.sleep(1.0)
                 _venv_holders = _m()._detect_venv_python_processes()
         if _venv_holders:
-            print(_format_venv_python_holders_message(_venv_holders))
+            # Say what is open in words and offer to close it, instead of
+            # leaving the user with a list of process ids to end by hand.
+            _closing = update_blockers.offer_to_close(
+                _venv_holders,
+                args,
+                redetect=lambda: _m()._detect_venv_python_processes(),
+            )
+            if _closing.reopen_desktop and not getattr(args, "reopen_desktop", None):
+                # cmd_update reopens the app once the update has finished.
+                args.reopen_desktop = _closing.reopen_desktop
+                args.reopen_desktop_closed_here = True
+            if _closing.closed_others:
+                args.closed_for_update = True
+            _venv_holders = _closing.remaining
+            if _venv_holders:
+                if _closing.declined:
+                    print()
+                    print("Update cancelled: nothing was closed.")
+                    print("  Close them yourself, then run the update again:  robo update")
+                else:
+                    if _closing.asked:
+                        print()
+                        print("Some of them could not be closed.")
+                    print(_format_venv_python_holders_message(_venv_holders))
+                    if _closing.inside_robo:
+                        print()
+                        print("  This update was started from inside Robo (its own terminal), so Robo")
+                        print("  cannot close itself from here. Run  robo update  in a normal terminal")
+                        print("  window (PowerShell), or use Update in the desktop app.")
+                    elif not _closing.asked and not assume_yes:
+                        print("  Or let Robo close them for you:  robo update --yes")
+                _m()._resume_windows_gateways_after_update(_windows_gateway_resume)
+                sys.exit(2)
+
+    if _recheck_shims_in is not None:
+        # The robo.exe check was left to the venv guard above. It has done its
+        # work (or found nothing to do): a robo.exe that is still running now
+        # would lock the launcher the update is about to replace.
+        _still_running = _m()._detect_concurrent_robo_instances(_recheck_shims_in)
+        if _still_running:
+            print(_format_concurrent_instances_message(_still_running, _recheck_shims_in))
             _m()._resume_windows_gateways_after_update(_windows_gateway_resume)
             sys.exit(2)
 

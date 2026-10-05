@@ -1459,6 +1459,28 @@ def _live_system_guard(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _update_never_closes_real_processes(monkeypatch):
+    """``robo update`` may close what holds the install open (Windows).
+
+    A ``cmd_update`` test that reaches that step with process ids of its own
+    invention - or, on a developer's Windows machine, with the real Robo the
+    developer is running - must never stop anything. ``update_blockers``'s
+    two process-stopping primitives are swapped for no-ops in every test;
+    the tests of that module pass their own recorders on top.
+    """
+    # Nothing is imported here: a test module that reaches cmd_update has
+    # already imported robo_cli.main (and with it this module) by the time
+    # its fixtures run; everything else is left exactly as it was.
+    update_blockers = sys.modules.get("robo_cli.update_blockers")
+    if update_blockers is None:
+        return
+    monkeypatch.setattr(update_blockers, "_kill_tree", lambda pid: None, raising=False)
+    monkeypatch.setattr(
+        update_blockers, "_close_desktop_app", lambda pids, **_kw: None, raising=False
+    )
+
+
+@pytest.fixture(autouse=True)
 def _audio_playback_guard(request, monkeypatch):
     """Stub TTS synthesis + speaker playback for every test.
 

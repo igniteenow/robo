@@ -52,25 +52,24 @@ updates:
 
 `updates.pre_update_backup` 是单一开关，有三种模式：`quick`（默认 — 上述轻量级状态快照）、`full`（快速快照加上完整的 `ROBO_HOME` zip 备份；在大型 home 目录上可能增加数分钟）、`off`（完全不做更新前备份 — `--no-backup` 对单次运行有相同效果）。旧版布尔值仍然有效：`true` 等同于 `full`，`false` 等同于 `off`。
 
-### Windows：另一个 `robo.exe` 正在运行
+### Windows：Robo 仍在运行
 
-在 Windows 上，如果 `robo update` 检测到另一个 `robo.exe` 进程持有 venv 入口点可执行文件的句柄，它将拒绝运行 — 最常见的情况是 Robo Desktop 应用启动的后端进程、另一个终端中打开的 `robo` REPL，或正在运行的 gateway：
+Windows 会锁定正在运行的程序所使用的文件，因此当桌面应用、dashboard 或另一个 `robo` 终端仍在从同一安装运行时，`robo update` 无法替换这些文件。检测到这种情况时，它会说明哪些程序仍然开着，并询问是否替你关闭：
 
 ```
-$ robo update
-✗ Another robo.exe is running:
-    PID 12345  robo.exe
-
-  Updating now would fail to overwrite ...\venv\Scripts\robo.exe because
-  Windows blocks REPLACE on a running executable.
-
-  Close Robo Desktop, exit any open `robo` REPLs, and
-  stop the gateway (`robo gateway stop`) before retrying.
-  Override with `robo update --force` if you've already
-  confirmed those processes will not write to the venv.
+Robo is still open, and Windows cannot update files that are in use:
+    - the Robo desktop app (it reopens when the update is done)
+    - a Robo terminal session (PID 4242)
+  Chats are saved as you go. A reply that is being written right now, or a
+  command one of them is running, stops with it.
+Close them and continue the update? [Y/n]
 ```
 
-关闭列出的进程后重试。如果你确定并发进程不会造成干扰（极少见 — 通常仅在杀毒软件 shim 被误判时有用），可传入 `--force` 跳过检查。此时更新程序仍会以指数退避方式重试 `.exe` 重命名操作，对于顽固的文件锁，会通过 `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` 将替换操作安排在下次重启时执行，以确保更新能够完成。
+按 Enter，更新程序会关闭它们并继续更新，完成后重新打开桌面应用。它关闭的其他窗口（dashboard、终端聊天）不会自动恢复，需要时请自行重新启动。回答 `n` 则不会关闭任何程序。
+
+`robo update --yes` 会不经询问直接关闭。在以下情况下，更新仍会像以前一样停止并列出相关进程：无法询问且未提供 `--yes`（从 dashboard 或聊天平台发起的更新），或者更新是在 Robo 自己的终端里发起的。此时请自行关闭这些程序，然后在普通终端窗口中重新运行更新。
+
+如果你确定列出的进程属于误判（极少见，通常是杀毒软件 shim 被误认），`--force` 可跳过对另一个 `robo.exe` 的检查，`--force-venv` 可跳过对从 venv 的 Python 运行的进程的检查。使用 `--force` 时，更新程序仍会以指数退避方式重试 `.exe` 重命名操作，对于顽固的文件锁，会通过 `MoveFileEx(MOVEFILE_DELAY_UNTIL_REBOOT)` 将替换操作安排在下次重启时执行。使用 `--force-venv` 时，依赖同步一旦遇到被锁定的原生扩展（`.pyd`），可能中途停止，使安装停留在两个版本之间。
 
 预期输出如下：
 

@@ -418,6 +418,144 @@ def test_update_autostash_survives_undeletable_untracked_dir(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# A user's own files in the install folder are not "local changes"
+# ---------------------------------------------------------------------------
+
+
+def _repo_with_an_incoming_version(tmp_path):
+    """A checkout on ``main`` with a newer version fetched: FETCH_HEAD adds
+    ``robo_cli/new_module.py`` and changes ``robo_cli/update_cmd.py``."""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:
+        pytest.skip("git not available")
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=tmp_path, capture_output=True, text=True, check=True)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / "robo_cli").mkdir()
+    (tmp_path / "robo_cli" / "update_cmd.py").write_text("v1\n")
+    git("add", "-A")
+    git("commit", "-qm", "v1")
+    git("checkout", "-q", "-b", "incoming")
+    (tmp_path / "robo_cli" / "update_cmd.py").write_text("v2\n")
+    (tmp_path / "robo_cli" / "new_module.py").write_text("new in v2\n")
+    git("add", "-A")
+    git("commit", "-qm", "v2")
+    git("checkout", "-q", "main")
+    git("fetch", "-q", ".", "incoming")  # what `git fetch origin main` leaves behind
+    return git
+
+
+def test_a_users_own_file_in_the_install_folder_is_left_alone(tmp_path):
+    """A file Robo made for the user (its working directory was the install
+    folder) is untracked but not in the update's way: no stash, no "Restore
+    local changes?" question, and the file stays where it is."""
+    _repo_with_an_incoming_version(tmp_path)
+    (tmp_path / "userid.py").write_text("print('mine')\n")
+    (tmp_path / "notes").mkdir()
+    (tmp_path / "notes" / "todo list.txt").write_text("buy milk\n")
+
+    assert robo_main._stash_local_changes_if_needed(["git"], tmp_path) is None
+
+    assert (tmp_path / "userid.py").read_text() == "print('mine')\n"
+    assert (tmp_path / "notes" / "todo list.txt").read_text() == "buy milk\n"
+
+
+def test_an_untracked_file_the_new_version_also_has_is_still_put_aside(tmp_path):
+    """The one case an untracked file must be stashed: the new version carries
+    a file of the same name (a hand-copied patch, say). Its content is kept in
+    the stash and the path is cleared so the checkout can bring the real one."""
+    _repo_with_an_incoming_version(tmp_path)
+    (tmp_path / "robo_cli" / "new_module.py").write_text("my own copy\n")
+    (tmp_path / "userid.py").write_text("print('mine')\n")
+
+    stash_ref = robo_main._stash_local_changes_if_needed(["git"], tmp_path)
+
+    assert stash_ref
+    assert not (tmp_path / "robo_cli" / "new_module.py").exists()
+    assert (tmp_path / "userid.py").exists(), "not in the way: never stashed"
+    import subprocess
+
+    saved = subprocess.run(
+        ["git", "show", f"{stash_ref}^3:robo_cli/new_module.py"], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert saved.stdout == "my own copy\n"
+
+
+def test_edits_to_robos_own_files_are_stashed_and_the_users_files_stay(tmp_path):
+    _repo_with_an_incoming_version(tmp_path)
+    (tmp_path / "robo_cli" / "update_cmd.py").write_text("my local edit\n")
+    (tmp_path / "userid.py").write_text("print('mine')\n")
+
+    stash_ref = robo_main._stash_local_changes_if_needed(["git"], tmp_path)
+
+    assert stash_ref
+    assert (tmp_path / "robo_cli" / "update_cmd.py").read_text() == "v1\n"
+    assert (tmp_path / "userid.py").read_text() == "print('mine')\n"
+    restored = robo_main._restore_stashed_changes(["git"], tmp_path, stash_ref, prompt_user=False)
+    assert restored is True
+    assert (tmp_path / "robo_cli" / "update_cmd.py").read_text() == "my local edit\n"
+
+
+def test_without_a_fetched_version_to_compare_every_untracked_file_is_kept_safe(tmp_path):
+    """No FETCH_HEAD to look at (nothing was fetched): the old, cautious
+    behaviour - stash untracked files too - so nothing can be overwritten."""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:
+        pytest.skip("git not available")
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=tmp_path, capture_output=True, text=True, check=True)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / "tracked.txt").write_text("v1\n")
+    git("add", "-A")
+    git("commit", "-qm", "init")
+    (tmp_path / "extra.py").write_text("x\n")
+
+    assert robo_main._stash_local_changes_if_needed(["git"], tmp_path)
+    assert not (tmp_path / "extra.py").exists()
+
+
+def test_local_changes_reads_renames_and_odd_names(tmp_path):
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:
+        pytest.skip("git not available")
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=tmp_path, capture_output=True, text=True, check=True)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / "old name.txt").write_text("same content either way\n")
+    (tmp_path / "edited.txt").write_text("v1\n")
+    git("add", "-A")
+    git("commit", "-qm", "init")
+    git("mv", "old name.txt", "new name.txt")
+    (tmp_path / "edited.txt").write_text("v2\n")
+    (tmp_path / "méi yǒu.txt").write_text("untracked\n")
+    (tmp_path / "dir").mkdir()
+    (tmp_path / "dir" / "inner.txt").write_text("untracked too\n")
+
+    tracked, untracked = robo_main._local_changes(["git"], tmp_path)
+
+    assert set(tracked) == {"new name.txt", "old name.txt", "edited.txt"}
+    assert set(untracked) == {"méi yǒu.txt", "dir/inner.txt"}
+
+
+# ---------------------------------------------------------------------------
 # Diverged history: local commits are kept on a backup branch before reset
 # ---------------------------------------------------------------------------
 

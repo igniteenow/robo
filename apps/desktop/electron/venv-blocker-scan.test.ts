@@ -15,6 +15,7 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 
 import {
+  closeBlockersQuestion,
   formatBlockerMessage,
   formatProbeFailedMessage,
   parseVenvBlockerScanOutput,
@@ -81,6 +82,31 @@ describe('formatBlockerMessage', () => {
     assert.ok(msg.includes('remote backend'))
     assert.ok(msg.includes('retry'))
     assert.ok(!msg.includes('force-venv'))
+  })
+})
+
+describe('closeBlockersQuestion', () => {
+  const processes = (count: number) =>
+    Array.from({ length: count }, (_unused, index) => ({ cmdline: 'robo', name: 'robo.exe', pid: 4000 + index }))
+
+  it('names what is open and what closing it costs, without telling the user to end processes', () => {
+    const question = closeBlockersQuestion({ blocked: true, processes: processes(2) })
+
+    assert.equal(question.message, 'Robo is also open somewhere else')
+    assert.ok(question.detail.includes('robo.exe (PID 4000)'))
+    assert.ok(question.detail.includes('robo.exe (PID 4001)'))
+    assert.ok(question.detail.includes('Robo can close them and then update'))
+    assert.ok(question.detail.includes('Chats are saved'))
+    assert.ok(!question.detail.includes('taskkill'))
+    assert.ok(!question.detail.includes('force-venv'))
+  })
+
+  it('keeps a long list short', () => {
+    const question = closeBlockersQuestion({ blocked: true, processes: processes(8) })
+
+    assert.ok(question.detail.includes('(PID 4004)'))
+    assert.ok(!question.detail.includes('(PID 4005)'))
+    assert.ok(question.detail.includes('... and 3 more'))
   })
 })
 
