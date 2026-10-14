@@ -22,7 +22,7 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: matrix
         run: |
           MATRIX=$(python3 scripts/run_tests_parallel.py --generate-slices 8)
@@ -37,7 +37,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.slices.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install ripgrep (the search tool tests need rg on PATH)
         run: |
           sudo apt-get update -qq
@@ -77,7 +77,7 @@ jobs:
   node:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
         with:
           version: "0.12.20"
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
         with:
           version: "0.12.20"
@@ -115,7 +115,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Parse with Windows PowerShell 5.1
         shell: powershell
         run: |
