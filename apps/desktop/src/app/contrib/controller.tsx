@@ -71,6 +71,7 @@ import {
 } from '../chat/session-tile'
 import { $terminalTakeover, setTerminalTakeover } from '../right-sidebar/store'
 import { $workspaceIsPage } from '../routes'
+import { registerTeamContributions } from '../team/contrib'
 
 import { FilesPane, LogsPane, ReviewPaneContent } from './panes'
 import { ContribWiring, WiredPane } from './wiring'
@@ -388,6 +389,10 @@ registry.registerMany([
 ])
 
 declareDefaultTree(DEFAULT_TREE)
+
+// Team mode (the `/team` page + its sidebar row) registers through the same
+// areas a plugin would — opt-in, lazy, and nothing else in the shell changes.
+registerTeamContributions()
 
 // Bundled plugins load AFTER core, so a same-id contribution from a plugin
 // deliberately overrides the core default (last writer wins). Third-party

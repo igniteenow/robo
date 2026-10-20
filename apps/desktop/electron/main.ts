@@ -185,6 +185,7 @@ import {
   revalidatePooledRemoteBackends,
   revalidateRemoteConnection
 } from './remote-liveness'
+import { type GpuFeatureStatusLike, renderingInfoFrom } from './rendering-info'
 import {
   buildSessionWindowUrl,
   chatWindowWebPreferences,
@@ -470,6 +471,56 @@ if (IS_WINDOWS) {
 }
 
 ipcMain.handle('robo:get-remote-display-reason', () => REMOTE_DISPLAY_REASON)
+
+// Whether frames are composited on the CPU (remote display, VM, blocklisted
+// driver): the renderer turns its per-frame backdrop effects off while they
+// are. `getGPUFeatureStatus` only means something once the GPU process has
+// reported in (`gpu-info-update`); a renderer normally asks well after that,
+// but the first window of a cold launch is close, so wait for the report —
+// briefly, in case it never comes (no GPU process at all).
+const GPU_INFO_WAIT_MS = 1500
+
+let gpuInfoSeen = false
+
+app.on('gpu-info-update', () => {
+  gpuInfoSeen = true
+})
+
+function waitForGpuInfo(): Promise<void> {
+  if (gpuInfoSeen) {
+    return Promise.resolve()
+  }
+
+  return new Promise(resolve => {
+    const done = () => {
+      clearTimeout(timer)
+      app.removeListener('gpu-info-update', done)
+      resolve()
+    }
+
+    const timer = setTimeout(done, GPU_INFO_WAIT_MS)
+
+    app.on('gpu-info-update', done)
+  })
+}
+
+ipcMain.handle('robo:get-rendering-info', async () => {
+  if (REMOTE_DISPLAY_REASON) {
+    return renderingInfoFrom(null, REMOTE_DISPLAY_REASON)
+  }
+
+  await waitForGpuInfo()
+
+  let status: GpuFeatureStatusLike | null = null
+
+  try {
+    status = app.getGPUFeatureStatus()
+  } catch {
+    status = null
+  }
+
+  return renderingInfoFrom(status, REMOTE_DISPLAY_REASON)
+})
 
 // Keep the renderer's PROCESS priority normal while its windows are hidden —
 // a deprioritized renderer streams a live answer visibly slower once the

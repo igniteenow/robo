@@ -862,7 +862,25 @@ function applyStoredToolResultToParts(parts: ChatMessagePart[], toolMessage: Ses
 function storedToolMessagePart(toolMessage: SessionMessage, fallbackIndex: number): ChatMessagePart {
   const name = toolMessage.tool_name || toolMessage.name || 'tool'
   const context = textFromUnknown(toolMessage.context || toolMessage.text || toolMessage.content || '')
-  const args = context ? { context } : {}
+
+  // The projection carries a structured result for rows rendered as cards
+  // (a clarify's question + answer); every other row has only its context.
+  const structured =
+    toolMessage.result && typeof toolMessage.result === 'object' && !Array.isArray(toolMessage.result)
+      ? (toolMessage.result as Record<string, unknown>)
+      : null
+
+  const args: Record<string, unknown> = context ? { context } : {}
+
+  if (structured) {
+    if (structured.question) {
+      args.question = structured.question
+    }
+
+    if (structured.choices_offered) {
+      args.choices = structured.choices_offered
+    }
+  }
 
   return {
     type: 'tool-call',
@@ -870,7 +888,7 @@ function storedToolMessagePart(toolMessage: SessionMessage, fallbackIndex: numbe
     toolName: name,
     args: args as never,
     argsText: Object.keys(args).length ? JSON.stringify(args) : '',
-    result: context ? { context } : {},
+    result: structured ?? (context ? { context } : {}),
     isError: false
   }
 }

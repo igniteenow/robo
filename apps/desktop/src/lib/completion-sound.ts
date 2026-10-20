@@ -458,10 +458,27 @@ export function previewCompletionSound(variantId?: number) {
 // (the session id) so only one window beeps when several are open — the mute
 // check runs first, so a muted window never claims the cue out from under an
 // audible peer.
+// Sessions whose turns should end without the chime — a surface that runs
+// many turns on the user's behalf (Team mode's members) would otherwise beep
+// on every one of them. Keyed by the dedupe key (the runtime session id).
+const quietSessions = new Set<string>()
+
+export function setCompletionSoundQuiet(sessionId: string, quiet: boolean) {
+  if (quiet) {
+    quietSessions.add(sessionId)
+  } else {
+    quietSessions.delete(sessionId)
+  }
+}
+
 export function playCompletionSound(dedupeKey?: string) {
   // In a hands-free voice chat the reply is spoken — a chime right before
   // Robo starts talking is just noise in the conversation.
   if ($hapticsMuted.get() || isVoiceConversationActive()) {
+    return
+  }
+
+  if (dedupeKey && quietSessions.has(dedupeKey)) {
     return
   }
 

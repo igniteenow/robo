@@ -136,6 +136,8 @@ Not sure what's available? Here's a quick directory of major features:
 | **MCP** | Connect to external tool servers via Model Context Protocol | [MCP](/user-guide/features/mcp) |
 | **Cron** | Schedule recurring agent tasks | [Cron](/user-guide/features/cron) |
 | **Delegation** | Spawn sub-agents for parallel work | [Delegation](/user-guide/features/delegation) |
+| **Team mode** | Two to four models on one goal in the desktop app: the lead works, the reviewers verify, vote and guide, a Final seat writes the outcome | [Team mode](/user-guide/features/team-mode) |
+| **Fact check** | Each answer is checked against sources before it is delivered; corrections are proposed, not forced | [Fact check](/user-guide/features/fact-check) |
 | **Code Execution** | Run Python scripts that call Robo tools programmatically | [Code Execution](/user-guide/features/code-execution) |
 | **Browser** | Web browsing and scraping | [Browser](/user-guide/features/browser) |
 | **Hooks** | Event-driven callbacks and middleware | [Hooks](/user-guide/features/hooks) |

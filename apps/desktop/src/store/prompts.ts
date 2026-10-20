@@ -76,6 +76,9 @@ export interface ApprovalRequest extends KeyedPrompt {
   choices?: string[]
   command: string
   description: string
+  // 'correction' when the fact checker proposes a correction to the answer
+  // (allow applies it; deny keeps the answer). Absent/'command' otherwise.
+  kind?: 'command' | 'correction'
   smartDenied?: boolean
 }
 

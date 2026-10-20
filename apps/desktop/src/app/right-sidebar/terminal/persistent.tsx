@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import { atom } from 'nanostores'
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
+import { usePaneVisible } from '@/components/pane-shell/pane-visibility'
 import { $layoutTree } from '@/components/pane-shell/tree/store'
 import { markRightPanePerf } from '@/debug/right-pane-events'
 import { createRendererLoopPauseController } from '@/lib/renderer-loop-pause'
@@ -21,10 +22,27 @@ import { TerminalWorkspace } from './workspace'
 
 const $slot = atom<HTMLElement | null>(null)
 
+/**
+ * Whether the slot's tab is the one on screen. A tab stack keeps an inactive
+ * tab's layer mounted with the SAME box (visibility hidden, see
+ * pane-visibility.ts), so the slot's rect cannot say the terminal went behind
+ * the chat — the overlay kept painting over it and swallowing its clicks. The
+ * zone already knows which tab is active and hands it to every pane as
+ * PaneVisibleContext; the slot publishes it here, in the same commit as the
+ * tab switch, so hiding and showing follow the click directly (no measuring,
+ * no animation frame to wait for). True outside a tab stack.
+ */
+const $slotOnScreen = atom(true)
+
 const SLOT_CLASS = 'relative flex min-h-0 min-w-0 flex-1 flex-col'
 
 export function TerminalSlot({ className = SLOT_CLASS }: { className?: string }) {
   const ref = useRef<HTMLDivElement | null>(null)
+  const onScreen = usePaneVisible()
+
+  useLayoutEffect(() => {
+    $slotOnScreen.set(onScreen)
+  }, [onScreen])
 
   useEffect(() => {
     const el = ref.current
@@ -61,6 +79,7 @@ const sameRect = (a: Rect | null, b: Rect) =>
 
 export function PersistentTerminal({ onAddSelectionToChat }: PersistentTerminalProps) {
   const slot = useStore($slot)
+  const slotOnScreen = useStore($slotOnScreen)
   const terminalTakeover = useStore($terminalTakeover)
   const [rect, setRect] = useState<Rect | null>(null)
   const [ready, setReady] = useState(false)
@@ -218,7 +237,8 @@ export function PersistentTerminal({ onAddSelectionToChat }: PersistentTerminalP
     }
   }, [slot])
 
-  const visible = Boolean(rect && rect.width > 0 && rect.height > 0)
+  const sized = Boolean(rect && rect.width > 0 && rect.height > 0)
+  const visible = sized && slotOnScreen
 
   const style: CSSProperties = {
     position: 'fixed',
@@ -230,6 +250,12 @@ export function PersistentTerminal({ onAddSelectionToChat }: PersistentTerminalP
     flexDirection: 'column',
     visibility: visible ? 'visible' : 'hidden',
     pointerEvents: visible ? 'auto' : 'none',
+    // Behind another tab the overlay keeps its box, so xterm is never resized
+    // for a tab switch. `visibility` alone cannot hide it then: the active
+    // xterm host sets `visibility: visible` on itself, which beats a hidden
+    // parent. Opacity and a clip cover the whole subtree and no descendant can
+    // undo them, so nothing paints and nothing is hit-tested.
+    ...(sized && !slotOnScreen ? { clipPath: 'inset(50%)', opacity: 0 } : null),
     zIndex: 4,
     // Match the live skin surface so the header strip (transparent) and body
     // read as one cohesive pane instead of revealing a near-black slab behind.

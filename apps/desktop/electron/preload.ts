@@ -309,6 +309,7 @@ contextBridge.exposeInMainWorld('roboDesktop', {
   },
   getVersion: () => ipcRenderer.invoke('robo:version'),
   getRemoteDisplayReason: () => ipcRenderer.invoke('robo:get-remote-display-reason'),
+  getRenderingInfo: () => ipcRenderer.invoke('robo:get-rendering-info'),
   uninstall: {
     summary: () => ipcRenderer.invoke('robo:uninstall:summary'),
     run: mode => ipcRenderer.invoke('robo:uninstall:run', { mode })

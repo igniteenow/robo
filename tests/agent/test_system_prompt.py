@@ -5,7 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from agent.prompt_builder import TASK_COMPLETION_GUIDANCE, TASK_FOCUS_GUIDANCE, VERIFICATION_GUIDANCE, CLAIM_VERIFICATION_CHANNEL_NOTE
+from agent.prompt_builder import (
+    CLAIM_VERIFICATION_CHANNEL_NOTE,
+    STEP_NARRATION_GUIDANCE,
+    TASK_COMPLETION_GUIDANCE,
+    TASK_FOCUS_GUIDANCE,
+    VERIFICATION_GUIDANCE,
+)
 from agent.system_prompt import build_system_prompt, build_system_prompt_parts
 
 
@@ -17,6 +23,7 @@ def _make_agent(**overrides):
         _task_completion_guidance=False,
         _task_focus_guidance=False,
         _verification_guidance=False,
+        _step_narration_guidance=False,
         _claim_verification=False,
         _tool_use_enforcement=False,
         _environment_probe=False,
@@ -394,3 +401,48 @@ class TestClaimVerificationChannelNote:
         ):
             parts = build_system_prompt_parts(agent)
         assert CLAIM_VERIFICATION_CHANNEL_NOTE not in parts["stable"]
+
+
+class TestStepNarrationGuidance:
+    """The "say what you are doing" block (agent.step_narration): one short
+    line per tool-using step so the person following along knows what Robo
+    is doing. Same gating as the other guidance blocks — it is about tool
+    use, so it only ships with tools."""
+
+    def test_included_by_default_with_tools(self):
+        parts = _build(build_system_prompt_parts, _step_narration_guidance=True)
+        assert STEP_NARRATION_GUIDANCE in parts["stable"]
+
+    def test_default_is_on_when_agent_has_no_flag(self):
+        # An agent built without agent_init (SimpleNamespace, plugins, tests)
+        # still narrates: the flag defaults to on.
+        agent = _make_agent(valid_tool_names=["terminal"])
+        del agent._step_narration_guidance
+        with (
+            patch("run_agent.load_soul_md", return_value=""),
+            patch("run_agent.build_igniteenow_subscription_prompt", return_value=""),
+            patch("run_agent.build_environment_hints", return_value=""),
+            patch("run_agent.build_context_files_prompt", return_value=""),
+        ):
+            parts = build_system_prompt_parts(agent)
+        assert STEP_NARRATION_GUIDANCE in parts["stable"]
+
+    def test_excluded_when_toggled_off(self):
+        parts = _build(build_system_prompt_parts, _step_narration_guidance=False)
+        assert STEP_NARRATION_GUIDANCE not in parts["stable"]
+
+    def test_excluded_with_no_tools(self):
+        agent = _make_agent(_step_narration_guidance=True, valid_tool_names=[])
+        with (
+            patch("run_agent.load_soul_md", return_value=""),
+            patch("run_agent.build_igniteenow_subscription_prompt", return_value=""),
+            patch("run_agent.build_environment_hints", return_value=""),
+            patch("run_agent.build_context_files_prompt", return_value=""),
+        ):
+            parts = build_system_prompt_parts(agent)
+        assert STEP_NARRATION_GUIDANCE not in parts["stable"]
+
+    def test_lands_in_stable_tier_not_volatile(self):
+        parts = _build(build_system_prompt_parts, _step_narration_guidance=True)
+        assert STEP_NARRATION_GUIDANCE not in parts["volatile"]
+        assert STEP_NARRATION_GUIDANCE not in parts["context"]

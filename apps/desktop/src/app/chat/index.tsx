@@ -90,6 +90,12 @@ interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
   onRetryResume: (sessionId: string) => void
   onTranscribeAudio?: (audio: Blob) => Promise<string>
   onDismissError?: (messageId: string) => void
+  /** Render the transcript WITHOUT the composer — a live, read-only view of a
+   *  session someone else is driving (Team mode's member panes). Same stance
+   *  as a watch window: the chrome that docks/floats a composer is what makes
+   *  several of these overlap in a grid, so a dashboard of sessions omits it
+   *  and provides one composer elsewhere. */
+  hideComposer?: boolean
 }
 
 interface ChatHeaderProps {
@@ -176,6 +182,14 @@ interface ChatRuntimeBoundaryProps {
 }
 
 const NO_MESSAGES: ChatMessage[] = []
+
+/** A surface with no composer (a team seat) publishes no composer height, so
+ *  it would inherit the root's fallback clearance for a dock it does not have:
+ *  the floating approval card floated ~4rem above the floor and, bounded by
+ *  the surface, lost that much room in a short pane. Pin the var to zero
+ *  there. Nothing else reads it on such a surface — the thread's clamp and
+ *  the intro are both off without a chat bar. */
+const COMPOSERLESS_SURFACE_VARS = { '--composer-measured-height': '0px' } as React.CSSProperties
 
 /**
  * The view's $messages, live only while this surface is the VISIBLE tab.
@@ -295,7 +309,8 @@ export const ChatView = memo(function ChatView({
   onRestoreToMessage,
   onRetryResume,
   onTranscribeAudio,
-  onDismissError
+  onDismissError,
+  hideComposer = false
 }: ChatViewProps) {
   const location = useLocation()
   const { t } = useI18n()
@@ -420,7 +435,7 @@ export const ChatView = memo(function ChatView({
   // Hide the composer in the exhausted error state too: there's no live runtime
   // to send to until a retry rebinds one. Watch windows are pure spectators of a
   // subagent run driven elsewhere — no composer, transcript is read-only.
-  const showChatBar = !loadingSession && !resumeExhausted && !isWatchWindow()
+  const showChatBar = !loadingSession && !resumeExhausted && !isWatchWindow() && !hideComposer
   const threadKey = selectedSessionId || activeSessionId || (isRoutedSessionView ? location.pathname : 'new')
 
   const modelOptionsQuery = useQuery<ModelOptionsResponse>({
@@ -506,6 +521,7 @@ export const ChatView = memo(function ChatView({
       data-chat-surface=""
       data-composer-target={composerScope.target}
       data-session-anchor={sessionAnchor}
+      style={hideComposer ? COMPOSERLESS_SURFACE_VARS : undefined}
     >
       <Backdrop />
       {/* Tiles get their chrome from the layout zone (chip strip); the modal
@@ -544,7 +560,9 @@ export const ChatView = memo(function ChatView({
             gateway={gateway}
             // A fresh chat's logo travels with the centered composer (below);
             // the thread only carries it when there is no composer to hold it.
-            intro={showIntro && !showChatBar}
+            // A composer-less dashboard pane (Team member) shows no hero at all
+            // — its own "waiting" placeholder covers the empty state.
+            intro={showIntro && !showChatBar && !hideComposer}
             loading={threadLoading}
             onBranchInNewChat={onBranchInNewChat}
             onCancel={haltRun}

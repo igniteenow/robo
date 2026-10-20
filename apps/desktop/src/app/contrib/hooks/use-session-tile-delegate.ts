@@ -57,11 +57,14 @@ export function useSessionTileDelegate({
       interruptSession: async runtimeId => {
         await requestGateway('session.interrupt', { session_id: runtimeId })
       },
-      resumeTile: async storedSessionId => {
+      resumeTile: async (storedSessionId, options) => {
         const existing = runtimeIdByStoredSessionIdRef.current.get(storedSessionId)
         const cached = existing ? sessionStateByRuntimeIdRef.current.get(existing) : undefined
 
-        if (existing && cached?.storedSessionId === storedSessionId) {
+        // `fresh` skips the cache: after a reconnect the cached runtime id may
+        // belong to a backend that no longer exists. The gateway hands back the
+        // live session when it still is one, so a fresh resume is never worse.
+        if (!options?.fresh && existing && cached?.storedSessionId === storedSessionId) {
           publishSessionState(existing, cached)
 
           return existing
@@ -103,10 +106,14 @@ export function useSessionTileDelegate({
 
         return runtimeId
       },
-      submitToSession: async (runtimeId, text) => {
-        await requestGateway('prompt.submit', { session_id: runtimeId, text }, PROMPT_SUBMIT_REQUEST_TIMEOUT_MS)
+      submitToSession: async (runtimeId, text, options) => {
+        await requestGateway(
+          'prompt.submit',
+          { session_id: runtimeId, text, ...(options?.queued && { queued: true }) },
+          PROMPT_SUBMIT_REQUEST_TIMEOUT_MS
+        )
       },
-      updateSession: (runtimeId, updater) => updateSessionState(runtimeId, updater)
+      updateSession: (runtimeId, updater, storedSessionId) => updateSessionState(runtimeId, updater, storedSessionId)
     })
   }, [
     archiveSession,

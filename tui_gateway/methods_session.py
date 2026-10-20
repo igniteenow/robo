@@ -69,6 +69,16 @@ def _(rid, params: dict) -> dict:
         create_service_tier_override = (
             "priority" if is_truthy_value(params.get("fast")) else ""
         )
+    # ``background_review: false`` opts this session out of the post-turn
+    # self-improvement review (desktop Team seats share one ROBO_HOME and would
+    # otherwise patch the same skill/memory files at once). Omitted/true keeps
+    # the normal behavior. See _apply_session_background_review.
+    background_review = not (
+        "background_review" in params and not is_truthy_value(params.get("background_review"))
+    )
+    # ``fact_check: false`` opts this session out of the per-answer fact check
+    # (team seats verify each other instead). Same shape, same default.
+    fact_check = not ("fact_check" in params and not is_truthy_value(params.get("fact_check")))
 
     ready = threading.Event()
     now = time.time()
@@ -80,6 +90,8 @@ def _(rid, params: dict) -> dict:
             "agent_error": None,
             "agent_ready": ready,
             "attached_images": [],
+            "background_review": background_review,
+            "fact_check": fact_check,
             "close_on_disconnect": is_truthy_value(params.get("close_on_disconnect", False)),
             "active_session_lease": lease,
             "cols": cols,
@@ -937,6 +949,46 @@ def _(rid, params: dict) -> dict:
         if not deleted:
             return _err(rid, 4007, "session not found")
         return _ok(rid, {"deleted": target})
+
+
+@method("session.background_review")
+def _(rid, params: dict) -> dict:
+    """Turn a session's post-turn self-improvement review on or off — and,
+    with ``fact_check``, its per-answer fact check.
+
+    The create-time ``background_review`` / ``fact_check`` flags do not survive
+    a resume (a resumed session is rebuilt from its stored row), so a client
+    that needs the opt-outs — the desktop's Team seats, which share one
+    ROBO_HOME and verify each other — re-asserts them here after
+    ``session.resume``. Applies at once to a built agent and is kept on the
+    session for every later (re)build. ``fact_check`` is optional: absent
+    leaves that setting as it is.
+    """
+    session, err = _sess_nowait(params, rid)
+    if err:
+        return err
+    enabled = True
+    if "enabled" in params and not is_truthy_value(params.get("enabled")):
+        enabled = False
+    session["background_review"] = enabled
+    result = {"background_review": enabled}
+    if "fact_check" in params:
+        fact_check = is_truthy_value(params.get("fact_check"))
+        session["fact_check"] = fact_check
+        result["fact_check"] = fact_check
+        if fact_check:
+            # Opting back in applies at once too — the flag is read per turn.
+            agent = session.get("agent")
+            if agent is not None:
+                try:
+                    agent._fact_check_disabled = False
+                except Exception:
+                    pass
+    # Opting out applies to a built agent at once; opting the review back in
+    # takes effect on the next build (the live agent's intervals came from
+    # config and are not re-derived here).
+    _apply_session_background_review(session)
+    return _ok(rid, result)
 
 
 @method("session.title")

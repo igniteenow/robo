@@ -16,7 +16,7 @@
 
 import { useStore } from '@nanostores/react'
 import { useQueryClient } from '@tanstack/react-query'
-import { atom, computed } from 'nanostores'
+import { atom, computed, type ReadableAtom } from 'nanostores'
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 
 import { useGatewayRequest } from '@/app/gateway/hooks/use-gateway-request'
@@ -73,12 +73,13 @@ import { ChatView } from '.'
 const NO_MESSAGES: ChatMessage[] = []
 
 /** The tile's SessionView: the same atom shape the primary chat renders
- *  from, computed from this session's slice of `$sessionStates`. */
-function buildTileView(storedSessionId: string): SessionView {
-  const $runtimeId = computed(
-    $sessionTiles,
-    tiles => tiles.find(t => t.storedSessionId === storedSessionId)?.runtimeId ?? null
-  )
+ *  from, computed from this session's slice of `$sessionStates`. A caller
+ *  that binds its own runtime (Team mode's member panes) passes the atom the
+ *  runtime id lives in; tiles read theirs from `$sessionTiles`. */
+export function buildTileView(storedSessionId: string, $boundRuntimeId?: ReadableAtom<null | string>): SessionView {
+  const $runtimeId =
+    $boundRuntimeId ??
+    computed($sessionTiles, tiles => tiles.find(t => t.storedSessionId === storedSessionId)?.runtimeId ?? null)
 
   const $state = computed([$runtimeId, $sessionStates], (runtimeId, states) =>
     runtimeId ? states[runtimeId] : undefined
@@ -111,11 +112,18 @@ const noop = () => undefined
 const tileTranscribeAudio = async (audio: Blob) =>
   (await transcribeAudio(await blobToDataUrl(audio), audio.type)).transcript
 
-function TileChat({
+/** The real chat surface for ONE bound session, used by tile panes and by
+ *  Team mode's member panes: the same ChatView/composer tree as the primary,
+ *  pointed at this runtime through its own SessionView + ComposerScope. */
+export function TileChat({
+  hideComposer = false,
   runtimeId,
   storedSessionId,
   view
 }: {
+  /** Render transcript only (no composer) — Team member panes, where one
+   *  shared composer replaces per-pane ones that would collide in a grid. */
+  hideComposer?: boolean
   runtimeId: string
   storedSessionId: string
   view: SessionView
@@ -194,6 +202,7 @@ function TileChat({
       <ComposerScopeProvider value={scope}>
         <ChatView
           gateway={gateway}
+          hideComposer={hideComposer}
           modelMenuContent={modelMenuContent}
           onAddContextRef={addContextRefAttachment}
           onAddUrl={onAddUrl}

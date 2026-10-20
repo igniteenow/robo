@@ -2265,14 +2265,17 @@ def _update_node_dependencies() -> list[str]:
     # print download progress, and capturing it makes a long download look
     # hung. The chatty npm-deprecation noise during `robo update` comes from
     # the *desktop* build, not this step; that one is captured to update.log.
+    from robo_cli.progress_heartbeat import heartbeat
+
     root_args = [*extra_args, "--workspaces=false"]
-    root_result = _m()._run_npm_install_deterministic(
-        npm,
-        _m().PROJECT_ROOT,
-        extra_args=tuple(root_args),
-        capture_output=False,
-        env=nixos_env,
-    )
+    with heartbeat("updating Node.js packages", hint="npm prints little while it works"):
+        root_result = _m()._run_npm_install_deterministic(
+            npm,
+            _m().PROJECT_ROOT,
+            extra_args=tuple(root_args),
+            capture_output=False,
+            env=nixos_env,
+        )
     if root_result.returncode != 0:
         print("  ⚠ npm install failed in repo root")
         stderr = (root_result.stderr or "").strip() if root_result.stderr else ""
@@ -2283,13 +2286,14 @@ def _update_node_dependencies() -> list[str]:
     # Step 2: install only the workspaces update needs (ui-tui, web).
     # --workspace selects specific workspaces; the rest (desktop) are skipped.
     ws_args = [*extra_args, "--workspace", "ui-tui", "--workspace", "web"]
-    ws_result = _m()._run_npm_install_deterministic(
-        npm,
-        _m().PROJECT_ROOT,
-        extra_args=tuple(ws_args),
-        capture_output=False,
-        env=nixos_env,
-    )
+    with heartbeat("updating the terminal app and dashboard packages"):
+        ws_result = _m()._run_npm_install_deterministic(
+            npm,
+            _m().PROJECT_ROOT,
+            extra_args=tuple(ws_args),
+            capture_output=False,
+            env=nixos_env,
+        )
     if ws_result.returncode == 0:
         _record_npm_lockfile_hash(shared_robo_root)
         print("  ✓ repo root + ui-tui, web workspaces (desktop skipped)")
@@ -4663,9 +4667,18 @@ def _cmd_update_impl(args, gateway_mode: bool):
                 from robo_constants import with_robo_node_path
 
                 _build_env = with_robo_node_path()
-                build_result = _m()._run_logged_subprocess(_desktop_build_cmd, cwd=_m().PROJECT_ROOT, env=_build_env)
-                if build_result.returncode != 0:
+                # The build's own output goes to update.log; without a line
+                # of our own the terminal sits quiet for minutes and the
+                # update looks stuck — people close the window on it.
+                from robo_cli.progress_heartbeat import heartbeat
+
+                from robo_constants import display_robo_home as _dhh_hint
+
+                print("→ Rebuilding the desktop app (a few minutes; it is quiet while it works)...")
+                with heartbeat("rebuilding the desktop app", hint=f"details in {_dhh_hint()}/logs/update.log"):
                     build_result = _m()._run_logged_subprocess(_desktop_build_cmd, cwd=_m().PROJECT_ROOT, env=_build_env)
+                    if build_result.returncode != 0:
+                        build_result = _m()._run_logged_subprocess(_desktop_build_cmd, cwd=_m().PROJECT_ROOT, env=_build_env)
                 if build_result.returncode != 0:
                     print("  ⚠ Desktop build failed (non-fatal; run `robo desktop` to retry)")
                     tail = "\n".join((build_result.stdout or "").strip().splitlines()[-15:])

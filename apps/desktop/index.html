@@ -9,6 +9,63 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="shortcut icon" href="/apple-touch-icon.png" />
     <title>Robo</title>
+    <style>
+      /* Boot splash — part of the very first frame, before the app bundle has
+         even started to run. `ready-to-show` fires on that frame, so without
+         this a new window opens onto a bare background and stays that way for
+         as long as the bundle takes to load and mount (seconds on a slow
+         machine). The app's first commit removes it (src/main.tsx); the
+         CONNECTING overlay takes over in the same place and the same type.
+         Only shown for app windows — the inline script below opts in — so the
+         transparent pet / quick-entry / wake windows stay empty. */
+      #boot-splash {
+        display: none;
+        position: fixed;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        font:
+          600 0.64rem/1 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          'Liberation Mono',
+          monospace;
+        letter-spacing: 0.4em;
+        text-transform: uppercase;
+        color: var(--boot-splash-fg, #8a8a8a);
+        pointer-events: none;
+        user-select: none;
+      }
+      html[data-boot-splash] #boot-splash {
+        display: flex;
+      }
+      #boot-splash > i {
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        margin-left: 0.125rem;
+        transform: translateY(-1px);
+        border-radius: 1px;
+        background: currentColor;
+        animation: boot-splash-cursor 1s step-end infinite;
+      }
+      @keyframes boot-splash-cursor {
+        0%,
+        49% {
+          opacity: 1;
+        }
+        50%,
+        100% {
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash > i {
+          animation: none;
+        }
+      }
+    </style>
     <script>
       // Pre-paint the themed background before the app bundle loads. Without
       // this, the first frame (which is what `ready-to-show` waits for) is the
@@ -26,13 +83,26 @@
         document.documentElement.style.backgroundColor = bg
         if (scheme === 'dark' || scheme === 'light') {
           document.documentElement.style.colorScheme = scheme
+          document.documentElement.style.setProperty('--boot-splash-fg', scheme === 'dark' ? '#8d8d8d' : '#767676')
         }
       } catch {
         // localStorage unavailable — keep UA defaults.
       }
+      // The splash belongs to windows that render the app (the primary, peer
+      // instances, session windows). The `win` flag rides in the query string
+      // ahead of the router hash — see src/main.tsx.
+      try {
+        const win = new URLSearchParams(window.location.search).get('win')
+        if (!win || win === 'secondary') {
+          document.documentElement.setAttribute('data-boot-splash', '')
+        }
+      } catch {
+        // No splash is the safe default.
+      }
     </script>
   </head>
   <body>
+    <div id="boot-splash" aria-hidden="true">Robo<i></i></div>
     <div id="root" class="scrollbar-dt"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

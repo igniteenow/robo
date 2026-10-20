@@ -814,6 +814,9 @@ def _run_review_in_thread(
             review_agent._user_profile_enabled = agent._user_profile_enabled
             review_agent._memory_nudge_interval = 0
             review_agent._skill_nudge_interval = 0
+            # The fork's summary is never shown to the user: no fact check on
+            # it (one would raise a correction prompt in the REAL chat).
+            review_agent._fact_check_disabled = True
             # PERSISTENCE ISOLATION (the curator-takeover root cause): the fork
             # shares the parent's session_id (set below, for prompt-cache
             # warmth), so without this it would write its harness turn ("Review

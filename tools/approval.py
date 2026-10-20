@@ -2714,10 +2714,22 @@ def resolve_gateway_approval(session_key: str, choice: str,
     # granting session trust. The hardline floor and deny rules in
     # check_all_command_guards() run before this bypass is ever consulted,
     # so genuinely catastrophic commands still can't be skipped by it.
-    if choice == "session":
+    #
+    # A fact-check *correction* prompt rides this same queue but is not a
+    # command: "allow for this session" there means "apply corrections
+    # without asking", recorded by agent/fact_check.py itself, and must
+    # never widen into a command bypass.
+    if choice == "session" and any(
+        not _is_correction_entry(entry) for entry in targets
+    ):
         enable_session_yolo(session_key)
 
     return len(targets)
+
+
+def _is_correction_entry(entry: "_ApprovalEntry") -> bool:
+    data = getattr(entry, "data", None)
+    return isinstance(data, dict) and data.get("kind") == "correction"
 
 
 def has_blocking_approval(session_key: str) -> bool:
@@ -3968,7 +3980,13 @@ def _await_gateway_decision(session_key: str, notify_cb, approval_data: dict,
     # A pending *redirect* (the user typed a new instruction instead of
     # answering) is not a deny: the interrupt that resolved this wait belongs
     # to that redirect, so leave it alone.
-    if policy.get("halt_on_deny") and _outcome in {"deny", "timeout", "closed"}:
+    # A request may opt out of the barrier (``halt_on_deny: False`` in the
+    # payload): a declined fact-check correction keeps the answer as
+    # written and the turn must finish normally.
+    _halt = policy.get("halt_on_deny")
+    if approval_data.get("halt_on_deny") is False:
+        _halt = False
+    if _halt and _outcome in {"deny", "timeout", "closed"}:
         on_halt = policy.get("on_halt")
         if callable(on_halt):
             try:

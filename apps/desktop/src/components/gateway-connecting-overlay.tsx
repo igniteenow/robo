@@ -6,15 +6,19 @@ import { cn } from '@/lib/utils'
 import { $desktopBoot } from '@/store/boot'
 import { $gatewaySwitching } from '@/store/gateway-switch'
 import { $gatewayState } from '@/store/session'
+import { $visualEffects } from '@/store/visual-effects'
 
 // Decode mechanics live in the shared <DecodeText> primitive
 // (components/ui/decode-text.tsx). "CONN" stays legible via prefix={4}.
 const TEXT = 'CONNECTING'
 
-// Exit choreography (ms): text fades down + out, hold, then the overlay fades.
-const TEXT_OUT_MS = 360
-const POST_TEXT_HOLD_MS = 300
-const OVERLAY_OUT_MS = 520
+// Exit choreography (ms): text fades down + out, then the overlay fades. Kept
+// short on purpose — every window pays it between "connected" and "usable",
+// and it used to add well over a second (360 + a 300 hold + 520) to each new
+// window on top of the real boot. The durations mirror the Tailwind classes
+// below (duration-150 / duration-200).
+const TEXT_OUT_MS = 160
+const OVERLAY_OUT_MS = 220
 // Preview-only: how long to "connect" for, and the pause before replaying.
 const PREVIEW_CONNECT_MS = 2600
 const PREVIEW_REPLAY_MS = 1100
@@ -44,7 +48,11 @@ export function GatewayConnectingOverlay() {
   const boot = useStore($desktopBoot)
   const gatewaySwitching = useStore($gatewaySwitching)
   const [previewing] = useState(forcedPreview)
-  const reduce = prefersReducedMotion()
+  const effects = useStore($visualEffects)
+  // Reduced effects (software compositing — see store/visual-effects) skips
+  // the exit choreography too: a cross-fade of a window-sized layer is a full
+  // repaint per frame on a CPU compositor, and the chat is ready underneath.
+  const reduce = prefersReducedMotion() || effects === 'reduced'
   // Under reduced motion, skip the multi-phase exit choreography (text-out →
   // hold → overlay fade) and jump straight to gone so the overlay unmounts
   // the instant the gateway opens. E2E screenshots rely on this to avoid
@@ -101,7 +109,7 @@ export function GatewayConnectingOverlay() {
   // Advance the exit choreography: text-out -> overlay-out -> gone.
   useEffect(() => {
     if (phase === 'text-out') {
-      const id = window.setTimeout(() => setPhase('overlay-out'), TEXT_OUT_MS + POST_TEXT_HOLD_MS)
+      const id = window.setTimeout(() => setPhase('overlay-out'), TEXT_OUT_MS)
 
       return () => window.clearTimeout(id)
     }
@@ -141,14 +149,14 @@ export function GatewayConnectingOverlay() {
   return (
     <div
       className={cn(
-        'fixed inset-0 z-(--z-connecting) grid place-items-center bg-(--ui-chat-surface-background) transition-opacity duration-500 ease-out',
+        'fixed inset-0 z-(--z-connecting) grid place-items-center bg-(--ui-chat-surface-background) transition-opacity duration-200 ease-out',
         overlayHidden ? 'pointer-events-none opacity-0' : 'opacity-100'
       )}
     >
       <DecodeText
         active={phase === 'live' && (previewing || connecting)}
         className={cn(
-          'pl-[0.4em] text-(--theme-primary) transition duration-300 ease-out',
+          'pl-[0.4em] text-(--theme-primary) transition duration-150 ease-out',
           leaving ? 'translate-y-2 opacity-0 saturate-0' : 'translate-y-0 opacity-100 saturate-100'
         )}
         cursor

@@ -535,6 +535,7 @@ class ComputeHost:
                 session["profile_home"] = str(frame.get("profile_home"))
             if isinstance(frame.get("attached_images"), list):
                 session["attached_images"] = list(frame.get("attached_images") or [])
+            self._apply_background_review(server, session, frame)
             return session
 
         history = frame.get("history") if isinstance(frame.get("history"), list) else []
@@ -622,7 +623,26 @@ class ComputeHost:
             session["attached_images"] = list(frame.get("attached_images") or [])
         if frame.get("model_override") is not None:
             session["model_override"] = frame.get("model_override")
+        self._apply_background_review(server, session, frame)
         return session
+
+    @staticmethod
+    def _apply_background_review(server: Any, session: dict, frame: dict[str, Any]) -> None:
+        # The serving process owns the opt-out (session.create / the RPC); the
+        # host builds its own agent, so the frame carries it on every turn and
+        # the host applies it to whichever agent runs the turn.
+        opted_out = False
+        if frame.get("background_review") is False:
+            session["background_review"] = False
+            opted_out = True
+        if frame.get("fact_check") is False:
+            session["fact_check"] = False
+            opted_out = True
+        if opted_out:
+            try:
+                server._apply_session_background_review(session)
+            except Exception:
+                pass
 
     def _handle_reload_mcp(self, frame: dict[str, Any]) -> None:
         sid = str(frame.get("sid") or "")

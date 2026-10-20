@@ -1663,6 +1663,8 @@ def _compute_host_turn_frame(
         "model_override": session.get("model_override"),
         "reasoning_config_override": session.get("create_reasoning_override"),
         "service_tier_override": session.get("create_service_tier_override"),
+        "background_review": bool(session.get("background_review", True)),
+        "fact_check": bool(session.get("fact_check", True)),
         "source": _session_source(session),
         "attached_images": attached_images,
         "queued_prompt_generation": queued_prompt_generation,
@@ -2313,6 +2315,7 @@ def _start_agent_build(sid: str, session: dict) -> None:
             # Session DB row deferred to first run_conversation() call.
             # pending_title applied post-first-message (see cli.exec handler).
             current["agent"] = agent
+            _apply_session_background_review(current)
             # Baseline for the per-turn config sync; the profile home
             # override is still active here.
             current["config_model_seen"] = _config_model_target()
@@ -5428,6 +5431,40 @@ def _session_info(agent, session: dict | None = None) -> dict:
     return info
 
 
+def _clarify_projection(content) -> dict | None:
+    """``{"context", "result"}`` for a persisted clarify tool result.
+
+    ``context`` reads ``<question> → <answer>`` (``→ skipped`` for an empty
+    answer) for clients that show tool rows as one line (the TUI trail);
+    ``result`` carries the question, the answer and the offered choices for
+    clients that re-render the card (the desktop). ``None`` when the content
+    is not the clarify tool's JSON.
+    """
+    text = _coerce_message_text(content).strip()
+    if not text.startswith("{"):
+        return None
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(data, dict) or "question" not in data:
+        return None
+    question = str(data.get("question") or "").strip()
+    answer = data.get("user_response")
+    if isinstance(answer, list):
+        answer = ", ".join(str(a) for a in answer)
+    answer = str(answer or "").strip()
+    shown = answer if answer else "skipped"
+    context = f"{question} → {shown}" if question else shown
+    if len(context) > 240:
+        context = context[:239] + "…"
+    result = {"question": question, "user_response": answer}
+    choices = data.get("choices_offered")
+    if isinstance(choices, list):
+        result["choices_offered"] = choices
+    return {"context": context, "result": result}
+
+
 def _tool_ctx(name: str, args: dict) -> str:
     """Argument preview for a tool row — never a phrased label.
 
@@ -6431,6 +6468,46 @@ def _preview_restart_callbacks(parent: str, task_id: str) -> dict:
     }
 
 
+def _apply_session_background_review(session: dict) -> None:
+    """Honor a session's opt-outs of the post-turn work: the self-improvement
+    review and the per-answer fact check.
+
+    The desktop's Team mode runs several sessions against ONE ROBO_HOME at the
+    same time. Each of their post-turn background reviews would patch the same
+    skill / memory files in the same moment, which is exactly the "could not
+    find a match … the reference file has been updated by teammates already"
+    failure. A session created (or re-bound) with ``background_review: false``
+    therefore never forks that review: the opt-out is the same one the curator
+    and the review agent itself use on their own agents — both nudge intervals
+    to 0 — so nothing else about the session changes.
+
+    ``fact_check: false`` opts the session out of the per-answer fact check
+    (agent/fact_check.py). A team seat's answers are verified by the team
+    itself — the reviewers' votes and the completion check — and the checker's
+    research (claim extraction plus a tool loop, up to its timeout) after
+    EVERY turn of every seat was what made the Final seat take minutes to
+    answer a follow-up while its pane still looked busy. The flag is read by
+    ``should_skip`` on the agent, so nothing else about the turn changes.
+
+    Default (absent / true) is the unchanged behavior for both. Safe to call
+    before the agent exists (no-op) and again after every (re)build.
+    """
+    agent = session.get("agent")
+    if agent is None:
+        return
+    if not session.get("background_review", True):
+        try:
+            agent._memory_nudge_interval = 0
+            agent._skill_nudge_interval = 0
+        except Exception:
+            logger.debug("background review opt-out could not be applied", exc_info=True)
+    if not session.get("fact_check", True):
+        try:
+            agent._fact_check_disabled = True
+        except Exception:
+            logger.debug("fact check opt-out could not be applied", exc_info=True)
+
+
 def _reset_session_agent(sid: str, session: dict) -> dict:
     tokens = _set_session_context(session["session_key"])
     try:
@@ -6454,6 +6531,7 @@ def _reset_session_agent(sid: str, session: dict) -> dict:
     finally:
         _clear_session_context(tokens)
     session["agent"] = new_agent
+    _apply_session_background_review(session)
     session["config_model_seen"] = _config_model_target()
     session["attached_images"] = []
     session["queued_prompt"] = None
@@ -7342,9 +7420,16 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
             tc_info = tool_call_args.get(tc_id) if tc_id else None
             name = (tc_info[0] if tc_info else None) or m.get("tool_name") or "tool"
             args = (tc_info[1] if tc_info else None) or {}
-            messages.append(
-                {"role": "tool", "name": name, "context": _tool_ctx(name, args)}
-            )
+            row = {"role": "tool", "name": name, "context": _tool_ctx(name, args)}
+            if name == "clarify":
+                # A clarify row IS a user turn in disguise: the person's answer
+                # lives only in the tool result. Project it, so a resumed
+                # transcript shows what they answered, not just the question.
+                qa = _clarify_projection(m.get("content"))
+                if qa:
+                    row["context"] = qa["context"]
+                    row["result"] = qa["result"]
+            messages.append(row)
             continue
         # An assistant turn may carry only reasoning/thinking content with no
         # visible text (extended-thinking turns, thinking-only recovery

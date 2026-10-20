@@ -1059,6 +1059,63 @@ button {
   -webkit-backdrop-filter: blur(0.75rem) saturate(1.08);
 }
 
+/* Radix parks a popper (select / menu / popover) at `translate(0, -200%)`
+   while it measures, meaning "off screen". Inside a dialog the popper portals
+   into the dialog shell, whose transform makes it the containing block for
+   `position: fixed` — so the parking spot lands at the top of the window, and
+   the unplaced dropdown flashed there (like a toast) before jumping under its
+   trigger: the "Clone from" select in New profile. Layout still happens, so
+   measuring is unaffected; it just isn't painted until placed. */
+[data-radix-popper-content-wrapper][style*='-200%'] {
+  visibility: hidden !important;
+}
+
+/* ── Reduced visual effects — `<html data-effects='reduced'>` ──────────────
+   Set by store/visual-effects: automatically while Chromium composites on the
+   CPU (a server over RDP, a VM, a blocklisted GPU), or pinned from
+   Settings → Appearance. A `backdrop-filter` re-samples and re-blurs
+   everything beneath its element on every frame; on the GPU that is free, in
+   software it is a full-area blur per frame for the composer, every menu and
+   dialog, and the settings backdrop over the whole window — the reason those
+   machines feel like they are wading. One rule turns every blur-behind off
+   (`!important` outranks the Tailwind utilities and the arbitrary-property
+   variants alike); the surfaces that relied on the blur for legibility go
+   opaque below. Motion is untouched: that is `prefers-reduced-motion`. */
+html[data-effects='reduced'] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-effects='reduced'] [data-slot='dropdown-menu-content'],
+html[data-effects='reduced'] [data-slot='select-content'],
+html[data-effects='reduced'] [data-slot='dialog-content'],
+html[data-effects='reduced'] [data-slot='thread-timeline-popover'] {
+  background: var(--ui-bg-elevated);
+}
+
+/* The composer's scrolled-up state is 48% glass over the transcript; without
+   the blur the text beneath would show through, so keep the rest fill. */
+html[data-effects='reduced'] [data-slot='composer-root'][data-thread-scrolled-up] {
+  --composer-fill: color-mix(in srgb, var(--ui-text-primary) var(--composer-rest-lift), var(--dt-card));
+}
+
+/* Continuous decorative glows repaint their region on every frame for as long
+   as a turn runs — fine on a GPU, a steady drain on a software compositor
+   (and a steady stream of screen updates over RDP). The static end state of
+   each stays, so nothing loses its meaning. */
+html[data-effects='reduced'] .arc-border::before,
+html[data-effects='reduced'] .quest-glow,
+html[data-effects='reduced'] [data-slot='aui_assistant-message-content'] .aui-md [data-slot='code-card'][data-streaming='true'] {
+  animation: none !important;
+}
+
+/* Same resting glow the reduced-motion rule gives it. */
+html[data-effects='reduced'] .quest-glow {
+  box-shadow:
+    0 0 0.25rem color-mix(in srgb, var(--color-amber-500, #f59e0b) 80%, transparent),
+    0 0 0.625rem color-mix(in srgb, var(--color-amber-500, #f59e0b) 55%, transparent);
+}
+
 [data-slot='dropdown-menu-item']:focus,
 [data-slot='dropdown-menu-checkbox-item']:focus,
 [data-slot='dropdown-menu-radio-item']:focus {

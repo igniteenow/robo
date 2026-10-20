@@ -271,6 +271,11 @@ declare global {
       onBootstrapEvent: (callback: (payload: DesktopBootstrapEvent) => void) => () => void
       getVersion: () => Promise<DesktopVersionInfo>
       getRemoteDisplayReason?: () => Promise<string | null>
+      // How this window's frames reach the screen. `software` is true when
+      // Chromium composites on the CPU (remote display, VM, blocklisted GPU);
+      // the renderer then runs with reduced visual effects (see
+      // store/visual-effects). Optional: an older preload won't have it.
+      getRenderingInfo?: () => Promise<{ software: boolean; reason: string | null }>
       updates: {
         check: () => Promise<DesktopUpdateStatus>
         apply: (opts?: DesktopUpdateApplyOptions) => Promise<DesktopUpdateApplyResult>

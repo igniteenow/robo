@@ -50,6 +50,7 @@ def _is_pure_tool_call_tail(msg: dict) -> bool:
 _VERIFICATION_CONTINUATION_FLAGS = (
     "_verification_stop_synthetic",
     "_pre_verify_synthetic",
+    "_fact_check_synthetic",
 )
 
 
@@ -488,6 +489,18 @@ def finalize_turn(
                     final_response = final_response.rstrip() + "\n\n" + footer
         except Exception as _ver_err:
             logger.debug("file-mutation verifier footer failed: %s", _ver_err)
+
+    # Fact-check footer: when the person kept an answer that Robo's
+    # research disagreed with, say so under the answer (with the sources),
+    # so the disagreement is visible rather than silently dropped. Same
+    # gate and shape as the file-mutation footer above; not persisted.
+    if final_response and not interrupted:
+        try:
+            _fact_note = getattr(agent, "_fact_check_note", None)
+            if _fact_note:
+                final_response = final_response.rstrip() + "\n\n" + _fact_note
+        except Exception as _fact_err:
+            logger.debug("fact check footer failed: %s", _fact_err)
 
     # Turn-completion explainer.
     # When a turn ends abnormally after substantive work — empty content

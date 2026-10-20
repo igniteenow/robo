@@ -66,10 +66,10 @@ describe('ComposerControls shortcut tooltips', () => {
     await expectShortcutTooltip('Send', '↵')
   })
 
-  it('shows Enter for Steer', async () => {
-    renderControls({ busy: true, busyAction: 'steer' })
+  it('shows Enter for Send while Robo is working', async () => {
+    renderControls({ busy: true, busyAction: 'ask' })
 
-    await expectShortcutTooltip('Steer the current run', '↵')
+    await expectShortcutTooltip('Send… (Robo is still working)', '↵')
   })
 
   it('shows Ctrl+Enter for Queue', async () => {

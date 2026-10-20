@@ -283,6 +283,43 @@ export function useComposerQueue({
     [activeQueueSessionKey, busy, onCancel, queueEdit, runDrain]
   )
 
+  // "Send now" for the words in the composer while a turn runs: the answer to
+  // the busy-send choice (and a second Enter on it). Deterministic, unlike a
+  // redirect that the live turn may reject (no model request in flight — e.g.
+  // between tool batches or during the answer's fact check): the draft goes to
+  // the HEAD of the queue, the park is lifted, and the raw interrupt stops the
+  // current work; the busy→false settle drain then sends it as the next turn.
+  // Idle: just send it. Text only — attachments take the queue path.
+  const sendDraftNow = useCallback(() => {
+    const text = draftRef.current
+
+    if (!activeQueueSessionKey || !text.trim() || attachments.length > 0) {
+      return false
+    }
+
+    const entry = enqueueQueuedPrompt(activeQueueSessionKey, { text, attachments: [] })
+
+    if (!entry) {
+      return false
+    }
+
+    clearDraft()
+    triggerHaptic('submit')
+
+    if (busy) {
+      promoteQueuedPrompt(activeQueueSessionKey, entry.id)
+      unparkQueuedPrompts(activeQueueSessionKey)
+      void Promise.resolve(onCancel())
+
+      return true
+    }
+
+    drainFailuresRef.current.delete(entry.id)
+    void runDrain(entries => entries.find(e => e.id === entry.id))
+
+    return true
+  }, [activeQueueSessionKey, attachments.length, busy, clearDraft, draftRef, onCancel, runDrain])
+
   // Edge-independent auto-drain: send the head whenever the session is idle and
   // the queue is non-empty, bounding retries so a thrown/rejected onSubmit (e.g.
   // a stale-session 404) can't strand the entry permanently nor spin-loop. The
@@ -377,6 +414,7 @@ export function useComposerQueue({
     queueEdit,
     queueParked,
     queuedPrompts,
+    sendDraftNow,
     sendQueuedNow,
     stepQueuedEdit
   }

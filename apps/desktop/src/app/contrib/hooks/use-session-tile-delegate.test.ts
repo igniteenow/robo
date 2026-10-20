@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createClientSessionState } from '@/lib/chat-runtime'
 import type * as RoboModule from '@/robo'
 import { setSessions } from '@/store/session'
 import { sessionTileDelegate } from '@/store/session-states'
@@ -78,6 +79,41 @@ describe('useSessionTileDelegate resumeTile', () => {
       session_id: 'stored-x',
       cols: 96,
       profile: 'ai-engineer',
+      omit_messages: true
+    })
+  })
+
+  it('reuses a cached live binding, unless asked for a fresh resume', async () => {
+    setSessions([row({ id: 'stored-z', profile: 'default' })])
+
+    const requestGateway = vi.fn(async (method: string) =>
+      method === 'session.resume' ? ({ session_id: 'runtime-new' } as never) : ({} as never)
+    )
+
+    renderHook(() =>
+      useSessionTileDelegate({
+        archiveSession: vi.fn(async () => undefined),
+        branchStoredSession: vi.fn(async () => undefined),
+        executeSlashCommand: vi.fn(async () => undefined) as never,
+        removeSession: vi.fn(async () => undefined),
+        requestGateway: requestGateway as never,
+        runtimeIdByStoredSessionIdRef: { current: new Map([['stored-z', 'runtime-old']]) },
+        sessionStateByRuntimeIdRef: { current: new Map([['runtime-old', createClientSessionState('stored-z')]]) },
+        updateSessionState: vi.fn()
+      })
+    )
+
+    // The cache answers a plain resume without a round trip...
+    expect(await sessionTileDelegate()!.resumeTile('stored-z')).toBe('runtime-old')
+    expect(requestGateway).not.toHaveBeenCalled()
+
+    // ...but after a reconnect the cached id may be dead: `fresh` asks the
+    // gateway, which re-binds (or hands back the same live session).
+    expect(await sessionTileDelegate()!.resumeTile('stored-z', { fresh: true })).toBe('runtime-new')
+    expect(requestGateway).toHaveBeenCalledWith('session.resume', {
+      session_id: 'stored-z',
+      cols: 96,
+      profile: 'default',
       omit_messages: true
     })
   })

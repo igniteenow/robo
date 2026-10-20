@@ -522,6 +522,12 @@ def _hermetic_environment(tmp_path, monkeypatch):
     # tests/tools/test_lazy_deps.py overrides this var in both directions.
     monkeypatch.setenv("ROBO_DISABLE_LAZY_INSTALLS", "1")
 
+    # The end-of-turn fact check (agent/fact_check.py) spends auxiliary
+    # model calls and research-tool calls on every final answer. Off for
+    # the suite so loop-level tests see the plain turn-end path;
+    # tests/agent/test_fact_check.py opts back in explicitly.
+    monkeypatch.setenv("ROBO_FACT_CHECK", "0")
+
     # 5. Reset plugin singleton so tests don't leak plugins from
     #    ~/.robo/plugins/ (which, per step 3, is now empty — but the
     #    singleton might still be cached from a previous test).

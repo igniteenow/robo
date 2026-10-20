@@ -449,13 +449,24 @@ export interface SessionTileDelegate {
   /** Interrupt a tile's running turn. */
   interruptSession(runtimeId: string): Promise<void>
   /** Bind a live runtime id for a stored session (resume without touching
-   *  the main view). Returns the runtime id, or throws. */
-  resumeTile(storedSessionId: string): Promise<string>
-  /** Submit a prompt to a tile's live session. */
-  submitToSession(runtimeId: string, text: string): Promise<void>
+   *  the main view). Returns the runtime id, or throws. A cached live binding
+   *  is reused unless `fresh`: then the gateway is asked again, which is what
+   *  a caller wants after a reconnect — a respawned backend re-mints runtime
+   *  ids, and the cache still holds the dead one. */
+  resumeTile(storedSessionId: string, options?: { fresh?: boolean }): Promise<string>
+  /** Submit a prompt to a tile's live session. `queued` marks it "run
+   *  after": should the session be mid-turn, the gateway holds it for the
+   *  next turn instead of redirecting the live one. */
+  submitToSession(runtimeId: string, text: string, options?: { queued?: boolean }): Promise<void>
   /** THE session-state write path — routes through the wiring cache so the
-   *  cache, the primary view (when active), and every tile mirror agree. */
-  updateSession(runtimeId: string, updater: (state: ClientSessionState) => ClientSessionState): ClientSessionState
+   *  cache, the primary view (when active), and every tile mirror agree.
+   *  `storedSessionId` binds a runtime the caller just created (session.create
+   *  returns both ids) before any event has stamped it. */
+  updateSession(
+    runtimeId: string,
+    updater: (state: ClientSessionState) => ClientSessionState,
+    storedSessionId?: null | string
+  ): ClientSessionState
 }
 
 let delegate: SessionTileDelegate | null = null

@@ -2687,7 +2687,29 @@ class CuaDriverBackend(ComputerUseBackend):
                                 message=f"unknown button {button!r} — expected left, right, middle.")
         tool = "double_click" if click_count == 2 else "click"
 
-        args: Dict[str, Any] = {"pid": pid, "button": button_norm}
+        args: Dict[str, Any] = {"pid": pid}
+        # `button` goes only where the live schema takes it. `click` gained
+        # the enum in trycua/cua#1961; `double_click` on the drivers in the
+        # field has no such property and REFUSES the whole call
+        # ("double_click: unknown argument button"), which left the model
+        # retrying for minutes to open an app. A left button is the driver's
+        # default and needs no argument; a right/middle double-click that the
+        # schema cannot express is refused here, with a way forward, instead
+        # of bouncing off the driver. With no tools/list schema at all
+        # (discovery failed) the argument is passed as before.
+        session = self._session
+        discovered = bool(getattr(session, "capabilities_discovered", False))
+        if not discovered or session.supports_input_property(tool, "button"):
+            args["button"] = button_norm
+        elif button_norm != "left":
+            return ActionResult(
+                ok=False, action=tool, code="button_unsupported",
+                message=(
+                    f"The connected cua-driver's {tool} takes no button argument, so a "
+                    f"{button_norm} {tool} is unavailable. Use two single clicks with "
+                    f"button={button_norm!r}, or a left double_click."
+                ),
+            )
         if element is not None:
             if self._active_window_id is None:
                 return ActionResult(ok=False, action=tool,

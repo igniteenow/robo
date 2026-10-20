@@ -119,6 +119,46 @@ function ClarifyLine({
   )
 }
 
+/** The person's answer, shown the way their own messages look: a right-aligned
+ * bubble in the user surface, full-strength text. It used to be a secondary-
+ * colored line (and, until the tool settled, a half-transparent disabled
+ * textbox), so a typed answer was all but invisible once sent. */
+function ClarifyAnswer({
+  answer,
+  error,
+  pending = false,
+  skipped = false
+}: {
+  answer: string
+  error?: boolean
+  pending?: boolean
+  skipped?: boolean
+}) {
+  const { t } = useI18n()
+  const copy = t.assistant.clarify
+
+  return (
+    <div className="flex items-start justify-end gap-2" data-clarify-answer-row="">
+      <div
+        aria-busy={pending || undefined}
+        className={cn(
+          'ml-auto w-fit min-w-0 max-w-[min(85%,40rem)] whitespace-pre-wrap rounded-[1.125rem] border border-(--dt-user-bubble-border) bg-(--dt-user-bubble) px-3.5 py-2 leading-(--conversation-line-height) text-(--ui-text-primary)',
+          error && 'text-destructive',
+          skipped && 'italic text-(--ui-text-tertiary)'
+        )}
+        data-clarify-answer=""
+      >
+        {answer}
+      </div>
+      {pending ? (
+        <Loader2 aria-label={copy.sending} className={cn(CLARIFY_ICON_CLASS, 'animate-spin')} role="status" />
+      ) : (
+        <CircleLetterA aria-hidden className={CLARIFY_ICON_CLASS} />
+      )}
+    </div>
+  )
+}
+
 function KeyBadge({ char, preview, selected }: { char: string; preview?: boolean; selected: boolean }) {
   return (
     <Kbd
@@ -243,20 +283,7 @@ function ClarifyToolSettled({ args, result }: ToolCallMessagePartProps) {
           <span className="whitespace-pre-wrap font-medium leading-(--conversation-line-height)">{question}</span>
         </ClarifyLine>
       ) : null}
-      {answerText ? (
-        <ClarifyLine icon={CircleLetterA}>
-          <p
-            className={cn(
-              'whitespace-pre-wrap leading-(--conversation-line-height)',
-              error ? 'text-destructive' : 'text-(--ui-text-secondary)',
-              skipped && 'italic text-(--ui-text-tertiary)'
-            )}
-            data-clarify-answer=""
-          >
-            {answerText}
-          </p>
-        </ClarifyLine>
-      ) : null}
+      {answerText ? <ClarifyAnswer answer={answerText} error={Boolean(error)} skipped={skipped} /> : null}
       {skipped && choices.length > 0 ? (
         <div className="grid gap-px" data-clarify-late-choices="" role="group">
           {choices.map((choice, index) => (
@@ -309,6 +336,10 @@ function ClarifyToolPending({ args }: ToolCallMessagePartProps) {
 
   const [draft, setDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  // The answer on its way to the gateway (and, once accepted, on its way to
+  // the model). Shown at once as the person's own bubble in place of the
+  // form — nothing to wait for before the words are visibly received.
+  const [sentAnswer, setSentAnswer] = useState<string | null>(null)
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null)
   // The keyboard cursor. Indices 0..choices.length-1 are the options; the
   // trailing index (=== choices.length) is the "Other" free-text row.
@@ -338,6 +369,7 @@ function ClarifyToolPending({ args }: ToolCallMessagePartProps) {
       }
 
       setSubmitting(true)
+      setSentAnswer(answer)
 
       try {
         await gateway.request<{ ok?: boolean }>('clarify.respond', {
@@ -349,6 +381,7 @@ function ClarifyToolPending({ args }: ToolCallMessagePartProps) {
         // tool.complete lands next → ClarifyToolSettled.
       } catch (error) {
         notifyError(error, copy.sendFailed)
+        setSentAnswer(null)
         setSubmitting(false)
       }
     },
@@ -523,6 +556,25 @@ function ClarifyToolPending({ args }: ToolCallMessagePartProps) {
     return (
       <ClarifyShell aria-label={copy.loadingQuestion} className="my-1.5 grid min-h-12 place-items-center" role="status">
         <Loader2 aria-hidden className="size-4 animate-spin text-(--ui-text-tertiary)" />
+      </ClarifyShell>
+    )
+  }
+
+  // Sent: the question and the person's answer, as the settled card will show
+  // them, with a spinner until the tool returns. The form is gone — a disabled
+  // half-transparent textbox holding the words is exactly what made a typed
+  // answer look lost.
+  if (sentAnswer !== null) {
+    const skippedNow = !sentAnswer.trim()
+
+    return (
+      <ClarifyShell className="my-1.5 grid gap-1.5" data-clarify-sent="">
+        {question ? (
+          <ClarifyLine icon={MessageQuestion}>
+            <span className="whitespace-pre-wrap font-medium leading-(--conversation-line-height)">{question}</span>
+          </ClarifyLine>
+        ) : null}
+        <ClarifyAnswer answer={skippedNow ? copy.skipped : sentAnswer} pending skipped={skippedNow} />
       </ClarifyShell>
     )
   }

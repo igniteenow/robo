@@ -3685,6 +3685,7 @@ _AUX_TASKS: list[tuple[str, str, str]] = [
     ("kanban_decomposer", "Kanban decomposer", "task decomposition"),
     ("profile_describer", "Profile describer", "auto profile descriptions"),
     ("curator", "Curator", "skill-usage review pass"),
+    ("fact_check", "Fact check", "answer research and correction"),
 ]
 
 
@@ -6053,6 +6054,79 @@ def _desktop_stamp_path() -> Path:
     return get_robo_home() / "desktop-build-stamp.json"
 
 
+# The packages the desktop build cannot do without. All five are
+# devDependencies of the desktop workspace; npm hoists some to the repo root
+# and keeps others under apps/desktop/node_modules depending on its version,
+# so both places are checked.
+_DESKTOP_TOOLCHAIN_PACKAGES = ("electron", "electron-builder", "vite", "typescript", "@vitejs/plugin-react")
+
+
+def _desktop_toolchain_ready(project_root: Path) -> bool:
+    """True when every build-time package the desktop needs is installed."""
+    roots = (project_root, project_root / "apps" / "desktop")
+    for pkg in _DESKTOP_TOOLCHAIN_PACKAGES:
+        if not any((root / "node_modules" / pkg / "package.json").is_file() for root in roots):
+            return False
+    return _electron_dist_ok(project_root)
+
+
+def _desktop_deps_stamp_path(project_root: Path) -> Path:
+    """Per-checkout record of the lockfile the desktop packages were installed from.
+
+    Lives under the shared Robo root like ``robo update``'s own npm cache: the
+    packages describe ``PROJECT_ROOT/node_modules``, which every profile using
+    this checkout shares, so one stamp per checkout, not per profile.
+    """
+    import hashlib
+
+    from robo_constants import get_default_robo_root
+
+    key = hashlib.sha256(str(project_root).encode()).hexdigest()[:12]
+    return get_default_robo_root() / f".desktop_deps_{key}.json"
+
+
+def _desktop_deps_current(project_root: Path) -> bool:
+    """True when ``npm ci`` would only reinstall what is already there.
+
+    ``robo desktop`` used to run ``npm ci`` over the whole workspace tree
+    whenever the desktop had to be rebuilt — which is after every update, as
+    the build stamp covers the source. ``npm ci`` deletes ``node_modules`` and
+    re-extracts every package (plus the Electron download), minutes of quiet
+    work per update that changed nothing. The lockfile and workspace manifests
+    are hashed after each successful install; when the hash still matches and
+    the build toolchain is in place, the install is skipped and only the build
+    runs. Any doubt (no stamp, no lockfile, a missing package) reinstalls.
+    """
+    try:
+        from robo_cli.update_cmd import _npm_manifests_digest
+
+        digest = _npm_manifests_digest()
+    except Exception:
+        return False
+    if not digest or not _desktop_toolchain_ready(project_root):
+        return False
+    try:
+        data = json.loads(_desktop_deps_stamp_path(project_root).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, dict) and data.get("digest") == digest
+
+
+def _record_desktop_deps(project_root: Path) -> None:
+    """Remember the lockfile the desktop packages were just installed from."""
+    try:
+        from robo_cli.update_cmd import _npm_manifests_digest
+
+        digest = _npm_manifests_digest()
+        if not digest:
+            return
+        stamp = _desktop_deps_stamp_path(project_root)
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(json.dumps({"digest": digest, "projectRoot": str(project_root)}), encoding="utf-8")
+    except Exception:
+        logger.debug("Could not record the desktop deps stamp", exc_info=True)
+
+
 def _desktop_build_needed(desktop_dir: Path, project_root: Path, *, source_mode: bool) -> bool:
     """Return True when the desktop build output is stale or missing.
 
@@ -7357,7 +7431,8 @@ def cmd_gui(args: argparse.Namespace):
             build_label = "source build" if source_mode else "packaged app"
             print(f"✓ Desktop {build_label} is up to date (content stamp matches)")
         else:
-            print("→ Installing desktop workspace dependencies...")
+            from robo_cli.progress_heartbeat import heartbeat
+
             # Put the Robo-managed Node on PATH so npm's child scripts (which
             # shell out to bare `node`, e.g. electron-winstaller's
             # select-7z-arch.js) resolve it even when the parent PATH is
@@ -7366,23 +7441,39 @@ def cmd_gui(args: argparse.Namespace):
             # NixOS build env keeps its PYTHON hint while restoring managed Node
             # ahead of a bare PATH (same idiom as the `robo update` path).
             nixos_env = with_robo_node_path(_nixos_build_env())
-            install_result = _run_npm_install_deterministic(npm, PROJECT_ROOT, capture_output=False, env=nixos_env)
-            if install_result.returncode != 0:
-                if not _electron_pkg_staged_missing_dist(PROJECT_ROOT):
-                    print("✗ Desktop dependency install failed")
-                    print(f"  Run manually:  cd {PROJECT_ROOT} && npm ci")
-                    sys.exit(install_result.returncode or 1)
-                repaired = _try_redownload_electron_dist(PROJECT_ROOT, env)
-                if repaired:
-                    print("  ⚠ Dependency install failed with a missing Electron dist; "
-                          "repopulated it and continuing.")
+            if _desktop_deps_current(PROJECT_ROOT):
+                # Same lockfile as the last install and the toolchain is in
+                # place: nothing for npm to do — go straight to the build.
+                print("✓ Desktop packages are current (lockfile unchanged) — skipping the install")
+            else:
+                print("→ Installing desktop packages (a few minutes the first time; npm prints little while it works)...")
+                # --prefer-offline/--no-audit/--no-fund: the same trims `robo
+                # update` uses; --progress=false: npm's bar is off under CI=1
+                # anyway, the heartbeat below is the progress.
+                install_args = ("--no-fund", "--no-audit", "--prefer-offline", "--progress=false")
+                with heartbeat("installing desktop packages", hint="a few minutes the first time after an update"):
+                    install_result = _run_npm_install_deterministic(
+                        npm, PROJECT_ROOT, extra_args=install_args, capture_output=False, env=nixos_env
+                    )
+                if install_result.returncode != 0:
+                    if not _electron_pkg_staged_missing_dist(PROJECT_ROOT):
+                        print("✗ Desktop dependency install failed")
+                        print(f"  Run manually:  cd {PROJECT_ROOT} && npm ci")
+                        sys.exit(install_result.returncode or 1)
+                    repaired = _try_redownload_electron_dist(PROJECT_ROOT, env)
+                    if repaired:
+                        print("  ⚠ Dependency install failed with a missing Electron dist; "
+                              "repopulated it and continuing.")
+                    else:
+                        print("  ⚠ Dependency install failed with a missing Electron dist; "
+                              "continuing to the build so electron-builder can attempt "
+                              "the Electron fetch itself.")
                 else:
-                    print("  ⚠ Dependency install failed with a missing Electron dist; "
-                          "continuing to the build so electron-builder can attempt "
-                          "the Electron fetch itself.")
+                    print("  ✓ desktop packages installed")
+                    _record_desktop_deps(PROJECT_ROOT)
 
             build_label = "source build" if source_mode else "packaged app"
-            print(f"→ Building desktop {build_label}...")
+            print(f"→ Building desktop {build_label} (a few minutes)...")
             build_script = "build" if source_mode else "pack"
             if _force_adhoc_macos_signing(env, source_mode=source_mode):
                 print("  → No Developer ID configured; ad-hoc signing this local rebuild "
@@ -7396,7 +7487,8 @@ def cmd_gui(args: argparse.Namespace):
             stopped = _stop_desktop_processes_locking_build(desktop_dir, PROJECT_ROOT, source_mode=source_mode)
             if stopped:
                 print(f"  ⚠ Stopped running desktop app to free the build output (pid {', '.join(map(str, stopped))})")
-            build_result = subprocess.run([npm, "run", build_script], cwd=desktop_dir, env=env, check=False)
+            with heartbeat(f"building the desktop {build_label}"):
+                build_result = subprocess.run([npm, "run", build_script], cwd=desktop_dir, env=env, check=False)
             if (
                 build_result.returncode != 0
                 and not source_mode

@@ -219,6 +219,96 @@ def test_atomic_replace_copy_fallback_preserves_symlink(
 
 
 
+def _sharing_violation(src: str, dst: str) -> PermissionError:
+    exc = PermissionError(errno.EACCES, "Access is denied", src, None, dst)
+    exc.winerror = 32  # ERROR_SHARING_VIOLATION; 5 (ACCESS_DENIED) is the same class
+    return exc
+
+
+def test_atomic_replace_retries_a_windows_sharing_conflict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows a rename fails while another handle holds the target
+    (a sibling agent build reading auth.json); the holder is gone within
+    milliseconds, so the rename must be retried, not surfaced."""
+    import utils
+
+    target = tmp_path / "auth.json"
+    target.write_text("old\n", encoding="utf-8")
+    tmp = _write_tmp(tmp_path, "new\n")
+    real_replace = os.replace
+    calls = {"n": 0}
+    pauses: list[float] = []
+
+    def flaky_replace(src: str, dst: str) -> None:
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            raise _sharing_violation(src, dst)
+        real_replace(src, dst)
+
+    monkeypatch.setattr(utils, "_is_windows", lambda: True)
+    monkeypatch.setattr(utils.time, "sleep", pauses.append)
+    monkeypatch.setattr("utils.os.replace", flaky_replace)
+
+    assert Path(atomic_replace(tmp, target)) == target
+    assert target.read_text(encoding="utf-8") == "new\n"
+    assert not tmp.exists()
+    assert calls["n"] == 4
+    assert len(pauses) == 3 and all(p > 0 for p in pauses)
+
+
+def test_atomic_replace_gives_up_on_a_windows_conflict_that_never_clears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import utils
+
+    target = tmp_path / "auth.json"
+    target.write_text("old\n", encoding="utf-8")
+    tmp = _write_tmp(tmp_path, "new\n")
+    calls = {"n": 0}
+
+    def stuck_replace(src: str, dst: str) -> None:
+        calls["n"] += 1
+        raise _sharing_violation(src, dst)
+
+    monkeypatch.setattr(utils, "_is_windows", lambda: True)
+    monkeypatch.setattr(utils.time, "sleep", lambda _s: None)
+    monkeypatch.setattr("utils.os.replace", stuck_replace)
+
+    with pytest.raises(PermissionError):
+        atomic_replace(tmp, target)
+
+    # Bounded: it tried the configured number of times, then let the real
+    # error through, and never touched the target.
+    assert calls["n"] == utils._WINDOWS_REPLACE_ATTEMPTS
+    assert target.read_text(encoding="utf-8") == "old\n"
+
+
+def test_atomic_replace_does_not_retry_a_posix_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A permission error on a POSIX rename is real; one attempt, no pause."""
+    import utils
+
+    target = tmp_path / "auth.json"
+    target.write_text("old\n", encoding="utf-8")
+    tmp = _write_tmp(tmp_path, "new\n")
+    calls = {"n": 0}
+
+    def denied_replace(src: str, dst: str) -> None:
+        calls["n"] += 1
+        raise PermissionError(errno.EACCES, "Permission denied", src, None, dst)
+
+    monkeypatch.setattr(utils, "_is_windows", lambda: False)
+    monkeypatch.setattr(utils.time, "sleep", lambda _s: pytest.fail("must not pause on POSIX"))
+    monkeypatch.setattr("utils.os.replace", denied_replace)
+
+    with pytest.raises(PermissionError):
+        atomic_replace(tmp, target)
+
+    assert calls["n"] == 1
+
+
 def test_atomic_replace_real_cross_device(tmp_path: Path) -> None:
     shm = Path("/dev/shm")
     if os.name != "posix" or not os.access(shm, os.W_OK):

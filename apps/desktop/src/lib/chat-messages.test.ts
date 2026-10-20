@@ -34,6 +34,50 @@ describe('toChatMessages', () => {
     expect(chatMessageText(messages[0])).toBe('Planning.Done.')
   })
 
+  it('re-renders a resumed clarify from the projection result: question, choices and the answer', () => {
+    // The gateway's resume projection ships a structured `result` for a
+    // clarify row (the person's answer lives only in the tool result). Without
+    // it the settled card had nothing to show but an empty shell.
+    const messages = toChatMessages([
+      { role: 'user', content: 'deploy it', timestamp: 1 },
+      {
+        role: 'tool',
+        name: 'clarify',
+        content: '',
+        context: 'Which target? → the blue one',
+        result: { question: 'Which target?', user_response: 'the blue one', choices_offered: ['staging', 'prod'] },
+        timestamp: 2
+      },
+      { role: 'assistant', content: 'Deploying.', timestamp: 3 }
+    ])
+
+    const tool = messages.flatMap(m => m.parts).find(p => p.type === 'tool-call')
+
+    expect(tool?.type).toBe('tool-call')
+    expect(tool?.type === 'tool-call' && tool.args).toEqual({
+      context: 'Which target? → the blue one',
+      question: 'Which target?',
+      choices: ['staging', 'prod']
+    })
+    expect(tool?.type === 'tool-call' && tool.result).toEqual({
+      question: 'Which target?',
+      user_response: 'the blue one',
+      choices_offered: ['staging', 'prod']
+    })
+  })
+
+  it('keeps the plain context shape for a tool row without a structured result', () => {
+    const messages = toChatMessages([
+      { role: 'tool', name: 'terminal', content: '', context: 'ls', timestamp: 2 },
+      { role: 'assistant', content: 'Done.', timestamp: 3 }
+    ])
+
+    const tool = messages.flatMap(m => m.parts).find(p => p.type === 'tool-call')
+
+    expect(tool?.type === 'tool-call' && tool.args).toEqual({ context: 'ls' })
+    expect(tool?.type === 'tool-call' && tool.result).toEqual({ context: 'ls' })
+  })
+
   it('keeps assistant tool-call iterations in one loaded assistant bubble', () => {
     const messages = toChatMessages([
       { role: 'user', content: 'check this repo', timestamp: 1 },

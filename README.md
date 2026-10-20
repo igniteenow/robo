@@ -94,6 +94,7 @@ Talk to Robo in the terminal and the desktop app. Transcription runs on your mac
 
 ### Desktop app
 
+- **Team mode.** Open **Team** in the sidebar to put two to four models on one goal at the same time, each in its own pane. The lead works; the reviewers verify its options on their own models, vote, and guide it; when the lead says it is done, the reviewers check that it is; then a Final seat writes the outcome you can keep questioning. Pick a model per seat and press **Start team**. The normal chat is untouched.
 - **MCP servers in Settings → MCP.** Add, search, and switch Model Context Protocol servers without editing files.
 - **Updates itself.** When a new version is ready, click **Update now**. Robo closes, shows its progress, and reopens when done.
 - **Connect to a Robo on another machine:** Settings → Gateway → Remote gateway.
@@ -120,6 +121,7 @@ You can also message Robo from **Telegram, WhatsApp, Discord, Slack**, and more:
 
 - **Works from your documents.** Attach logs, notes, code, CSV, JSON, HTML, or PowerPoint files of any size (`/attach <file>`). Robo indexes them on your machine and answers with the exact passages.
 - **Gets real work done.** Coding, debugging, research, writing, data work, file cleanup, and system admin, with a real terminal, file editing, a real browser, and code execution.
+- **Shows its work and checks it.** Writes one short line before each step it takes, and checks each answer against sources with its own research — when a source disagrees, it asks before correcting the answer.
 - **Looks inside software safely.** Static analysis of programs with Ghidra, radare2, or rizin when installed, or a built-in parser when not. The file is never run.
 - **Gets sharper with use.** Saves what works as reusable skills, keeps long-term memory, searches past conversations, and learns how you like things done.
 - **Works while you don't.** Scheduled jobs ("every morning at 8…") and parallel sub-agents.
