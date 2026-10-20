@@ -148,6 +148,13 @@ class TestUpdateProgress:
 
         assert progress.detail == "Provisioning a private Python 3.11 runtime with fixed SQLite…"
 
+    def test_a_progress_heartbeat_becomes_the_detail(self):
+        progress = _progress()
+        progress.feed("→ Rebuilding the desktop app (a few minutes; it is quiet while it works)...")
+        progress.feed("  … rebuilding the desktop app (1 min 30 s) — details in ~/.robo/logs/update.log")
+
+        assert progress.detail.startswith("rebuilding the desktop app (1 min 30 s)")
+
     def test_a_very_long_step_is_shortened(self):
         progress = _progress()
         progress.feed("→ " + "x" * 300)

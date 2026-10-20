@@ -101,6 +101,7 @@ import {
 import { FIELD_LABELS, SECTIONS } from '../settings/constants'
 import { fieldCopyForSchemaKey } from '../settings/field-copy'
 import { prettyName } from '../settings/helpers'
+import { TEAM_ROUTE } from '../team/contrib'
 
 import { usePaletteContributions } from './contrib'
 import { MarketplaceThemePage } from './marketplace-theme-page'
@@ -814,6 +815,13 @@ function CommandPaletteBody({ onExited }: { onExited: () => void }) {
             keywords: ['star map', 'memory', 'memories', 'skills', 'graph', 'learning', 'constellation'],
             label: t.starmap.title,
             run: go(STARMAP_ROUTE)
+          },
+          {
+            icon: Users,
+            id: 'nav-team',
+            keywords: ['team', 'models', 'vote', 'multi', 'agents', 'lead', 'review'],
+            label: t.team.title,
+            run: go(TEAM_ROUTE)
           }
         ]
       },

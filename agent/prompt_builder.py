@@ -439,6 +439,31 @@ VERIFICATION_GUIDANCE = (
     "it, not from how hard it looked at first glance."
 )
 
+# Universal step-narration guidance — applied to ALL models.
+#
+# While a task runs, the person (or their client watching a shared chat) sees
+# tool rows go by but nothing that says what Robo is doing in their own terms.
+# Models say nothing between tool calls unless told to, so the gap is the
+# prompt, not the surfaces: every surface already shows mid-turn assistant
+# text (CLI stream, TUI/desktop ``message.interim``, messaging interim
+# messages). This block asks for exactly one short plain line before each
+# step — enough to follow along, never a running commentary. Gated by
+# config.yaml ``agent.step_narration`` (default True); only injected when
+# tools are loaded, since a toolless reply has no steps to narrate.
+#
+# Short on purpose — same amortised-cost reasoning as the blocks above.
+STEP_NARRATION_GUIDANCE = (
+    "# Say what you are doing\n"
+    "While working on a task, write one short plain line before each step "
+    "that uses tools, saying what you are about to do and why it matters — "
+    "for example \"Checking the config files to find the current port.\" or "
+    "\"Running the tests to confirm the fix.\" One line per step, under "
+    "fifteen words, no headings, no bullet lists, no restating the request, "
+    "and nothing when you are answering directly without tools. Keep these "
+    "lines for the person following along; put the detail in the final "
+    "answer."
+)
+
 # Universal parallel-tool-call guidance — applied to ALL models.
 #
 # Why this matters for cost: every assistant turn resends the entire

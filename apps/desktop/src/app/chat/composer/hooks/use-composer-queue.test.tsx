@@ -23,10 +23,15 @@ import { useComposerQueue } from './use-composer-queue'
 
 const SESSION_KEY = 'stored-session-queue-hook'
 
-function renderQueueHook(overrides: { busy?: boolean; onCancel?: () => void } = {}) {
+function renderQueueHook(overrides: { busy?: boolean; draft?: string; onCancel?: () => void } = {}) {
   const onSubmit = vi.fn<ChatBarProps['onSubmit']>(async () => true)
   const onCancel = overrides.onCancel ?? vi.fn()
   const queueEditRef: { current: QueueEditState | null } = { current: null }
+  const draftRef = { current: overrides.draft ?? '' }
+
+  const clearDraft = vi.fn(() => {
+    draftRef.current = ''
+  })
 
   const hook = renderHook(
     ({ busy }: { busy: boolean }) =>
@@ -34,8 +39,8 @@ function renderQueueHook(overrides: { busy?: boolean; onCancel?: () => void } = 
         activeQueueSessionKey: SESSION_KEY,
         attachments: [],
         busy,
-        clearDraft: () => undefined,
-        draftRef: { current: '' },
+        clearDraft,
+        draftRef,
         focusInput: () => undefined,
         loadIntoComposer: () => undefined,
         onCancel,
@@ -47,7 +52,7 @@ function renderQueueHook(overrides: { busy?: boolean; onCancel?: () => void } = 
     { initialProps: { busy: overrides.busy ?? false } }
   )
 
-  return { hook, onCancel, onSubmit }
+  return { clearDraft, draftRef, hook, onCancel, onSubmit }
 }
 
 describe('useComposerQueue park integration', () => {
@@ -126,5 +131,56 @@ describe('useComposerQueue park integration', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
     expect(onSubmit.mock.calls[0]?.[0]).toBe('send me now')
+  })
+
+  it('sendDraftNow while busy: draft to the head of the queue, park lifted, interrupt fired, drained on settle', async () => {
+    enqueueQueuedPrompt(SESSION_KEY, { attachments: [], text: 'already waiting' })
+    parkQueuedPrompts(SESSION_KEY)
+
+    const { clearDraft, hook, onCancel, onSubmit } = renderQueueHook({ busy: true, draft: 'stop, do this instead' })
+
+    let accepted = false
+
+    act(() => {
+      accepted = hook.result.current.sendDraftNow()
+    })
+
+    expect(accepted).toBe(true)
+    expect(clearDraft).toHaveBeenCalledTimes(1)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(isQueueParked(SESSION_KEY)).toBe(false)
+    expect(getQueuedPrompts(SESSION_KEY).map(e => e.text)).toEqual(['stop, do this instead', 'already waiting'])
+
+    hook.rerender({ busy: false })
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit.mock.calls[0]?.[0]).toBe('stop, do this instead')
+  })
+
+  it('sendDraftNow while idle sends the draft straight away', async () => {
+    const { hook, onCancel, onSubmit } = renderQueueHook({ draft: 'right now' })
+
+    act(() => {
+      hook.result.current.sendDraftNow()
+    })
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit.mock.calls[0]?.[0]).toBe('right now')
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(getQueuedPrompts(SESSION_KEY)).toHaveLength(0)
+  })
+
+  it('sendDraftNow does nothing for an empty draft', () => {
+    const { hook, onCancel } = renderQueueHook({ busy: true, draft: '   ' })
+
+    let accepted = true
+
+    act(() => {
+      accepted = hook.result.current.sendDraftNow()
+    })
+
+    expect(accepted).toBe(false)
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(getQueuedPrompts(SESSION_KEY)).toHaveLength(0)
   })
 })

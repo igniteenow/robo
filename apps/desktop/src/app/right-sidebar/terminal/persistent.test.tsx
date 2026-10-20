@@ -2,6 +2,7 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { PaneVisibleContext } from '@/components/pane-shell/pane-visibility'
 import { $paneStates } from '@/store/panes'
 
 import { PersistentTerminal, TerminalSlot } from './persistent'
@@ -332,5 +333,54 @@ describe('PersistentTerminal rect tracking', () => {
     act(() => window.dispatchEvent(new Event('focus')))
 
     expect(raf.pending()).toBe(1)
+  })
+
+  it('follows its tab in the zone at once: hidden behind another tab, back on the click', () => {
+    const raf = installRaf()
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(rect(10, 20, 200, 100))
+
+    // The zone hands each pane PaneVisibleContext (is this tab the active one).
+    const Zone = ({ terminalActive }: { terminalActive: boolean }) => (
+      <>
+        <PaneVisibleContext.Provider value={terminalActive}>
+          <TerminalSlot className="slot" />
+        </PaneVisibleContext.Provider>
+        <PersistentTerminal onAddSelectionToChat={() => undefined} />
+      </>
+    )
+
+    render(<Zone terminalActive />)
+    act(() => {
+      raf.runNext()
+    })
+
+    const overlay = container!.lastElementChild as HTMLElement
+    expect(overlay.style.visibility).toBe('visible')
+    expect(overlay.style.opacity).toBe('')
+
+    // The chat tab is fronted. No measuring frame runs — the switch alone hides
+    // the terminal, in a way the xterm host's own `visibility: visible` cannot
+    // undo, and it keeps its size (xterm is not resized for a tab switch).
+    act(() => {
+      root!.render(<Zone terminalActive={false} />)
+    })
+
+    expect(raf.pending()).toBe(0)
+    expect(overlay.style.visibility).toBe('hidden')
+    expect(overlay.style.pointerEvents).toBe('none')
+    expect(overlay.style.opacity).toBe('0')
+    expect(overlay.style.clipPath).toBe('inset(50%)')
+    expect(overlay.style.width).toBe('200px')
+    expect(overlay.style.height).toBe('100px')
+
+    // Back to the terminal tab: shown straight away, again without a frame.
+    act(() => {
+      root!.render(<Zone terminalActive />)
+    })
+
+    expect(overlay.style.visibility).toBe('visible')
+    expect(overlay.style.pointerEvents).toBe('auto')
+    expect(overlay.style.opacity).toBe('')
+    expect(overlay.style.clipPath).toBe('')
   })
 })

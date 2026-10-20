@@ -24,6 +24,7 @@ import { $autoSpeakReplies } from '@/store/voice-prefs'
 import { useTheme } from '@/themes'
 
 import { AttachmentList } from './attachments'
+import { BusySendChoice } from './busy-send-choice'
 import {
   acceptsTriggerCompletion,
   COMPOSER_FADE_BACKGROUND,
@@ -39,6 +40,7 @@ import { COMPOSER_DROP_ACTIVE_CLASS, COMPOSER_DROP_FADE_CLASS } from './drop-aff
 import { markActiveComposer } from './focus'
 import { HelpHint } from './help-hint'
 import { useAtCompletions } from './hooks/use-at-completions'
+import { useBusySendChoice } from './hooks/use-busy-send-choice'
 import { useComposerBranch } from './hooks/use-composer-branch'
 import { useComposerDraft } from './hooks/use-composer-draft'
 import { useComposerDrop } from './hooks/use-composer-drop'
@@ -256,6 +258,7 @@ export function ChatBar({
     queueEdit,
     queueParked,
     queuedPrompts,
+    sendDraftNow,
     sendQueuedNow,
     stepQueuedEdit
   } = useComposerQueue({
@@ -273,7 +276,12 @@ export function ChatBar({
     sessionId
   })
 
-  const statusStackVisible = queuedPrompts.length > 0 || statusPresent
+  // The "Robo is still working" choice (Send now / Queue) that Enter opens on a
+  // text draft while a turn runs. Owns only its open flag; the words stay in
+  // the composer until the person picks.
+  const busySendChoice = useBusySendChoice({ activeQueueSessionKey, busy, draftRef, hasText })
+
+  const statusStackVisible = queuedPrompts.length > 0 || statusPresent || busySendChoice.open
 
   // Halt vs. reach-the-queue: every interrupt lands on onCancel, but only the
   // gestures that MEAN "stop working" (Stop button, Esc) go through this
@@ -288,6 +296,18 @@ export function ChatBar({
 
     return onCancel()
   }, [activeQueueSessionKeyRef, onCancel])
+
+  // Esc while the choice is open keeps the words and closes the choice — it
+  // must not fall through to the Stop that Esc otherwise means while busy.
+  const cancelOrKeep = useCallback(() => {
+    if (busySendChoice.openRef.current) {
+      busySendChoice.hide()
+
+      return undefined
+    }
+
+    return haltRun()
+  }, [busySendChoice, haltRun])
 
   const metrics = useComposerMetrics({
     composerDockRef,
@@ -309,14 +329,15 @@ export function ChatBar({
   const hasComposerPayload = hasText || attachments.length > 0
   const canSubmit = busy || hasComposerPayload
 
-  // Steer only makes sense mid-turn, text-only (the gateway can't carry images
-  // into a tool result) and never for a slash command (those execute inline).
-  const canSteer = busy && !compacting && !!onSteer && attachments.length === 0 && isSteerableText
+  // A text-only draft while a turn runs gets the Send now / Queue choice on
+  // Enter (never for a slash command — those execute inline — and not while
+  // compacting, when the words can only wait).
+  const canAsk = busy && !compacting && attachments.length === 0 && isSteerableText
 
-  // While busy: text redirects the live turn (Cursor-style stop-and-correct),
-  // attachments queue for the next turn, an empty composer stops.
-  const busyAction: 'steer' | 'queue' | 'stop' = canSteer
-    ? 'steer'
+  // While busy: text opens the choice, attachments queue for the next turn, an
+  // empty composer stops.
+  const busyAction: 'ask' | 'queue' | 'stop' = canAsk
+    ? 'ask'
     : compacting || hasComposerPayload
       ? 'queue'
       : 'stop'
@@ -328,6 +349,7 @@ export function ChatBar({
     activeQueueSessionKeyRef,
     attachments,
     busy,
+    busySendChoice,
     compacting,
     clearDraft,
     disabled,
@@ -346,6 +368,7 @@ export function ChatBar({
     queueCurrentDraft,
     queueEdit,
     queuedPrompts,
+    sendDraftNow,
     sessionId,
     setComposerText,
     stashAt
@@ -836,6 +859,15 @@ export function ChatBar({
         return
       }
 
+      // The Send now / Queue choice is open → Esc keeps the words and closes
+      // it; the running turn is left alone.
+      if (busySendChoice.openRef.current) {
+        event.preventDefault()
+        busySendChoice.hide()
+
+        return
+      }
+
       // Otherwise Esc interrupts the running turn (Stop-button parity) — unless
       // the turn is parked waiting on the user, where Esc must not discard the
       // pending prompt. An explicit halt, so it parks the queue too.
@@ -880,7 +912,7 @@ export function ChatBar({
 
   // Global Esc-to-cancel when the chat (not the composer input) has focus.
   // Same explicit-halt semantics as the Stop button: park the queue.
-  useComposerEscCancel({ awaitingInput, busy, onCancel: haltRun, target: scope.target })
+  useComposerEscCancel({ awaitingInput, busy, onCancel: cancelOrKeep, target: scope.target })
 
   const {
     conversation,
@@ -1111,29 +1143,53 @@ export function ChatBar({
               it. Collapses to nothing when every status is empty. */}
           <ComposerStatusStack
             queue={
-              activeQueueSessionKey && queuedPrompts.length > 0 ? (
-                <QueuePanel
-                  busy={busy}
-                  editingId={queueEdit?.entryId ?? null}
-                  entries={queuedPrompts}
-                  onDelete={id => {
-                    if (removeQueuedPrompt(activeQueueSessionKey, id) && queueEdit?.entryId === id) {
-                      exitQueuedEdit('cancel')
-                    }
-                  }}
-                  onEdit={beginQueuedEdit}
-                  onResume={() => {
-                    unparkQueuedPrompts(activeQueueSessionKey)
+              // null when there is nothing: the stack takes any node as "a
+              // queue section" and would paint an empty card.
+              busySendChoice.open || (activeQueueSessionKey && queuedPrompts.length > 0) ? (
+                <>
+                  {busySendChoice.open && (
+                    <BusySendChoice
+                      onKeep={() => {
+                        busySendChoice.hide()
+                        focusInput()
+                      }}
+                      onQueue={() => {
+                        busySendChoice.hide()
+                        queueCurrentDraft()
+                        focusInput()
+                      }}
+                      onSendNow={() => {
+                        busySendChoice.hide()
+                        sendDraftNow()
+                        focusInput()
+                      }}
+                    />
+                  )}
+                  {activeQueueSessionKey && queuedPrompts.length > 0 ? (
+                    <QueuePanel
+                      busy={busy}
+                      editingId={queueEdit?.entryId ?? null}
+                      entries={queuedPrompts}
+                      onDelete={id => {
+                        if (removeQueuedPrompt(activeQueueSessionKey, id) && queueEdit?.entryId === id) {
+                          exitQueuedEdit('cancel')
+                        }
+                      }}
+                      onEdit={beginQueuedEdit}
+                      onResume={() => {
+                        unparkQueuedPrompts(activeQueueSessionKey)
 
-                    // Idle → kick the head immediately; busy → the settle drain
-                    // takes over now that the park is lifted.
-                    if (!busy) {
-                      void drainNextQueued()
-                    }
-                  }}
-                  onSendNow={id => void sendQueuedNow(id)}
-                  parked={queueParked}
-                />
+                        // Idle → kick the head immediately; busy → the settle drain
+                        // takes over now that the park is lifted.
+                        if (!busy) {
+                          void drainNextQueued()
+                        }
+                      }}
+                      onSendNow={id => void sendQueuedNow(id)}
+                      parked={queueParked}
+                    />
+                  ) : null}
+                </>
               ) : null
             }
             sessionId={statusSessionId}

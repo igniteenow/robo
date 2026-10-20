@@ -19,6 +19,9 @@ interface UseComposerSubmitArgs {
   activeQueueSessionKeyRef: RefObject<string | null>
   attachments: ComposerAttachment[]
   busy: boolean
+  /** The "Robo is still working" choice: whether it is open (a second Enter
+   *  on it means Send now) and how to open it. */
+  busySendChoice: { hide: () => void; openRef: RefObject<boolean>; show: () => void }
   compacting: boolean
   clearDraft: () => void
   disabled: boolean
@@ -35,6 +38,8 @@ interface UseComposerSubmitArgs {
   queueCurrentDraft: () => boolean
   queueEdit: QueueEditState | null
   queuedPrompts: QueuedPromptEntry[]
+  /** Stop the current work and send the draft as the next turn. */
+  sendDraftNow: () => boolean
   sessionId: string | null | undefined
   setComposerText: (value: string) => void
   stashAt: (scope: string | null, text?: string, attachments?: ComposerAttachment[]) => void
@@ -54,6 +59,7 @@ export function useComposerSubmit({
   activeQueueSessionKeyRef,
   attachments,
   busy,
+  busySendChoice,
   compacting,
   clearDraft,
   disabled,
@@ -70,6 +76,7 @@ export function useComposerSubmit({
   queueCurrentDraft,
   queueEdit,
   queuedPrompts,
+  sendDraftNow,
   sessionId,
   setComposerText,
   stashAt
@@ -157,7 +164,9 @@ export function useComposerSubmit({
     // both RPCs ride the same socket in call order, so the gateway resolves the
     // clarify before it sees the follow-up. Awaiting first would leave the draft
     // live for a tick — long enough for a second Enter to send it twice.
-    if (payloadPresent && !queueEdit && hasClarifyRequest(sessionId)) {
+    const answeringClarify = payloadPresent && !queueEdit && hasClarifyRequest(sessionId)
+
+    if (answeringClarify) {
       void skipClarifyRequest(sessionId)
     }
 
@@ -176,10 +185,23 @@ export function useComposerSubmit({
         clearDraft()
         dispatchSubmit(text)
       } else if (!compacting && !attachments.length && text.trim()) {
-        // Cursor-style stop-and-correct: interrupt the live turn and redirect
-        // it with this text. redirect() preserves the shown reasoning/work; if
-        // the turn already ended, steerDraft re-queues so nothing is lost.
-        steerDraft()
+        if (answeringClarify) {
+          // The words answer the parked question: the clarify was just
+          // skipped, so the tool returns and the live turn takes the text as
+          // a redirect (the agent is right there waiting for it).
+          steerDraft()
+        } else if (busySendChoice.openRef.current) {
+          // Second Enter on the open choice = Send now.
+          busySendChoice.hide()
+          sendDraftNow()
+        } else {
+          // Robo is still working: ask — Send now (stop the current step and
+          // read this first) or Queue (after it finishes). The words stay in
+          // the composer until the person picks. Never a silent redirect or
+          // queue: when the live turn had nothing to redirect, the message
+          // used to land in the queue with nothing on screen to say so.
+          busySendChoice.show()
+        }
       } else if (payloadPresent) {
         // Attachments can't ride a redirect (no tool-result image carriage) —
         // queue the whole payload for the next turn.

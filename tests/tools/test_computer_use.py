@@ -1509,6 +1509,67 @@ class TestClickButtonPassthrough:
         )
 
 
+    def _backend_with_schemas(self, accepts_button):
+        """A session whose tools/list schema is known: `accepts_button`
+        names the tools whose input schema has a `button` property."""
+        backend = self._backend_with_active_target()
+        backend._session.capabilities_discovered = True
+        backend._session.supports_input_property.side_effect = (
+            lambda tool, prop: prop == "button" and tool in accepts_button
+        )
+        return backend
+
+    def test_double_click_sends_no_button_when_the_driver_schema_has_none(self):
+        """The field bug: cua-driver's `double_click` has no `button`
+        property, and it refuses the whole call when one is sent
+        ("double_click: unknown argument button") — so opening an app by
+        double-click failed over and over. A left double-click needs no
+        argument (left is the driver's default)."""
+        backend = self._backend_with_schemas(accepts_button={"click"})
+        res = backend.click(element=5, click_count=2)
+        assert res.ok
+        name, args = backend._session.call_tool.call_args.args
+        assert name == "double_click"
+        assert "button" not in args
+        assert args["element_index"] == 5
+
+    def test_double_click_passes_button_when_the_driver_schema_takes_it(self):
+        backend = self._backend_with_schemas(accepts_button={"click", "double_click"})
+        res = backend.click(element=5, button="right", click_count=2)
+        assert res.ok
+        name, args = backend._session.call_tool.call_args.args
+        assert name == "double_click"
+        assert args["button"] == "right"
+
+    def test_single_click_still_passes_the_button(self):
+        backend = self._backend_with_schemas(accepts_button={"click"})
+        res = backend.click(element=5, button="middle")
+        assert res.ok
+        name, args = backend._session.call_tool.call_args.args
+        assert name == "click"
+        assert args["button"] == "middle"
+
+    def test_right_double_click_is_refused_clearly_when_the_schema_cannot_express_it(self):
+        """Rather than bouncing off the driver with an opaque refusal, say
+        what is unavailable and what to do instead; nothing is sent."""
+        backend = self._backend_with_schemas(accepts_button={"click"})
+        res = backend.click(element=5, button="right", click_count=2)
+        assert not res.ok
+        assert res.code == "button_unsupported"
+        assert "two single clicks" in res.message
+        backend._session.call_tool.assert_not_called()
+
+    def test_button_is_passed_as_before_when_no_schema_was_discovered(self):
+        """Discovery failed (no tools/list): keep the pre-existing behaviour
+        rather than guessing — the argument goes through."""
+        backend = self._backend_with_active_target()
+        backend._session.capabilities_discovered = False
+        res = backend.click(element=5, click_count=2)
+        assert res.ok
+        name, args = backend._session.call_tool.call_args.args
+        assert name == "double_click"
+        assert args["button"] == "left"
+
     def test_coordinate_drag_and_scroll_keep_the_captured_window(self):
         backend = self._backend_with_active_target()
         # Mock the capability check so x/y are included (they're gated

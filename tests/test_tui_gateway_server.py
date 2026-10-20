@@ -2209,6 +2209,61 @@ def test_history_to_messages_preserves_tool_calls_for_resume_display():
     ]
 
 
+def test_history_to_messages_projects_the_clarify_answer_for_resume():
+    """A clarify's answer is the person's own words, stored only in the tool
+    result. The resumed transcript must show it — as a one-line context for
+    trail-style clients and as a structured result for card-style ones."""
+    history = [
+        {"role": "user", "content": "deploy it"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_q",
+                    "function": {
+                        "name": "clarify",
+                        "arguments": json.dumps({"question": "Which target?", "choices": ["staging", "prod"]}),
+                    },
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_q",
+            "content": json.dumps(
+                {"question": "Which target?", "choices_offered": ["staging", "prod"], "user_response": "the blue one"}
+            ),
+        },
+        {"role": "assistant", "content": "Deploying to the blue one."},
+    ]
+
+    assert server._history_to_messages(history) == [
+        {"role": "user", "text": "deploy it"},
+        {
+            "context": "Which target? → the blue one",
+            "name": "clarify",
+            "role": "tool",
+            "result": {"question": "Which target?", "user_response": "the blue one", "choices_offered": ["staging", "prod"]},
+        },
+        {"role": "assistant", "text": "Deploying to the blue one."},
+    ]
+
+
+def test_clarify_projection_edge_cases():
+    assert server._clarify_projection(json.dumps({"question": "Q?", "user_response": ""})) == {
+        "context": "Q? → skipped",
+        "result": {"question": "Q?", "user_response": ""},
+    }
+    multi = server._clarify_projection(json.dumps({"question": "Which?", "user_response": ["a", "b"]}))
+    assert multi["context"] == "Which? → a, b"
+    # Not the clarify tool's JSON → nothing projected, the plain context stays.
+    assert server._clarify_projection("plain tool output") is None
+    assert server._clarify_projection(json.dumps({"ok": True})) is None
+    long_q = "x" * 300
+    assert server._clarify_projection(json.dumps({"question": long_q, "user_response": "y"}))["context"].endswith("…")
+
+
 def test_tool_ctx_sends_an_arg_preview_not_a_phrased_label():
     # Clients phrase their own verb around this string: the TUI renders
     # `Terminal("<ctx>")` and the desktop prepends "Running"/"Ran". Sending a
@@ -14577,6 +14632,156 @@ def test_session_create_records_source(monkeypatch):
         assert server._sessions[sid]["source"] == "tool"
     finally:
         server._sessions.clear()
+
+
+class _NudgedAgent:
+    """Stand-in with the two post-turn review triggers an AIAgent carries,
+    plus the fact-check opt-out flag the checker reads."""
+
+    def __init__(self):
+        self._memory_nudge_interval = 10
+        self._skill_nudge_interval = 10
+        self._fact_check_disabled = False
+
+
+def test_session_create_records_background_review_opt_out(monkeypatch):
+    """Absent / true keeps the review; only an explicit false opts out."""
+    monkeypatch.setattr(server, "_start_agent_build", lambda sid, session: None)
+    server._sessions.clear()
+    try:
+        default = server.handle_request(
+            {"id": "1", "method": "session.create", "params": {}}
+        )["result"]["session_id"]
+        on = server.handle_request(
+            {"id": "2", "method": "session.create", "params": {"background_review": True}}
+        )["result"]["session_id"]
+        off = server.handle_request(
+            {"id": "3", "method": "session.create", "params": {"background_review": False}}
+        )["result"]["session_id"]
+        assert server._sessions[default]["background_review"] is True
+        assert server._sessions[on]["background_review"] is True
+        assert server._sessions[off]["background_review"] is False
+        # The fact-check opt-out has the same shape and the same default.
+        no_check = server.handle_request(
+            {"id": "4", "method": "session.create", "params": {"fact_check": False}}
+        )["result"]["session_id"]
+        assert server._sessions[default]["fact_check"] is True
+        assert server._sessions[off]["fact_check"] is True
+        assert server._sessions[no_check]["fact_check"] is False
+        assert server._sessions[no_check]["background_review"] is True
+    finally:
+        server._sessions.clear()
+
+
+def test_background_review_opt_out_zeroes_both_nudges_only_when_opted_out():
+    """The opt-out is the curator's own mechanism: both intervals to 0.
+
+    A session that did not opt out keeps whatever config gave the agent, and
+    the helper is a no-op before the agent exists.
+    """
+    kept = _NudgedAgent()
+    server._apply_session_background_review({"agent": kept})
+    server._apply_session_background_review({"agent": kept, "background_review": True})
+    assert (kept._memory_nudge_interval, kept._skill_nudge_interval) == (10, 10)
+
+    server._apply_session_background_review({"background_review": False, "agent": None})
+
+    muted = _NudgedAgent()
+    server._apply_session_background_review({"background_review": False, "agent": muted})
+    assert (muted._memory_nudge_interval, muted._skill_nudge_interval) == (0, 0)
+    # The review opt-out alone leaves the fact check on, and vice versa.
+    assert muted._fact_check_disabled is False
+    unchecked = _NudgedAgent()
+    server._apply_session_background_review({"fact_check": False, "agent": unchecked})
+    assert unchecked._fact_check_disabled is True
+    assert (unchecked._memory_nudge_interval, unchecked._skill_nudge_interval) == (10, 10)
+
+
+def test_session_background_review_rpc_applies_to_a_built_agent_and_sticks():
+    """A resumed seat re-asserts the opt-out over RPC: it lands on the live
+    agent at once and is recorded so a later rebuild honors it too."""
+    agent = _NudgedAgent()
+    server._sessions.clear()
+    server._sessions["sid"] = {"agent": agent, "session_key": "k"}
+    try:
+        resp = server.handle_request(
+            {
+                "id": "1",
+                "method": "session.background_review",
+                "params": {"session_id": "sid", "enabled": False},
+            }
+        )
+        assert resp["result"] == {"background_review": False}
+        assert server._sessions["sid"]["background_review"] is False
+        assert (agent._memory_nudge_interval, agent._skill_nudge_interval) == (0, 0)
+        # Without the optional field the fact check is left alone.
+        assert "fact_check" not in server._sessions["sid"]
+        assert agent._fact_check_disabled is False
+
+        both = server.handle_request(
+            {
+                "id": "1b",
+                "method": "session.background_review",
+                "params": {"session_id": "sid", "enabled": False, "fact_check": False},
+            }
+        )
+        assert both["result"] == {"background_review": False, "fact_check": False}
+        assert server._sessions["sid"]["fact_check"] is False
+        assert agent._fact_check_disabled is True
+
+        # Opting the check back in applies at once (the flag is read per turn).
+        back = server.handle_request(
+            {
+                "id": "1c",
+                "method": "session.background_review",
+                "params": {"session_id": "sid", "enabled": False, "fact_check": True},
+            }
+        )
+        assert back["result"] == {"background_review": False, "fact_check": True}
+        assert agent._fact_check_disabled is False
+        server._sessions["sid"]["fact_check"] = False
+
+        # A rebuild (the /new path) carries the opt-out onto the fresh agent.
+        fresh = _NudgedAgent()
+        server._sessions["sid"]["agent"] = fresh
+        server._apply_session_background_review(server._sessions["sid"])
+        assert (fresh._memory_nudge_interval, fresh._skill_nudge_interval) == (0, 0)
+        assert fresh._fact_check_disabled is True
+
+        missing = server.handle_request(
+            {
+                "id": "2",
+                "method": "session.background_review",
+                "params": {"session_id": "nope", "enabled": False},
+            }
+        )
+        assert "error" in missing
+    finally:
+        server._sessions.clear()
+
+
+def test_compute_host_turn_frame_carries_background_review_opt_out():
+    """Turn isolation builds the agent in another process: the frame must
+    carry the opt-out so the host's agent is muted the same way."""
+    base = {
+        "history": [],
+        "history_lock": threading.Lock(),
+        "history_version": 0,
+        "session_key": "k",
+        "cols": 80,
+        "cwd": os.getcwd(),
+    }
+    on = server._compute_host_turn_frame("r", "s", dict(base), "hi")
+    off = server._compute_host_turn_frame(
+        "r", "s", {**base, "background_review": False}, "hi"
+    )
+    assert on["background_review"] is True
+    assert off["background_review"] is False
+    assert on["fact_check"] is True
+    assert off["fact_check"] is True
+    unchecked = server._compute_host_turn_frame("r", "s", {**base, "fact_check": False}, "hi")
+    assert unchecked["fact_check"] is False
+    assert unchecked["background_review"] is True
 
 
 def test_shutdown_sessions_closes_every_session_via_helper(monkeypatch):

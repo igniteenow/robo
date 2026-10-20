@@ -391,6 +391,13 @@ export interface Translations {
       terminalFontReset: string
       translucencyTitle: string
       translucencyDesc: string
+      effectsTitle: string
+      effectsDesc: string
+      effectsAuto: string
+      effectsReduced: string
+      effectsFull: string
+      effectsAutoFull: string
+      effectsAutoReduced: string
       backdropTitle: string
       backdropDesc: string
       reactionsTitle: string
@@ -980,6 +987,109 @@ export interface Translations {
     importSuccess: (nodes: number) => string
     importedBadge: string
     resetToMine: string
+  }
+  team: {
+    title: string
+    subtitle: string
+    how: string[]
+    members: string
+    rounds: string
+    roundsHint: (max: number) => string
+    roundsUnlimited: string
+    goalLabel: string
+    goalPlaceholder: string
+    start: string
+    stop: string
+    stopping: string
+    reset: string
+    resetTitle: string
+    resetBody: string
+    resetConfirm: string
+    showLog: string
+    hideLog: string
+    log: string
+    logEmpty: string
+    lead: string
+    reviewer: (seat: number) => string
+    final: string
+    finalModelHint: string
+    pickModel: string
+    modelMissing: string
+    changeModel: string
+    seatEmpty: string
+    seatCreating: string
+    seatError: string
+    status: {
+      idle: string
+      creating: string
+      working: string
+      reviewing: string
+      sideTask: string
+      synthesizing: string
+      needsInput: string
+      error: string
+    }
+    run: {
+      starting: string
+      running: (round: number, max: number) => string
+      stopping: string
+      done: string
+      failed: string
+      stopped: string
+    }
+    finalAnswer: string
+    copyFinal: string
+    copied: string
+    talkHint: string
+    waitingForLead: string
+    waitingForFinal: string
+    finalReadyHint: string
+    composerTo: string
+    composerLabel: string
+    composerPlaceholder: (name: string) => string
+    composerDisabled: string
+    composerSend: string
+    sendFailed: string
+    notConnected: string
+    errors: {
+      notReady: string
+      noSessionId: string
+      noReply: string
+      leadNotCreated: string
+      noReviewer: string
+      runFailed: string
+      disconnected: string
+      turnTimedOut: string
+    }
+    entry: {
+      round: (round: number) => string
+      vote: (name: string, ranking: string) => string
+      decision: (label: string) => string
+      decidedBy: {
+        borda: string
+        confidence: string
+        'lead-order': string
+        'no-votes': string
+        single: string
+      }
+      noVote: (name: string) => string
+      reviewerFailed: (name: string) => string
+      repair: string
+      leadInterrupted: string
+      roundsExhausted: string
+      finalFallback: string
+      completionAccepted: string
+      completionPushback: string
+      completionExhausted: string
+      completionNoVerdict: string
+      completionSkipped: string
+      sideTaskAssigned: (name: string) => string
+      sideTaskSkipped: string
+      sideTaskFailed: (name: string) => string
+      sideResult: (name: string) => string
+      error: (name: string) => string
+      final: string
+    }
   }
   agents: {
     close: string
@@ -1686,6 +1796,13 @@ export interface Translations {
     openDirective: string
     queueMessage: string
     steer: string
+    sendWhileBusy: string
+    busyChoiceTitle: string
+    busyChoiceSendNow: string
+    busyChoiceSendNowHint: string
+    busyChoiceQueue: string
+    busyChoiceQueueHint: string
+    busyChoiceKeep: string
     stop: string
     send: string
     speaking: string
@@ -2364,6 +2481,11 @@ export interface Translations {
       allowSession: string
       alwaysAllowMenu: string
       jumpToApproval: string
+      correctionNeeded: string
+      apply: string
+      applySession: string
+      keep: string
+      details: string
       reject: string
       alwaysTitle: string
       alwaysDescription: (pattern: string) => string
@@ -2378,6 +2500,7 @@ export interface Translations {
       placeholder: string
       skip: string
       skipped: string
+      sending: string
       continueLabel: string
       lateAnswer: (question: string, choice: string) => string
       lateAnswerTip: string

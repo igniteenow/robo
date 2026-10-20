@@ -8,6 +8,7 @@ import {
   $dismissedPanes,
   $hiddenTreePanes,
   $layoutTree,
+  activateTreePane,
   bindToolPaneCollapse,
   closeToolPane,
   isPaneVisible,
@@ -206,5 +207,52 @@ describe('a zone whose header the user hid', () => {
 
     expect(toolZone()?.panes).toContain('terminal')
     expect(toolZone()?.headerHidden).toBe(true)
+  })
+})
+
+describe('a tool panel fronted by its tab while its store says off', () => {
+  /** Focus layout: the chat, files and the terminal share one zone as tabs. */
+  const focusTree = () => {
+    $layoutTree.set(
+      split('row', [
+        group(['logs'], { id: 'g-logs' }),
+        group(['workspace', 'terminal'], { active: 'workspace', id: 'g-focus' })
+      ])
+    )
+  }
+
+  it('turns the store on, so the terminal starts a shell instead of an empty pane', () => {
+    focusTree()
+    const $terminal = atom(false)
+    bindPaneCollapse('terminal', $terminal)
+
+    // The tab click: the tree fronts the terminal, nothing else is told.
+    activateTreePane('g-focus', 'terminal')
+
+    expect(isPaneVisible('terminal')).toBe(true)
+    expect($terminal.get()).toBe(true)
+  })
+
+  it('lets the next ⌃` close it on the first press', () => {
+    focusTree()
+    const $terminal = atom(false)
+    bindPaneCollapse('terminal', $terminal)
+    activateTreePane('g-focus', 'terminal')
+
+    togglePaneVisible('terminal')
+
+    expect(isPaneVisible('terminal')).toBe(false)
+    expect($terminal.get()).toBe(false)
+  })
+
+  it('leaves the store alone while the pane stays behind another tab', () => {
+    focusTree()
+    const $terminal = atom(false)
+    bindPaneCollapse('terminal', $terminal)
+
+    activateTreePane('g-focus', 'workspace')
+
+    expect(isPaneVisible('terminal')).toBe(false)
+    expect($terminal.get()).toBe(false)
   })
 })

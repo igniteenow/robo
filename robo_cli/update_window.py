@@ -194,6 +194,10 @@ class UpdateProgress:
 
         if line.startswith(_STEP_GLYPHS):
             self.detail = _step_text(line)
+        elif line.startswith("…"):
+            # A progress heartbeat ("… rebuilding the desktop app (1 min 30 s)"):
+            # the elapsed time is the news during a long quiet step.
+            self.detail = _step_text(line.lstrip("…"))
         if line.startswith("✗"):
             self.errors.append(_step_text(line, _REASON_MAX))
         if _REASSURANCE.match(line):

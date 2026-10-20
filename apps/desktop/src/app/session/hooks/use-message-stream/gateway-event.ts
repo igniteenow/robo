@@ -976,6 +976,7 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
             : undefined,
           command,
           description,
+          kind: payload?.kind === 'correction' ? 'correction' : 'command',
           sessionId: sessionId ?? null,
           smartDenied: payload?.smart_denied === true
         })
@@ -989,7 +990,9 @@ export function useGatewayEventHandler(deps: GatewayEventDeps) {
             { id: 'approve', text: translateNow('notifications.native.approveAction') },
             { id: 'reject', text: translateNow('notifications.native.rejectAction') }
           ],
-          body: command || description,
+          // A fact-check correction: the description says what is being
+          // proposed; the summary (command) is for the bar's Details.
+          body: payload?.kind === 'correction' ? description : command || description,
           kind: 'approval',
           sessionId,
           title: translateNow('notifications.native.approvalTitle')

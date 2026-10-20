@@ -13,7 +13,6 @@ import {
   Layers3,
   Loader2,
   Square,
-  SteeringWheel,
   Volume2,
   VolumeX
 } from '@/lib/icons'
@@ -67,7 +66,7 @@ export function ComposerControls({
 }: {
   autoSpeak: boolean
   busy: boolean
-  busyAction: 'steer' | 'queue' | 'stop'
+  busyAction: 'ask' | 'queue' | 'stop'
   canSubmit: boolean
   compactModelPill?: boolean
   conversation: ConversationProps
@@ -87,7 +86,7 @@ export function ComposerControls({
   }
 
   const showVoicePrimary = !busy && !hasComposerPayload
-  const busyLabel = busyAction === 'queue' ? c.queueMessage : busyAction === 'steer' ? c.steer : c.stop
+  const busyLabel = busyAction === 'queue' ? c.queueMessage : busyAction === 'ask' ? c.sendWhileBusy : c.stop
 
   return (
     <div className="ml-auto flex shrink-0 items-center gap-(--composer-control-gap)">
@@ -95,7 +94,7 @@ export function ComposerControls({
       <DictationButton disabled={disabled} onToggle={onDictate} state={state.voice} status={voiceStatus} />
       <AutoSpeakButton active={autoSpeak} disabled={disabled} onToggle={onToggleAutoSpeak} />
       <WakeWordButton disabled={disabled} />
-      {busyAction === 'steer' ? (
+      {busyAction === 'ask' ? (
         <Tip label={<TipKeybindLabel actionId="composer.queue" text={c.queueMessage} />}>
           <Button
             aria-label={c.queueMessage}
@@ -132,7 +131,7 @@ export function ComposerControls({
             busy ? (
               <TipKeybindLabel
                 actionId={
-                  busyAction === 'steer'
+                  busyAction === 'ask'
                     ? 'composer.steer'
                     : busyAction === 'queue'
                       ? 'composer.queue'
@@ -154,8 +153,8 @@ export function ComposerControls({
             {busy ? (
               busyAction === 'queue' ? (
                 <Layers3 className={iconSize.sm} />
-              ) : busyAction === 'steer' ? (
-                <SteeringWheel className={iconSize.sm} />
+              ) : busyAction === 'ask' ? (
+                <Codicon name="arrow-up" size="0.875rem" />
               ) : (
                 <span className="block size-2.5 rounded-[0.1875rem] bg-current" />
               )

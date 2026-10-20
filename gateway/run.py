@@ -638,6 +638,27 @@ def _format_exec_approval_fallback(
     )
 
 
+def _format_correction_approval(
+    summary: str,
+    description: str,
+    command_prefix: str,
+) -> str:
+    """Text prompt for a fact-check correction (agent/fact_check.py).
+
+    Rides the same approval queue as dangerous commands, so the same
+    ``approve`` / ``deny`` replies resolve it — but it is a proposed change
+    to the answer, not a command, and is worded as such.
+    """
+    preview = summary[:1500] + "…" if len(summary) > 1500 else summary
+    return (
+        f"🔎 **{description}**\n{preview}\n\n"
+        f"Reply `{command_prefix}approve` to apply the correction, "
+        f"`{command_prefix}approve session` to apply corrections without asking "
+        f"for the rest of this session, or `{command_prefix}deny` to keep the "
+        "answer as written."
+    )
+
+
 def _gateway_provider_error_reply(text: str) -> str:
     """Map raw provider/API errors to a short user-safe Telegram reply."""
     if _GATEWAY_AUTH_ERROR_RE.search(text):
@@ -5189,10 +5210,18 @@ class TurnRunner:
             # the redacted value.
             cmd = _redact_approval_command(cmd)
 
+            # A fact-check correction is a proposed change to the answer,
+            # not a command: always a worded text prompt (the button
+            # cards say "run"), resolved by the same approve/deny replies.
+            _is_correction = approval_data.get("kind") == "correction"
+
             # Prefer button-based approval when the adapter supports it.
             # Check the *class* for the method, not the instance — avoids
             # false positives from MagicMock auto-attribute creation in tests.
-            if getattr(type(ctx._status_adapter), "send_exec_approval", None) is not None:
+            if (
+                not _is_correction
+                and getattr(type(ctx._status_adapter), "send_exec_approval", None) is not None
+            ):
                 try:
                     _approval_fut = safe_schedule_threadsafe(
                         ctx._status_adapter.send_exec_approval(
@@ -5228,14 +5257,17 @@ class TurnRunner:
             # can actually type (`!approve`) — typed "/" is blocked in
             # Slack threads and reserved by Matrix clients.
             _p = getattr(ctx._status_adapter, "typed_command_prefix", "/")
-            msg = _format_exec_approval_fallback(
-                cmd,
-                desc,
-                _p,
-                allow_permanent=approval_data.get("allow_permanent", True),
-                allow_session=approval_data.get("allow_session", True),
-                smart_denied=approval_data.get("smart_denied", False),
-            )
+            if _is_correction:
+                msg = _format_correction_approval(cmd, desc, _p)
+            else:
+                msg = _format_exec_approval_fallback(
+                    cmd,
+                    desc,
+                    _p,
+                    allow_permanent=approval_data.get("allow_permanent", True),
+                    allow_session=approval_data.get("allow_session", True),
+                    smart_denied=approval_data.get("smart_denied", False),
+                )
             try:
                 _approval_send_fut = safe_schedule_threadsafe(
                     ctx._status_adapter.send(

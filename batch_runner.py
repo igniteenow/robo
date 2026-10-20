@@ -346,6 +346,9 @@ def _process_single_prompt(
         )
 
         # Run the agent with task_id to ensure each task gets its own isolated VM
+        # A batch item has no reader to accept a correction: never fact-check it
+        # (the check would only add an auxiliary call and research per item).
+        agent._fact_check_disabled = True
         result = agent.run_conversation(prompt, task_id=task_id)
         
         # Extract tool usage statistics

@@ -1516,6 +1516,19 @@ export function bindToolPaneCollapse(
   $open.listen(isOpen => (isOpen ? revealTreePane(paneId) : setPaneCollapsed(paneId, true)))
   registerPaneCloser(paneId, close)
   registerPaneOpener(paneId, open)
+
+  // ON SCREEN MEANS OPEN. A click on the tool panel's tab in a shared stack
+  // (Focus layout: chat | files | terminal) fronts it through the tree alone,
+  // so the store could stay `false` with the pane in plain view: the terminal
+  // never started a shell (an empty pane, no tab rail) and the next ⌃` spent
+  // its press "closing" what the store already called closed. Whenever the
+  // tree shows the pane, bring the store along — through the owner's opener,
+  // so everything keyed on it (the shell, the toggles) agrees.
+  $paneVisible(paneId).listen(visible => {
+    if (visible && !$open.get()) {
+      open()
+    }
+  })
 }
 
 /**

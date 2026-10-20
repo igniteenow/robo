@@ -1805,6 +1805,12 @@ def init_agent(
     # alternative before concluding a task can't be done.
     agent._verification_guidance = bool(_agent_section.get("verification_guidance", True))
 
+    # Universal step-narration guidance toggle.  Default True.  One short
+    # plain line before each tool-using step, so a person (or a client
+    # watching a shared chat) can follow what Robo is doing without reading
+    # tool rows.  Free prompt text like the blocks above.
+    agent._step_narration_guidance = bool(_agent_section.get("step_narration", True))
+
     # Active claim verification toggle.  Default FALSE — unlike the three
     # guidance blocks above, which are free prompt text, this spends a real
     # auxiliary-LLM call whenever it triggers (agent/claim_verification.py).

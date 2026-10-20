@@ -107,6 +107,16 @@ DEFAULT_CONFIG = {
         # two above — see agent/prompt_builder.py's VERIFICATION_GUIDANCE
         # docstring. Set False to disable.
         "verification_guidance": True,
+        # Step narration — one short plain line before each tool-using step
+        # ("Checking the config files to find the current port.") so the
+        # person, or a client watching a shared chat, can follow what Robo is
+        # doing without reading tool rows. Free prompt text like the guidance
+        # blocks above (agent/prompt_builder.py STEP_NARRATION_GUIDANCE). The
+        # lines reach every surface through the existing mid-turn channels
+        # (CLI stream, TUI/desktop interim messages, messaging interim
+        # messages — display.interim_assistant_messages). Set False to
+        # disable.
+        "step_narration": True,
         # Active claim verification — off by default. Unlike the guidance
         # blocks above (free prompt text), this spends a real auxiliary-LLM
         # call per trigger to double-check risky/definitive claims before
@@ -915,6 +925,18 @@ DEFAULT_CONFIG = {
             "base_url": "",
             "api_key": "",
             "timeout": 120,        # seconds — compression summarises large contexts; increase for local models
+            "extra_body": {},
+            "reasoning_effort": "",  # per-task thinking level: none|minimal|low|medium|high|xhigh|max|ultra (empty = provider default)
+        },
+        # End-of-turn fact check (agent/fact_check.py): claim extraction and
+        # the research loop. Pin a strong model here when the main model is
+        # small or local; "auto" follows the usual auxiliary chain.
+        "fact_check": {
+            "provider": "auto",
+            "model": "",
+            "base_url": "",
+            "api_key": "",
+            "timeout": 60,         # seconds — per auxiliary call; the whole check is bounded by fact_check.timeout_seconds
             "extra_body": {},
             "reasoning_effort": "",  # per-task thinking level: none|minimal|low|medium|high|xhigh|max|ultra (empty = provider default)
         },
@@ -2178,6 +2200,35 @@ DEFAULT_CONFIG = {
     # Permanently allowed dangerous command patterns (added via "always" approval)
     "command_allowlist": [],
     # User-defined quick commands that bypass the agent loop (type: exec only)
+    # Fact check — Robo verifies the model's final answer with its own
+    # research before delivering it (agent/fact_check.py). An auxiliary call
+    # lists the specific, checkable statements in the answer (numbers, dates,
+    # versions, names, what code or a system does); each one is then checked
+    # against sources with the research tools (web_search / web_extract for
+    # the world, search_files / read_file for the codebase). A contradicted
+    # statement becomes a proposed correction: with ``apply: ask`` the person
+    # is asked "Allow once / Allow for this session / Deny" through the same
+    # prompt the command approvals use, on every surface; "Deny" keeps the
+    # answer as written and appends a short note with the sources. ``apply:
+    # auto`` applies corrections without asking; with ``ask`` and nobody to
+    # ask (cron, one-shot runs) the answer is kept and the note shown.
+    # Answers with nothing checkable (small talk, a question back) cost one
+    # small auxiliary call and nothing else.
+    # Subagents and the research pass itself are never checked.
+    "fact_check": {
+        "enabled": True,
+        # ask | auto
+        "apply": "ask",
+        # Most consequential statements checked per answer.
+        "max_claims": 4,
+        # Research tool calls per check, and the wall-clock budget. Past
+        # either, unresolved statements stay "unverified" and the answer is
+        # delivered as written.
+        "max_steps": 8,
+        "timeout_seconds": 120,
+        # Answers shorter than this (in words) are never checked.
+        "min_answer_words": 12,
+    },
     "quick_commands": {},
 
     # Per-platform system-prompt hint overrides. Lets an admin append to or

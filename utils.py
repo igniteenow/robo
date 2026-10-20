@@ -7,6 +7,7 @@ import os
 import shutil
 import stat
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Union
 from urllib.parse import urlparse
@@ -88,6 +89,42 @@ def _restore_file_mode(path: Path, mode: "int | None") -> None:
         pass
 
 
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
+# Windows: ``os.replace`` is MoveFileEx(REPLACE_EXISTING), and it fails with
+# ERROR_ACCESS_DENIED (5) or ERROR_SHARING_VIOLATION (32) — both surface as
+# ``PermissionError`` — for as long as ANY other handle has the target open
+# without FILE_SHARE_DELETE: a sibling thread reading ``auth.json``, a second
+# writer mid-replace, an antivirus scan. The desktop's Team mode builds four or
+# five agents at once against one ``~/.robo``, so that window is hit routinely
+# ("agent init failed: [WinError 5] Access is denied: 'auth.json.tmp.…' ->
+# 'auth.json'"). The other holder is gone within milliseconds, so the rename is
+# retried with a short pause before the error is allowed through. POSIX renames
+# never fail this way (a permission error there is real) and get one attempt.
+_WINDOWS_REPLACE_ATTEMPTS = 60
+_WINDOWS_REPLACE_PAUSE_SECONDS = 0.05
+
+
+def _replace_with_retry(tmp_str: str, real_path: str) -> None:
+    attempts = _WINDOWS_REPLACE_ATTEMPTS if _is_windows() else 1
+    for attempt in range(1, attempts + 1):
+        try:
+            os.replace(tmp_str, real_path)
+            return
+        except PermissionError:
+            if attempt >= attempts:
+                raise
+            if attempt == 1:
+                logger.debug(
+                    "atomic_replace: %s -> %s hit a sharing/access conflict; retrying",
+                    tmp_str,
+                    real_path,
+                )
+            time.sleep(_WINDOWS_REPLACE_PAUSE_SECONDS)
+
+
 def atomic_replace(tmp_path: Union[str, Path], target: Union[str, Path]) -> str:
     """Atomically move *tmp_path* onto *target*, preserving symlinks.
 
@@ -103,7 +140,9 @@ def atomic_replace(tmp_path: Union[str, Path], target: Union[str, Path]) -> str:
     and non-existent paths the behavior is identical to a plain
     ``os.replace`` call unless the rename fails with ``EXDEV`` or ``EBUSY``;
     those cases fall back to copy/fsync/unlink for cross-device, bind-mount,
-    and busy-file deployments.
+    and busy-file deployments. On Windows a transient sharing/access conflict
+    on the rename is retried for a few seconds first (see
+    ``_replace_with_retry``).
 
     Returns the resolved real path used for the replace, so callers that
     need to re-apply permissions can target it instead of the symlink.
@@ -112,7 +151,7 @@ def atomic_replace(tmp_path: Union[str, Path], target: Union[str, Path]) -> str:
     real_path = os.path.realpath(target_str) if os.path.islink(target_str) else target_str
     tmp_str = str(tmp_path)
     try:
-        os.replace(tmp_str, real_path)
+        _replace_with_retry(tmp_str, real_path)
     except OSError as exc:
         if exc.errno not in (errno.EXDEV, errno.EBUSY):
             raise

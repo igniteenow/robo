@@ -13320,7 +13320,9 @@ class RoboCLI(CLIAgentSetupMixin, CLICommandsMixin):
         outcome = " ".join(outcome.split())
         if len(outcome) > 120:
             outcome = outcome[:119] + "…"
-        _cprint(f"\n{_DIM}{icon} {label}: {detail} → {outcome}{_RST}")
+        # The outcome is the person's own words (a clarify answer) or their
+        # decision: full strength, so it does not vanish into the dim line.
+        _cprint(f"\n{_DIM}{icon} {label}: {detail} →{_RST} {outcome}")
 
     def _clarify_callback(self, question, choices, multi_select=False):
         """

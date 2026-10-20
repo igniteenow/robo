@@ -18,6 +18,7 @@ import { $activeGatewayProfile, $profiles, normalizeProfileKey } from '@/store/p
 import { $reactionsEnabled, setReactionsEnabled } from '@/store/reactions-enabled'
 import { $toolViewMode, setToolViewMode } from '@/store/tool-view'
 import { $translucency, setTranslucency } from '@/store/translucency'
+import { $softwareRendering, $visualEffectsPreference, setVisualEffectsPreference } from '@/store/visual-effects'
 import { $zoomPercent, setZoomPercent } from '@/store/zoom'
 import { getBaseColors, useTheme } from '@/themes/context'
 import { installVscodeThemeFromMarketplace } from '@/themes/install'
@@ -252,6 +253,8 @@ export function AppearanceSettings() {
   const embedMode = useStore($embedMode)
   const embedAllowed = useStore($embedAllowed)
   const translucency = useStore($translucency)
+  const visualEffects = useStore($visualEffectsPreference)
+  const softwareRendering = useStore($softwareRendering)
   const reactionsEnabled = useStore($reactionsEnabled)
   const backdrop = useStore($backdrop)
   const installs = useStore($marketplaceInstalls)
@@ -298,6 +301,12 @@ export function AppearanceSettings() {
   ] as const satisfies readonly { id: EmbedMode; label: string }[]
 
   const uiScaleOptions = UI_SCALE_PRESETS.map(preset => ({ id: preset, label: `${preset}%` }))
+
+  const effectsOptions = [
+    { id: 'auto', label: a.effectsAuto },
+    { id: 'reduced', label: a.effectsReduced },
+    { id: 'full', label: a.effectsFull }
+  ] as const
 
   const matchedScalePreset = matchUiScalePreset(zoomPercent)
 
@@ -457,6 +466,25 @@ export function AppearanceSettings() {
             }
             description={a.translucencyDesc}
             title={a.translucencyTitle}
+          />
+
+          <ListRow
+            action={
+              <SegmentedControl
+                onChange={id => {
+                  triggerHaptic('selection')
+                  setVisualEffectsPreference(id)
+                }}
+                options={effectsOptions}
+                value={visualEffects}
+              />
+            }
+            description={
+              visualEffects === 'auto'
+                ? `${a.effectsDesc} ${softwareRendering ? a.effectsAutoReduced : a.effectsAutoFull}`
+                : a.effectsDesc
+            }
+            title={a.effectsTitle}
           />
 
           <ListRow

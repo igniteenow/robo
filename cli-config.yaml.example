@@ -958,6 +958,13 @@ agent:
   # Default 3.
   # max_verify_nudges: 3
 
+  # While working a task, Robo writes one short line before each step that
+  # uses tools ("Checking the config files to find the current port.") so you
+  # can follow what it is doing. The lines reach every surface as interim
+  # messages (see display.interim_assistant_messages). Set false to turn
+  # them off.
+  # step_narration: true
+
   # Enable verbose logging
   verbose: false
   
@@ -1404,6 +1411,29 @@ approvals:
   deny_stops_turn: true    # TUI/desktop: Deny / expired / closed prompt also
                            # stops the turn (false: only the command is blocked)
   cron_mode: deny          # cron jobs have nobody to ask: deny | approve
+
+# Fact check: Robo does not take the model's word for it. Before an answer is
+# delivered, Robo picks out its checkable statements (numbers, dates, versions,
+# what a library or flag does, what a file in your project does) and checks
+# them against sources with its own research tools — web_search / web_extract
+# for the world, search_files / read_file for your codebase. When sources
+# contradict the answer, Robo proposes the correction and asks you
+# "Allow once / Allow for this session / Deny" through the same prompt the
+# command approvals use (TUI, desktop, CLI, messaging). Allow sends the
+# findings back to the model, which revises the answer (and anything it
+# changed because of the wrong statement). Deny keeps the answer as written
+# and appends a short note with the sources so nothing is hidden.
+# Answers with nothing checkable pass straight through after one small
+# auxiliary call. Subagents are never checked.
+fact_check:
+  enabled: true
+  apply: ask               # ask | auto (apply corrections without asking;
+                           # with "ask" and nobody to ask — cron, one-shot runs —
+                           # the answer is kept and the note shown)
+  max_claims: 4            # most consequential statements checked per answer
+  max_steps: 8             # research tool calls per check
+  timeout_seconds: 120     # wall-clock budget; past it the answer goes out as written
+  min_answer_words: 12     # shorter answers are never checked
 
 display:
   # Interactive `robo`, `robo chat` and `robo --cli` open the terminal app

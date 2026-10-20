@@ -568,6 +568,13 @@ export interface SessionMessage {
    */
   row_id?: number
   id?: number
+  /**
+   * The gateway resume projection's structured result for a tool row that a
+   * client re-renders as a card (today: `clarify` — the question, the person's
+   * answer and the offered choices). Absent for other tools and on a backend
+   * older than this app.
+   */
+  result?: unknown
   text?: unknown
   timestamp?: number
   tool_call_id?: null | string

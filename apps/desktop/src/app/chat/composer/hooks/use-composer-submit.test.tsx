@@ -10,6 +10,7 @@ import { useComposerSubmit } from './use-composer-submit'
 interface SubmitHarnessOptions {
   attachments?: ComposerAttachment[]
   busy?: boolean
+  choiceOpen?: boolean
   compacting?: boolean
   text?: string
 }
@@ -17,6 +18,7 @@ interface SubmitHarnessOptions {
 function renderSubmitHook({
   attachments = [],
   busy = false,
+  choiceOpen = false,
   compacting = false,
   text = ''
 }: SubmitHarnessOptions = {}) {
@@ -29,6 +31,8 @@ function renderSubmitHook({
   const onSteer = vi.fn(async () => true)
   const onSubmit = vi.fn(async () => true)
   const queueCurrentDraft = vi.fn(() => true)
+  const sendDraftNow = vi.fn(() => true)
+  const busySendChoice = { hide: vi.fn(), openRef: { current: choiceOpen }, show: vi.fn() }
 
   const clearDraft = vi.fn(() => {
     draftRef.current = ''
@@ -41,6 +45,7 @@ function renderSubmitHook({
       activeQueueSessionKeyRef: { current: 'stored-session' },
       attachments,
       busy,
+      busySendChoice,
       compacting,
       clearDraft,
       disabled: false,
@@ -57,13 +62,14 @@ function renderSubmitHook({
       queueCurrentDraft,
       queueEdit: null,
       queuedPrompts: [],
+      sendDraftNow,
       sessionId: 'runtime-session',
       setComposerText: vi.fn(),
       stashAt: vi.fn()
     })
   )
 
-  return { clearDraft, hook, onCancel, onSteer, onSubmit, queueCurrentDraft }
+  return { busySendChoice, clearDraft, hook, onCancel, onSteer, onSubmit, queueCurrentDraft, sendDraftNow }
 }
 
 describe('useComposerSubmit busy-turn routing', () => {
@@ -72,20 +78,40 @@ describe('useComposerSubmit busy-turn routing', () => {
     vi.restoreAllMocks()
   })
 
-  it('steers a plain-text follow-up instead of queueing or stopping', async () => {
-    const { hook, onCancel, onSteer, onSubmit, queueCurrentDraft } = renderSubmitHook({
+  it('opens the Send now / Queue choice for a plain-text follow-up — nothing is sent, steered or queued', () => {
+    const { busySendChoice, clearDraft, hook, onCancel, onSteer, onSubmit, queueCurrentDraft, sendDraftNow } =
+      renderSubmitHook({ busy: true, text: 'change course' })
+
+    act(() => {
+      hook.result.current.submitDraft()
+    })
+
+    expect(busySendChoice.show).toHaveBeenCalledTimes(1)
+    // The words stay in the composer until the person picks.
+    expect(clearDraft).not.toHaveBeenCalled()
+    expect(onSteer).not.toHaveBeenCalled()
+    expect(sendDraftNow).not.toHaveBeenCalled()
+    expect(queueCurrentDraft).not.toHaveBeenCalled()
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('a second Enter on the open choice is Send now', () => {
+    const { busySendChoice, hook, onSteer, queueCurrentDraft, sendDraftNow } = renderSubmitHook({
       busy: true,
-      text: 'change course'
+      choiceOpen: true,
+      text: 'stop and do this instead'
     })
 
     act(() => {
       hook.result.current.submitDraft()
     })
 
-    await waitFor(() => expect(onSteer).toHaveBeenCalledWith('change course'))
+    expect(sendDraftNow).toHaveBeenCalledTimes(1)
+    expect(busySendChoice.hide).toHaveBeenCalledTimes(1)
+    expect(busySendChoice.show).not.toHaveBeenCalled()
+    expect(onSteer).not.toHaveBeenCalled()
     expect(queueCurrentDraft).not.toHaveBeenCalled()
-    expect(onCancel).not.toHaveBeenCalled()
-    expect(onSubmit).not.toHaveBeenCalled()
   })
 
   it('queues a plain-text follow-up while the active turn is compacting', () => {
@@ -225,9 +251,9 @@ describe('useComposerSubmit with a clarify parked on the session', () => {
     expect($clarifyRequests.get()['runtime-session']).toBeUndefined()
   })
 
-  it('skips the question before steering a busy turn', async () => {
+  it('skips the question before steering a busy turn (no choice: the words are the answer)', async () => {
     parkClarify('runtime-session')
-    const { hook, onSteer } = renderSubmitHook({ busy: true, text: 'change course' })
+    const { busySendChoice, hook, onSteer } = renderSubmitHook({ busy: true, text: 'change course' })
 
     act(() => {
       hook.result.current.submitDraft()
@@ -235,6 +261,7 @@ describe('useComposerSubmit with a clarify parked on the session', () => {
 
     await waitFor(() => expect(onSteer).toHaveBeenCalledWith('change course'))
     expect(gatewayRequest).toHaveBeenCalledWith('clarify.respond', { request_id: 'req-runtime-session', answer: '' })
+    expect(busySendChoice.show).not.toHaveBeenCalled()
   })
 
   it('leaves the question alone for an empty Enter (Stop, not an answer)', () => {

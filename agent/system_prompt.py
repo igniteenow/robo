@@ -39,6 +39,7 @@ from agent.prompt_builder import (
     MEMORY_GUIDANCE,
     OPENAI_MODEL_EXECUTION_GUIDANCE,
     PARALLEL_TOOL_CALL_GUIDANCE,
+    STEP_NARRATION_GUIDANCE,
     PLATFORM_HINTS,
     KNOWLEDGE_GUIDANCE,
     SESSION_SEARCH_GUIDANCE,
@@ -238,6 +239,14 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     # (default True) and only injected when tools are actually loaded.
     if getattr(agent, "_parallel_tool_call_guidance", True) and agent.valid_tool_names:
         stable_parts.append(PARALLEL_TOOL_CALL_GUIDANCE)
+
+    # Universal step-narration guidance. One short plain line before each
+    # tool-using step so the person following along knows what Robo is doing
+    # — see agent/prompt_builder.py's STEP_NARRATION_GUIDANCE docstring.
+    # Gated by config.yaml ``agent.step_narration`` (default True) and only
+    # injected when tools are actually loaded.
+    if getattr(agent, "_step_narration_guidance", True) and agent.valid_tool_names:
+        stable_parts.append(STEP_NARRATION_GUIDANCE)
 
     # Tool-aware behavioral guidance: only inject when the tools are loaded
     tool_guidance = []

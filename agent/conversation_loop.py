@@ -7264,6 +7264,70 @@ def run_conversation(
                     final_response = None
                     continue
 
+                # ── Fact check gate ────────────────────────────────────
+                # Robo checks the model's final answer against sources with
+                # its own research before delivering it. When sources
+                # contradict the answer and the person allows the
+                # correction (or has allowed corrections for the session),
+                # the findings go back to the model as a synthetic nudge and
+                # it revises — same continuation contract as verify-on-stop:
+                # the attempted answer is persisted and shown as an interim
+                # message, only the nudge is flagged and stripped. Runs at
+                # most once per turn; every failure path keeps the answer
+                # as written. See agent/fact_check.py.
+                _fact_result = None
+                try:
+                    from agent.fact_check import (
+                        FACT_CHECK_SYNTHETIC_FLAG,
+                        build_correction_nudge,
+                        build_keep_note,
+                        fact_check_enabled,
+                        gate_decision,
+                        run_fact_check,
+                    )
+
+                    if fact_check_enabled() and not getattr(agent, "_fact_check_done", False):
+                        _fact_result = run_fact_check(agent, final_response, messages)
+                        # One check per turn whatever happened inside: the
+                        # revised answer is never re-checked, so no loop.
+                        agent._fact_check_done = True
+                except Exception:
+                    logger.debug("fact check failed", exc_info=True)
+                    _fact_result = None
+
+                if _fact_result is not None and _fact_result.contradicted:
+                    try:
+                        _fact_apply = gate_decision(agent, _fact_result)
+                    except Exception:
+                        logger.debug("fact check decision failed", exc_info=True)
+                        _fact_apply = "keep"
+                    if _fact_apply == "apply":
+                        final_msg["finish_reason"] = "fact_check_correction"
+                        agent._emit_interim_assistant_message(final_msg)
+                        messages.append(final_msg)
+                        try:
+                            agent._flush_messages_to_session_db(messages, conversation_history)
+                        except Exception:
+                            logger.debug("fact check interim flush failed", exc_info=True)
+                        messages.append({
+                            "role": "user",
+                            "content": build_correction_nudge(_fact_result),
+                            FACT_CHECK_SYNTHETIC_FLAG: True,
+                        })
+                        agent._session_messages = messages
+                        agent._emit_status("🔎 Applying the correction…")
+                        logger.debug(
+                            "fact check correction nudge issued (%d contradicted)",
+                            len(_fact_result.contradicted),
+                        )
+                        _pending_verification_response = final_response
+                        _pending_verification_response_previewed = (
+                            agent._interim_content_was_streamed(final_response or "")
+                        )
+                        final_response = None
+                        continue
+                    agent._fact_check_note = build_keep_note(_fact_result)
+
                 messages.append(final_msg)
                 
                 _turn_exit_reason = f"text_response(finish_reason={finish_reason})"

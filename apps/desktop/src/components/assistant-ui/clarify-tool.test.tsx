@@ -297,6 +297,78 @@ describe('ClarifyTool keyboard navigation', () => {
   })
 })
 
+describe('ClarifyTool answer visibility', () => {
+  it('shows a typed answer at once as the person\'s own bubble, in place of the form, until the tool settles', async () => {
+    const request = renderLiveClarify()
+    const other = screen.getByPlaceholderText(/Other/)
+
+    fireEvent.change(other, { target: { value: 'the blue one, please' } })
+    fireEvent.keyDown(other, { key: 'Enter' })
+
+    // The form is gone and the words are on screen immediately — not parked in
+    // a disabled half-transparent textbox.
+    expect(screen.queryByPlaceholderText(/Other/)).toBeNull()
+    expect(document.querySelector('[data-clarify-sent]')).toBeTruthy()
+    expect(document.querySelector('[data-clarify-answer]')?.textContent).toBe('the blue one, please')
+    expect(screen.getByRole('status', { name: 'Sending your answer…' })).toBeTruthy()
+    // The question stays above it.
+    expect(screen.getByText('Which deployment target?')).toBeTruthy()
+
+    await waitFor(() => {
+      expect(request).toHaveBeenCalledWith('clarify.respond', {
+        answer: 'the blue one, please',
+        request_id: 'request-1'
+      })
+    })
+    // Still the sent view after the gateway accepted it (tool.complete settles it).
+    expect(document.querySelector('[data-clarify-answer]')?.textContent).toBe('the blue one, please')
+  })
+
+  it('shows a picked option the same way once confirmed', () => {
+    renderLiveClarify()
+
+    fireEvent.click(screen.getByRole('button', { name: /production/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }))
+
+    expect(document.querySelector('[data-clarify-answer]')?.textContent).toBe('production')
+    expect(screen.queryByRole('button', { name: /Continue/ })).toBeNull()
+  })
+
+  it('puts the form back when the gateway rejects the answer', async () => {
+    $activeSessionId.set('session-1')
+    $gateway.set({ request: vi.fn().mockRejectedValue(new Error('offline')) } as never)
+    setClarifyRequest({
+      choices: ['staging', 'production'],
+      question: 'Which deployment target?',
+      requestId: 'request-1',
+      sessionId: 'session-1'
+    })
+    renderClarify(<ClarifyTool {...liveClarifyProps()} />)
+
+    const other = screen.getByPlaceholderText(/Other/)
+    fireEvent.change(other, { target: { value: 'canary' } })
+    fireEvent.keyDown(other, { key: 'Enter' })
+
+    await waitFor(() => expect(screen.getByPlaceholderText(/Other/)).toBeTruthy())
+    expect(document.querySelector('[data-clarify-sent]')).toBeNull()
+  })
+
+  it('renders a settled answer as the person\'s bubble, full strength', () => {
+    const args = { choices: ['staging', 'production'], question: 'Which deployment target?' }
+    renderClarify(
+      <ClarifyTool
+        {...settledClarifyProps(args, { question: 'Which deployment target?', user_response: 'canary' }, 'clarify-1')}
+      />
+    )
+
+    const answer = document.querySelector('[data-clarify-answer]')
+
+    expect(answer?.textContent).toBe('canary')
+    expect(answer?.className).toContain('text-(--ui-text-primary)')
+    expect(answer?.className).not.toContain('text-(--ui-text-secondary)')
+  })
+})
+
 describe('ClarifyTool pending marker', () => {
   it('marks a live choices card with its row count so type-to-focus yields exactly its keys', () => {
     renderLiveClarify()

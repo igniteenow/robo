@@ -284,6 +284,13 @@ Notes:
 - Do not animate layout geometry with `transition-all` on a hot interaction.
   Name the properties, avoid backdrop-filter repaints during movement, and
   remove animation before masking a performance problem.
+- Blur-behind (`backdrop-filter`) is a GPU effect. On a software compositor
+  (Remote Desktop, a VM) every frame re-blurs the covered area, so
+  `<html data-effects='reduced'>` (store/visual-effects: automatic there, or
+  pinned in Settings → Appearance) turns every backdrop-filter off and makes the
+  surfaces that leaned on it opaque. A new glass surface must read well without
+  its blur — give it a solid fallback under `html[data-effects='reduced']` in
+  `styles.css` rather than depending on the blur for legibility.
 
 ## Direct manipulation & performance
 

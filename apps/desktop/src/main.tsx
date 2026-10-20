@@ -5,6 +5,10 @@ import './store/active-work'
 import './store/power'
 // Side-effect: applies the persisted window translucency on load.
 import './store/translucency'
+// Side-effect: sets `<html data-effects>` before anything renders, so a
+// software-composited window (RDP, VM) never paints the blur-behind surfaces
+// it is about to turn off.
+import './store/visual-effects'
 // Dev-only render/state churn counters. MUST precede the `react-dom` import
 // below: react-dom captures the devtools hook at module init, so bippy has to
 // install during THIS import's evaluation or every commit goes unseen
@@ -19,6 +23,7 @@ import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router'
 
 import App from './app'
+import { BootSplashRemover } from './components/boot-splash'
 import { ErrorBoundary } from './components/error-boundary'
 import { HapticsProvider } from './components/haptics-provider'
 import { RootTooltipProvider } from './components/ui/tooltip'
@@ -48,6 +53,11 @@ if (winParam === 'overlay') {
 } else {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
+      {/* First in the tree so the splash goes before the first paint even if
+          the app below it fails to mount (the error boundary then owns the
+          window). The transparent `?win=` windows mount above and never
+          show one. */}
+      <BootSplashRemover />
       <ErrorBoundary label="root">
         <QueryClientProvider client={queryClient}>
           <I18nProvider>

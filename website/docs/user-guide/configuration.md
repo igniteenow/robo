@@ -954,6 +954,42 @@ agent:
 
 For a user/plugin policy gate at the same point — keep the agent going with your own checks — see the [`pre_verify` hook](/user-guide/features/hooks#pre_verify).
 
+## Step narration (what Robo is doing)
+
+While working a task, Robo writes one short line before each step that uses tools — "Checking the config files to find the current port." — so you (or a client watching a shared session) can follow along without reading tool output. The lines are interim assistant messages, so they reach every surface: the TUI and desktop transcript, the CLI stream, and messaging platforms (where `display.interim_assistant_messages` controls them). Tool progress itself is a separate setting, `display.tool_progress`, and stays on by default.
+
+```yaml
+agent:
+  step_narration: true         # false: no per-step lines
+```
+
+Takes effect next session (it is part of the system prompt).
+
+## Fact check (Robo checks the answer)
+
+Robo does not take the model's word for it. Before an answer is delivered, Robo picks out the checkable statements in it — numbers, dates, versions, prices, what a library or flag does, what a file in your project does — and checks each one against sources with its own research tools: `web_search` / `web_extract` for the world, `search_files` / `read_file` for your codebase. See [Fact check](/user-guide/features/fact-check) for how a correction is proposed and applied.
+
+```yaml
+fact_check:
+  enabled: true
+  apply: ask                   # ask | auto
+  max_claims: 4                # most consequential statements checked per answer
+  max_steps: 8                 # research tool calls per check
+  timeout_seconds: 120         # wall-clock budget per check
+  min_answer_words: 12         # shorter answers are never checked
+```
+
+| Key | Meaning |
+|-----|---------|
+| `enabled` | Run the check after every final answer. `ROBO_FACT_CHECK=0` in the environment turns it off for one process. |
+| `apply` | `ask`: when sources contradict the answer, Robo proposes the correction and asks **Allow once / Allow for this session / Deny**. `auto`: corrections are applied without asking. With `ask` and nobody to ask (cron, one-shot runs), the answer is kept and the disagreement is shown under it. |
+| `max_claims` | Upper bound on statements checked per answer (hard ceiling 8). |
+| `max_steps` | Upper bound on research tool calls per check (hard ceiling 16). Unresolved statements stay "unverified". |
+| `timeout_seconds` | Wall-clock budget per check (hard ceiling 600). Past it, the answer goes out as written. |
+| `min_answer_words` | Answers shorter than this are never checked. |
+
+The auxiliary model used for the research is the `fact_check` task under `auxiliary:` (see [Auxiliary Models](#auxiliary-models)); pin a strong model there when the main model is small or local.
+
 ## Standing Goals (`/goal`)
 
 When a standing goal is active, Robo judges whether each assistant response satisfies it. If not, it feeds a continuation prompt back into the same session and keeps working until the goal is done, the turn budget is exhausted, or the user pauses/clears it. The turn budget is the real backstop — judge failures fail **open** (continue) so a flaky judge never wedges progress.
