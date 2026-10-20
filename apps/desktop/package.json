@@ -145,7 +145,7 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.3",
     "bippy": "0.5.43",
-    "concurrently": "10.0.4",
+    "concurrently": "10.0.6",
     "cross-env": "10.1.0",
     "electron": "41.10.6",
     "electron-builder": "26.15.3",
