@@ -711,6 +711,19 @@ def _run_command_stt(
 
     scrubbed = robo_subprocess_env(inherit_credentials=False)
     for key in env_passthrough or []:
+        # Same refusal as tools.env_passthrough: a provider credential that
+        # Robo itself manages must not be re-granted to a shell child by
+        # config. Command providers use their own keys, which are not in
+        # the blocklist and pass through normally.
+        from tools.env_passthrough import _is_robo_provider_credential
+
+        if _is_robo_provider_credential(key):
+            logger.warning(
+                "stt command provider: refusing env_passthrough for "
+                "Robo-managed credential %r",
+                key,
+            )
+            continue
         value = os.environ.get(key)
         if value is not None:
             scrubbed[key] = value
