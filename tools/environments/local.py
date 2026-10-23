@@ -464,6 +464,20 @@ def _inject_session_context_env(env: dict) -> None:
             env.pop(var_name, None)
 
 
+@lru_cache(maxsize=1)
+def _provider_env_blocklist_upper() -> frozenset:
+    """Uppercased view of the provider blocklist, for case-insensitive tests.
+
+    POSIX env names are case-sensitive, but Windows env names are not, and
+    the dicts built here feed children on both. A credential stored under a
+    non-canonical casing (a hand-written .env line, a systemd unit, a secret
+    manager that lowercases names) must not slip past the scrub just
+    because its case differs from the registry spelling. The code-execution
+    scrub already normalizes case the same way.
+    """
+    return frozenset(name.upper() for name in _build_provider_env_blocklist())
+
+
 def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = None) -> dict:
     """Filter Robo-managed secrets from a subprocess environment."""
     try:
@@ -483,7 +497,7 @@ def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = Non
         if _is_robo_internal_secret(key):
             continue
         passthrough = _is_passthrough(key)
-        if key in _build_provider_env_blocklist() and not passthrough:
+        if key.upper() in _provider_env_blocklist_upper() and not passthrough:
             continue
         resolved = _resolve_passthrough_value(key, value) if passthrough else value
         if resolved is not None:
@@ -499,7 +513,7 @@ def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = Non
             continue
         else:
             passthrough = _is_passthrough(key)
-            if key in _build_provider_env_blocklist() and not passthrough:
+            if key.upper() in _provider_env_blocklist_upper() and not passthrough:
                 continue
             resolved = _resolve_passthrough_value(key, value) if passthrough else value
             if resolved is not None:
@@ -632,8 +646,13 @@ def robo_subprocess_env(*, inherit_credentials: bool = False) -> dict[str, str]:
 
     if not inherit_credentials:
         # Tier 2 — strip provider/tool credentials unless explicitly inherited.
-        for key in _build_provider_env_blocklist():
-            env.pop(key, None)
+        # Case-insensitive: a differently-cased spelling of a blocked name
+        # is the same variable to a Windows child. See
+        # _provider_env_blocklist_upper.
+        blocked_upper = _provider_env_blocklist_upper()
+        for key in list(env):
+            if key.upper() in blocked_upper:
+                env.pop(key, None)
 
     # Windows UTF-8 safety for spawned processes (#31420).
     env.setdefault("PYTHONUTF8", "1")
