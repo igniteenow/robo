@@ -60,13 +60,16 @@ def _redact(text: Any, enabled: bool) -> Any:
 
     Non-strings pass through untouched. Uses Robo' shared redactor with
     ``force=True`` so an upload always scrubs known secret shapes even if
-    the user disabled log redaction globally.
+    the user disabled log redaction globally. ``redact_url_credentials``
+    is on because an upload is a non-navigation egress boundary: URLs in
+    a transcript must not carry credential query parameters or
+    ``user:pass@`` userinfo off the machine.
     """
     if not enabled or not isinstance(text, str) or not text:
         return text
     try:
         from agent.redact import redact_sensitive_text
-        return redact_sensitive_text(text, force=True)
+        return redact_sensitive_text(text, force=True, redact_url_credentials=True)
     except Exception as exc:
         logger.warning("Trace upload redaction failed; refusing upload", exc_info=True)
         raise TraceRedactionError(_REDACTION_BLOCKED_MESSAGE) from exc
