@@ -1099,3 +1099,17 @@ class TestShareConsentGate:
         mock_upload.assert_not_called()
         assert "Aborted" not in capsys.readouterr().out
 
+
+
+def test_redact_log_text_strips_url_credentials():
+    """The share bundle leaves the machine, so URL credentials in log
+    lines must be redacted even though ordinary tool flows keep them."""
+    from robo_cli.debug import _redact_log_text
+
+    text = (
+        "GET https://user:invented-pass@api.example.com/v1 "
+        "https://h.example.com/cb?token=invented-token"
+    )
+    out = _redact_log_text(text)
+    assert "invented-pass" not in out
+    assert "invented-token" not in out
