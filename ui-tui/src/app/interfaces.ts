@@ -352,6 +352,10 @@ export interface UiState {
   // Focus view (/focus) — display-only reduced-output mode. Drives the
   // persistent `◉ focus` status-bar badge; never affects request payloads.
   focusView: boolean
+  // display.friendly_tool_labels — tool rows and the status bar say "Running
+  // npm test" / "running…" (lib/toolPhrase.ts) instead of the raw
+  // `Terminal("npm test")` label. The same switch the CLI spinner reads.
+  friendlyToolLabels: boolean
   // display.tui_idle_exit_minutes — quit after this long with no input and
   // nothing running (0 = never). See useIdleExit.ts.
   idleExitMinutes: number

@@ -1,6 +1,8 @@
+import { useStore } from '@nanostores/react'
 import { Ansi, Box, NoSelect, Text } from '@robo/ink'
 import { memo, useState } from 'react'
 
+import { $friendlyToolLabels } from '../app/uiStore.js'
 import { TERMUX_TUI_MODE } from '../config/env.js'
 import { LONG_MSG } from '../config/limits.js'
 import { hasLeadGap } from '../domain/blockLayout.js'
@@ -51,6 +53,7 @@ export const MessageLine = memo(function MessageLine({
   const toolsMode = sectionMode('tools', detailsMode, sections, detailsModeCommandOverride)
   const activityMode = sectionMode('activity', detailsMode, sections, detailsModeCommandOverride)
   const thinking = msg.thinking?.trim() ?? ''
+  const friendlyToolLabels = useStore($friendlyToolLabels)
 
   // One blank line above this block iff it opens a new visual group relative
   // to the block directly above it (`prev`) — the flex-grouping rule. Applied
@@ -81,6 +84,7 @@ export const MessageLine = memo(function MessageLine({
         <ToolTrail
           commandOverride={detailsModeCommandOverride}
           detailsMode={detailsMode}
+          friendlyToolLabels={friendlyToolLabels}
           reasoning={thinking}
           reasoningAlwaysVisible={msg.isMoaReference}
           reasoningTokens={msg.thinkingTokens}
@@ -245,6 +249,7 @@ export const MessageLine = memo(function MessageLine({
           <ToolTrail
             commandOverride={detailsModeCommandOverride}
             detailsMode={detailsMode}
+            friendlyToolLabels={friendlyToolLabels}
             reasoning={thinking}
             reasoningTokens={msg.thinkingTokens}
             sections={sections}

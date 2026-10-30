@@ -46,9 +46,11 @@ jobs:
         run: |
           npm i -g npm@12
 
-      # Full npm ci (not --ignore-scripts): electron's postinstall
-      # downloads the binary we launch, and node-pty's native build is
-      # needed for the terminal pane.
+      # Full npm ci (not --ignore-scripts): the desktop workspace's
+      # postinstall (apps/desktop/scripts/ensure-electron-binary.mjs) downloads
+      # the Electron binary we launch (Electron 42+ no longer does that from
+      # its own postinstall), and node-pty's native build is needed for the
+      # terminal pane.
       - uses: ./.github/actions/retry
         with:
           command: npm ci

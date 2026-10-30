@@ -13850,7 +13850,7 @@ class GatewayRunner(GatewayAuthorizationMixin, GatewayKanbanWatchersMixin, Gatew
                     _py = f'& "{_py}"' if " " in _py else _py
                 else:
                     _py = _shlex.quote(_py)
-                _install = f'{_py} -m pip install "aiohttp>=3.14.3,<4"'
+                _install = f'{_py} -m pip install "aiohttp>=3.14.4,<4"'
                 try:
                     _has_pip = _ilu.find_spec("pip") is not None
                 except Exception:

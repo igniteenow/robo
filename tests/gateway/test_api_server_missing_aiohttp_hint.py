@@ -28,4 +28,4 @@ def test_missing_aiohttp_warning_names_the_install_command(monkeypatch, caplog):
     text = "\n".join(r.getMessage() for r in caplog.records)
     assert "aiohttp is not installed" in text
     assert "-m pip install" in text
-    assert "aiohttp>=3.14.3,<4" in text
+    assert "aiohttp>=3.14.4,<4" in text

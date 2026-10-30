@@ -164,9 +164,20 @@ If you want the light theme permanently regardless of terminal:
 export ROBO_TUI_THEME=light
 ```
 
+## Following along while Robo works
+
+While a turn runs, the TUI says what Robo is doing in plain words, in two places, and keeps it to one line each:
+
+- **The status bar** — the busy indicator's verb is the current step: `running…` while a command runs, `reading…`, `editing…`, `searching…`, `writing…` while the answer streams in, `thinking…` while Robo waits on the model.
+- **The live area** — the collapsed `Tool calls` row names the step and how long it has taken: `▸ Tool calls (3)  ⠋ Running npm test (12s)`. Open it (click, or `/details tools expanded`) and every step reads the same way: `Ran npm test (1.2s)`, `Read src/app.ts`, `Searched the web for vite 8 release notes`, each with its result underneath. Tools Robo has no plain phrase for (plugins, MCP servers) keep their own name.
+
+Robo also writes one short line before each step it takes ("Checking the config files to find the current port.") — see `agent.step_narration` in `config.yaml`.
+
+Token counts are detail, not status: they show inside an opened `Thinking` or `Tool calls` panel and never on the collapsed rows. `display.friendly_tool_labels: false` in `config.yaml` brings back the raw labels (`Terminal("npm test")`) and the rotating decorative verbs in the status bar.
+
 ## Busy indicator styles
 
-The status-bar busy indicator is pluggable — the default rotates Robo' kawaii face palette every 2.5 seconds during agent work. Pick a different style via config or the `/indicator` slash command:
+The status-bar busy indicator is pluggable — the default shows Robo's kawaii face next to the current step (`running…`, `thinking…`) and the elapsed time. Pick a different style via config or the `/indicator` slash command:
 
 ```yaml
 display:
@@ -241,11 +252,12 @@ Runtime toggles:
 
 **Default visibility**
 
-The TUI ships with opinionated per-section defaults that stream the turn as
-a live transcript instead of a wall of chevrons:
+The TUI ships with opinionated per-section defaults that keep a turn to a few
+lines while still showing what Robo is doing:
 
-- `thinking` — **expanded**. Reasoning streams inline as the model emits it.
-- `tools` — **expanded**. Tool calls and their results render open.
+- `thinking` — **collapsed**. One `▸ Thinking` row; open it to read the reasoning.
+- `tools` — **collapsed**. One `▸ Tool calls (N)` row that names the running step
+  (`⠋ Running npm test (12s)`); open it for every call and its result.
 - `subagents` — falls through to the global `details_mode` (collapsed under
   chevron by default — stays quiet until a delegation actually happens).
 - `activity` — **hidden**. Ambient meta (gateway hints, terminal-parity
@@ -257,8 +269,8 @@ a live transcript instead of a wall of chevrons:
 Per-section overrides take precedence over both the section default and the
 global `details_mode`. To reshape the layout:
 
-- `display.sections.thinking: collapsed` — put thinking back under a chevron
-- `display.sections.tools: collapsed` — put tool calls back under a chevron
+- `display.sections.thinking: expanded` — stream the reasoning open
+- `display.sections.tools: expanded` — render every tool call and result open
 - `display.sections.activity: collapsed` — opt the activity panel back in
 - `/details <section> <mode>` at runtime
 

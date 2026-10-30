@@ -19,13 +19,13 @@ import {
   compactPreview,
   estimateTokensRough,
   fmtK,
-  formatToolCall,
   parseToolTrailResultLine,
   pick,
   splitToolDuration,
   thinkingPreview,
   toolTrailLabel
 } from '../lib/text.js'
+import { describeToolCall, friendlyToolCall } from '../lib/toolPhrase.js'
 import type { Theme } from '../theme.js'
 import type {
   ActiveTool,
@@ -230,6 +230,7 @@ function StreamCursor({
 
 function Chevron({
   count,
+  live,
   onClick,
   open,
   suffix,
@@ -238,6 +239,10 @@ function Chevron({
   tone = 'dim'
 }: {
   count?: number
+  // What Robo is doing right now ("Running npm test (12s)"), shown in full
+  // colour with a spinner on the collapsed header — the one line a person
+  // following along reads while the panel stays folded.
+  live?: string
   onClick: (deep?: boolean) => void
   open: boolean
   suffix?: string
@@ -253,6 +258,12 @@ function Chevron({
         <Text color={t.color.accent}>{open ? '▾ ' : '▸ '}</Text>
         {title}
         {typeof count === 'number' ? ` (${count})` : ''}
+        {live ? (
+          <Text color={t.color.text}>
+            {'  '}
+            <Spinner color={t.color.tool} variant="tool" /> {live}
+          </Text>
+        ) : null}
         {suffix ? (
           <Text color={t.color.statusFg} dim>
             {'  '}
@@ -671,13 +682,17 @@ interface Group {
   details: DetailRow[]
   elapsed?: string
   key: string
+  // The raw trail call (`Terminal("npm test")`): grouping and the delegate
+  // checks key on it. `title` is what the row shows ("Ran npm test").
   label: string
+  title: string
 }
 
 export const ToolTrail = memo(function ToolTrail({
   busy = false,
   commandOverride = false,
   detailsMode = 'collapsed',
+  friendlyToolLabels = true,
   outcome = '',
   reasoningActive = false,
   reasoning = '',
@@ -695,6 +710,9 @@ export const ToolTrail = memo(function ToolTrail({
   busy?: boolean
   commandOverride?: boolean
   detailsMode?: DetailsMode
+  // display.friendly_tool_labels: "Running npm test" rows and header, or the
+  // raw `Terminal("npm test")` labels when off.
+  friendlyToolLabels?: boolean
   outcome?: string
   reasoningActive?: boolean
   reasoning?: string
@@ -742,15 +760,17 @@ export const ToolTrail = memo(function ToolTrail({
   const [deepSubagents, setDeepSubagents] = useState(visible.subagents === 'expanded')
   const [openMeta, setOpenMeta] = useState(visible.activity === 'expanded')
 
+  // The elapsed clock ticks whenever a running tool is on screen: in the
+  // open panel, and on the collapsed header's live line.
   useEffect(() => {
-    if (!tools.length || (visible.tools !== 'expanded' && !openTools)) {
+    if (!tools.length || visible.tools === 'hidden') {
       return
     }
 
     const id = setInterval(() => setNow(Date.now()), 500)
 
     return () => clearInterval(id)
-  }, [openTools, tools.length, visible.tools])
+  }, [tools.length, visible.tools])
 
   // Effects run after the FIRST render too, not just on later updates — so
   // this re-sync was clobbering the reasoningAlwaysVisible mount value above
@@ -808,12 +828,15 @@ export const ToolTrail = memo(function ToolTrail({
     const parsed = parseToolTrailResultLine(line)
 
     if (parsed) {
+      const title = friendlyToolCall(parsed.call, true, friendlyToolLabels)
+
       groups.push({
         color: parsed.mark === '✗' ? t.color.error : t.color.text,
-        content: parsed.call,
+        content: title,
         details: [],
         key: `tr-${i}`,
-        label: parsed.call
+        label: parsed.call,
+        title
       })
 
       if (parsed.detail) {
@@ -829,6 +852,8 @@ export const ToolTrail = memo(function ToolTrail({
     }
 
     if (line.startsWith('drafting ')) {
+      // The model is still writing the call: its arguments are not known
+      // yet, so the row keeps the tool's name until the real call lands.
       const label = toolTrailLabel(line.slice(9).replace(/…$/, '').trim())
 
       groups.push({
@@ -836,7 +861,8 @@ export const ToolTrail = memo(function ToolTrail({
         content: label,
         details: [{ color: t.color.muted, content: 'drafting...', dimColor: true, key: `tr-${i}-d` }],
         key: `tr-${i}`,
-        label
+        label,
+        title: label
       })
 
       continue
@@ -863,12 +889,14 @@ export const ToolTrail = memo(function ToolTrail({
   }
 
   for (const tool of tools) {
-    const label = formatToolCall(tool.name, tool.context || '')
+    const label = describeToolCall(tool.name, tool.context || '', false, false)
+    const title = describeToolCall(tool.name, tool.context || '', false, friendlyToolLabels)
 
     groups.push({
       color: t.color.text,
       key: tool.id,
       label,
+      title,
       elapsed: tool.startedAt ? fmtElapsed(now - tool.startedAt) : '',
       details: tool.verboseArgs
         ? [
@@ -882,7 +910,7 @@ export const ToolTrail = memo(function ToolTrail({
         : [],
       content: (
         <>
-          <Spinner color={t.color.tool} variant="tool" /> {label}
+          <Spinner color={t.color.tool} variant="tool" /> {title}
           {tool.startedAt ? ` (${fmtElapsed(now - tool.startedAt)})` : ''}
         </>
       )
@@ -903,16 +931,23 @@ export const ToolTrail = memo(function ToolTrail({
   const hasThinking = !!cot || reasoningActive || reasoningStreaming
   const thinkingLive = reasoningActive || reasoningStreaming
 
+  // Token counts are detail: they show once a panel is opened, never on the
+  // collapsed headers, which say what Robo is doing ("Running npm test") and
+  // nothing else. With the counts gone the header is what a person following
+  // along reads, not a running tally of tokens.
   const tokenCount =
     reasoningTokens && reasoningTokens > 0 ? reasoningTokens : reasoning ? estimateTokensRough(reasoning) : 0
 
   const toolTokenCount = toolTokens ?? 0
   const totalTokenCount = tokenCount + toolTokenCount
-  const thinkingTokensLabel = tokenCount > 0 ? `~${fmtK(tokenCount)} tokens` : null
+  const thinkingTokensLabel = openThinking && tokenCount > 0 ? `~${fmtK(tokenCount)} tokens` : null
 
-  const toolTokensLabel = toolTokens !== undefined && toolTokens > 0 ? `~${fmtK(toolTokens)} tokens` : undefined
+  const toolTokensLabel =
+    openTools && toolTokens !== undefined && toolTokens > 0 ? `~${fmtK(toolTokens)} tokens` : undefined
 
-  const totalTokensLabel = tokenCount > 0 && toolTokenCount > 0 ? `~${fmtK(totalTokenCount)} total` : null
+  const totalTokensLabel =
+    (openThinking || openTools) && tokenCount > 0 && toolTokenCount > 0 ? `~${fmtK(totalTokenCount)} total` : null
+
   const delegateGroups = groups.filter(g => g.label.startsWith('Delegate Task'))
   const inlineDelegateKey = hasSubagents && delegateGroups.length === 1 ? delegateGroups[0]!.key : null
 
@@ -1063,21 +1098,22 @@ export const ToolTrail = memo(function ToolTrail({
   }
 
   if (hasTools && visible.tools !== 'hidden') {
-    // Collapsed + busy: the chevron row itself ticks over with the latest
-    // tool ("▸ Tool calls (7)  terminal: npm test (12s)") so the transcript
-    // stays one line per turn while still showing what Robo is doing —
-    // click (or `/details expanded`) to unfold every call and its result.
-    const latest = groups[groups.length - 1]
+    // Collapsed while a tool runs: the chevron row itself says what Robo is
+    // doing ("▸ Tool calls (7)  ⠋ Running npm test (12s)") so the transcript
+    // stays one line per turn while still showing the current step — click
+    // (or `/details expanded`) to unfold every call and its result. Keyed on
+    // the running tools themselves, not `busy`: the live block is rendered
+    // from the turn's active tools and nothing else.
+    const running = tools.length ? groups[groups.length - 1] : undefined
 
-    const liveSuffix =
-      !openTools && busy && latest ? `${latest.label}${latest.elapsed ? ` (${latest.elapsed})` : ''}` : undefined
-
-    const toolsSuffix = liveSuffix ? (toolTokensLabel ? `${liveSuffix}  ${toolTokensLabel}` : liveSuffix) : toolTokensLabel
+    const liveLine =
+      !openTools && running ? `${running.title}${running.elapsed ? ` (${running.elapsed})` : ''}` : undefined
 
     panels.push({
       header: (
         <Chevron
           count={groups.length}
+          live={liveLine}
           onClick={shift => {
             if (shift) {
               expandAll()
@@ -1086,7 +1122,7 @@ export const ToolTrail = memo(function ToolTrail({
             }
           }}
           open={openTools}
-          suffix={toolsSuffix}
+          suffix={toolTokensLabel}
           t={t}
           title="Tool calls"
         />
