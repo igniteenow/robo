@@ -7,6 +7,7 @@ import { $delegationState } from '../app/delegationStore.js'
 import type { BatteryInfo, IndicatorStyle, Notice } from '../app/interfaces.js'
 import { $isStatusRuleOccluded } from '../app/overlayStore.js'
 import { useTurnSelector } from '../app/turnStore.js'
+import { $friendlyToolLabels } from '../app/uiStore.js'
 import { DEV_CREDITS_MODE } from '../config/env.js'
 import { FACES } from '../content/faces.js'
 import { VERBS } from '../content/verbs.js'
@@ -14,6 +15,7 @@ import { fmtDuration } from '../domain/messages.js'
 import { stickyPromptFromViewport } from '../domain/viewport.js'
 import { buildSubagentTree, treeTotals, widthByDepth } from '../lib/subagentTree.js'
 import { fmtK } from '../lib/text.js'
+import { liveActivityVerb, STATUS_VERB_MAX } from '../lib/toolPhrase.js'
 import { useScrollbarSnapshot, useViewportSnapshot } from '../lib/viewportStore.js'
 import type { Theme } from '../theme.js'
 import type { Msg, Usage } from '../types.js'
@@ -24,8 +26,11 @@ const FACE_TICK_MS = 2500
 const HEART_COLORS = ['#ff5fa2', '#ff4d6d']
 
 // Keep verb segment width stable so status-bar content to the right doesn't
-// jitter when the ticker rotates between short/long verbs.
-export const VERB_PAD_LEN = VERBS.reduce((max, v) => Math.max(max, v.length), 0) + 1 // + ellipsis
+// jitter when the verb changes between short/long words. Sized for the
+// decorative rotation AND the live activity verbs (lib/toolPhrase.ts), which
+// are capped at STATUS_VERB_MAX so they can never widen the slot.
+const LONGEST_VERB = Math.max(VERBS.reduce((max, v) => Math.max(max, v.length), 0), STATUS_VERB_MAX)
+export const VERB_PAD_LEN = LONGEST_VERB + 1 // + ellipsis
 export const padVerb = (verb: string) => `${verb}…`.padEnd(VERB_PAD_LEN, ' ')
 
 // Compact alternates for the `emoji` and `ascii` indicator styles.
@@ -124,6 +129,13 @@ function FaceTicker({ color, startedAt, style }: { color: string; startedAt?: nu
   const [verbTick, setVerbTick] = useState(() => Math.floor(Math.random() * VERBS.length))
   const [now, setNow] = useState(() => Date.now())
   const isOccluded = useStore($isStatusRuleOccluded)
+  // What Robo is doing right now — "running…", "reading…", "thinking…",
+  // "writing…" — instead of a decorative verb that has nothing to do with
+  // the step. Selected as one string so the ticker re-renders only when the
+  // verb itself changes, not on every tool or stream update. The decorative
+  // rotation stays available with display.friendly_tool_labels: false.
+  const friendly = useStore($friendlyToolLabels)
+  const liveVerb = useTurnSelector(state => (friendly ? liveActivityVerb(state) : ''))
 
   // Pre-compute cadence + verb-visibility for the active style so an
   // `/indicator` switch re-arms the interval (and skips the verb timer
@@ -162,7 +174,7 @@ function FaceTicker({ color, startedAt, style }: { color: string; startedAt?: nu
   }, [intervalMs, isOccluded, showVerb])
 
   const { frame } = renderIndicator(style, tick)
-  const verb = VERBS[verbTick % VERBS.length] ?? ''
+  const verb = liveVerb || (VERBS[verbTick % VERBS.length] ?? '')
   const verbSegment = showVerb ? ` ${padVerb(verb)}` : ''
   // Leading space keeps a gap between the frame and the duration when the
   // verb segment is hidden (e.g. `unicode` spinner style).  When the verb

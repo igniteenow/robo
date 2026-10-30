@@ -1558,9 +1558,12 @@ display:
 
   # How much of Robo's work the TUI / desktop show while it runs.
   # Default is the Claude Code / ChatGPT style: each turn shows one summary
-  # row per section ("▸ Tool calls (7)  terminal: npm test (12s)") that ticks
+  # row per section ("▸ Tool calls (7)  ⠋ Running npm test (12s)") that ticks
   # over in place; click the row (Shift+click for all sections), or run
   # `/details expanded`, to unfold every call, its result, and the reasoning.
+  # The TUI's status bar names the same step while it runs ("running…",
+  # "reading…", "writing…", "thinking…"). Both honour friendly_tool_labels:
+  # set it false for the raw tool names and the rotating decorative verbs.
   #   hidden | collapsed (default) | expanded
   details_mode: collapsed
   # Per-section overrides: thinking | tools | subagents | activity.
@@ -1569,6 +1572,11 @@ display:
     thinking: collapsed
     tools: collapsed
     activity: hidden
+  # Tool steps in plain words on every surface — the CLI spinner, the TUI's
+  # rows and status bar, the desktop app: "Running npm test", "Reading
+  # src/app.ts", "Searching the web for …" instead of the raw tool name.
+  # Custom / plugin / MCP tools keep their own name either way.
+  friendly_tool_labels: true
 
   # Stream tokens to the terminal as they arrive instead of waiting for the
   # full response. The response box opens on first token and text appears

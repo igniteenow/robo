@@ -45,10 +45,17 @@
     "protobufjs": "^8.7.1",
     "js-yaml": "4.3.1",
     "node-gyp": {
-      "undici": "6.28.1"
+      "undici": "6.29.1"
     },
-    "@vitest/mocker": "4.1.11",
-    "dompurify": "3.4.16"
+    "@vitest/mocker": "4.1.12",
+    "dompurify": "3.4.17",
+    "katex": "0.18.10",
+    "vite": "8.3.4",
+    "rolldown": "1.2.14",
+    "postcss": "8.5.30",
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "6.1.5"
+    }
   },
   "engines": {
     "node": ">=22.22.0",
@@ -60,7 +67,6 @@
     "node-pty@1.1.0": true,
     "electron-winstaller@5.4.0": true,
     "agent-browser@0.26.0": true,
-    "electron@41.10.6": true,
     "fsevents@2.3.2": true,
     "fsevents@2.3.3": true
   },

@@ -292,6 +292,7 @@ export const applyDisplay = (
     detailsMode: resolveDetailsMode(d),
     detailsModeCommandOverride: false,
     focusView: !!d.focus_view,
+    friendlyToolLabels: d.friendly_tool_labels !== false,
     idleExitMinutes: normalizeIdleExitMinutes(d.tui_idle_exit_minutes),
     indicatorStyle: normalizeIndicatorStyle(d.tui_status_indicator),
     inlineDiffs: d.inline_diffs !== false,

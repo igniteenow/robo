@@ -19,6 +19,7 @@ const buildUiState = (): UiState => ({
   detailsModeCommandOverride: false,
   editingLast: false,
   focusView: false,
+  friendlyToolLabels: true,
   idleExitMinutes: DEFAULT_IDLE_EXIT_MINUTES,
   indicatorStyle: DEFAULT_INDICATOR_STYLE,
   info: null,
@@ -47,6 +48,9 @@ export const $uiState = atom<UiState>(buildUiState())
 
 export const $uiTheme = computed($uiState, state => state.theme)
 export const $uiSessionId = computed($uiState, state => state.sid)
+// Read by every tool trail; a computed atom only wakes them when the setting
+// itself changes, never on the status-bar churn of the whole UiState.
+export const $friendlyToolLabels = computed($uiState, state => state.friendlyToolLabels)
 
 export const getUiState = () => $uiState.get()
 
