@@ -316,10 +316,10 @@ google = [
   # The Google SDKs permit older vulnerable transitives, so unlocked installs
   # must carry the same fixed floors as uv.lock and the runtime installers:
   # httplib2 0.32.0 (GHSA-j5g9-f88f-gfj3 decompression bomb DoS),
-  # pyasn1 0.6.4, google-auth 2.55.1, oauthlib 4.0.0 (GHSA-xpv3-w29h-x7cv,
+  # pyasn1 0.6.5 (CVE-2026-119196), google-auth 2.55.1, oauthlib 4.0.0 (GHSA-xpv3-w29h-x7cv,
   # GHSA-hj66-6f7g-4r5v; via requests-oauthlib).
   "httplib2==0.32.0",
-  "pyasn1==0.6.4",
+  "pyasn1==0.6.5",
   "oauthlib==4.0.0",
 ]
 youtube = [
@@ -403,7 +403,9 @@ exclude-newer = "14 days"
 #   Pillow 13.0.0 (39 advisories, no 12.x fix), filelock 4.2.1 (12 advisories,
 #   transitive via huggingface-hub), tornado 6.6 (3, via python-telegram-bot),
 #   setuptools 84.1.0 (dev/build), brotlicffi 1.2.1.0 (messaging).
-exclude-newer-package = { vercel = false, nemo-relay = false, huggingface_hub = false, pyjwt = "2026-09-29T00:00:00Z", oauthlib = "2026-09-29T00:00:00Z", certifi = "2026-10-23T00:00:00Z", pillow = "2026-10-23T00:00:00Z", filelock = "2026-10-23T00:00:00Z", tornado = "2026-10-23T00:00:00Z", setuptools = "2026-10-23T00:00:00Z", brotlicffi = "2026-10-23T00:00:00Z" }
+# pyasn1 0.6.5 (CVE-2026-119196, released 2026-10-27; via the Google SDKs) is
+# allowed the same way; remove its entry after 2026-11-10.
+exclude-newer-package = { vercel = false, nemo-relay = false, huggingface_hub = false, pyjwt = "2026-09-29T00:00:00Z", oauthlib = "2026-09-29T00:00:00Z", certifi = "2026-10-23T00:00:00Z", pillow = "2026-10-23T00:00:00Z", filelock = "2026-10-23T00:00:00Z", tornado = "2026-10-23T00:00:00Z", setuptools = "2026-10-23T00:00:00Z", brotlicffi = "2026-10-23T00:00:00Z", pyasn1 = "2026-10-28T00:00:00Z" }
 
 [tool.setuptools]
 # Top-level single-file modules (not packages). Without this, uv2nix's

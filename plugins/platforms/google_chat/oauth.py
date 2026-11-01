@@ -168,7 +168,7 @@ _REQUIRED_PACKAGES = [
     "google-auth-oauthlib==1.3.1",
     "google-auth-httplib2==0.3.1",
     "httplib2==0.32.0",
-    "pyasn1==0.6.4",
+    "pyasn1==0.6.5",
     "oauthlib==4.0.0",  # GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v (via requests-oauthlib)
 ]
 
