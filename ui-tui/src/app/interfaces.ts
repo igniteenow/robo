@@ -356,6 +356,10 @@ export interface UiState {
   // npm test" / "running…" (lib/toolPhrase.ts) instead of the raw
   // `Terminal("npm test")` label. The same switch the CLI spinner reads.
   friendlyToolLabels: boolean
+  // display.user_name — the person's messages are headed `$<name> ─────`
+  // the way Robo's replies are headed `$Robo ─────`; '' keeps the plain
+  // prompt glyph (domain/roles.ts::userLabel).
+  userName: string
   // display.tui_idle_exit_minutes — quit after this long with no input and
   // nothing running (0 = never). See useIdleExit.ts.
   idleExitMinutes: number

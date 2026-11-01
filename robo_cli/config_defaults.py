@@ -199,6 +199,19 @@ DEFAULT_CONFIG = {
         # a human as chat noise. Doc/markdown/skill-only edits never fire it.
         # Set true to force on everywhere, or false to disable.
         "verify_on_stop": "auto",
+        # Judgment: two deterministic, model-free checks that keep edits and
+        # claims tied to evidence (agent/judgment.py). Both fail open.
+        #   read_before_edit — the first patch/write_file on an existing file
+        #     this task has never read is stopped once with "read it first";
+        #     the same call goes through on the next attempt.
+        #   evidence_claims — when the final answer says a test/lint/typecheck/
+        #     build passed but no such command ran successfully in the turn,
+        #     the model gets one follow-up to run it or restate what it
+        #     actually verified.
+        "judgment": {
+            "read_before_edit": True,
+            "evidence_claims": True,
+        },
         # Staged inactivity warning: send a warning to the user at this
         # threshold before escalating to a full timeout.  The warning fires
         # once per run and does not interrupt the agent.  0 = disable warning.
@@ -1243,6 +1256,11 @@ DEFAULT_CONFIG = {
         # TUI busy indicator style: kaomoji (default), emoji, unicode (braille
         # spinner), or ascii.  Live-swappable via `/indicator <style>`.
         "tui_status_indicator": "kaomoji",
+        # What Robo calls you. With a name set, the TUI heads each of your
+        # messages with `$<name> ─────`, the way Robo's replies are headed
+        # `$Robo ─────`; empty keeps the plain prompt glyph. Asked by
+        # `robo setup` (and `robo setup name`).
+        "user_name": "",
         # Seconds between prompt_toolkit redraws in the classic CLI when idle.
         # Default 1.0 keeps the wall-clock status-bar read-outs (idle-since-
         # last-turn) ticking and keeps the bottom chrome alive during idle —

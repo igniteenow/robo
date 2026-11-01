@@ -19,12 +19,13 @@ def build_setup_parser(subparsers, *, cmd_setup: Callable) -> None:
         help="Interactive setup wizard",
         description="Configure Robo with an interactive wizard. "
         "Run a specific section: "
-        "robo setup model|tts|terminal|gateway|tools|telemetry|agent",
+        "robo setup name|model|tts|terminal|gateway|tools|telemetry|agent",
     )
     setup_parser.add_argument(
         "section",
         nargs="?",
         choices=[
+            "name",
             "model",
             "tts",
             "terminal",

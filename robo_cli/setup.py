@@ -1619,6 +1619,40 @@ def _apply_default_agent_settings(config: dict):
     print_info("  Run `robo setup agent` later to customize.")
 
 
+USER_NAME_MAX_CHARS = 40
+
+
+def normalize_user_name(value) -> str:
+    """Trim and bound the name Robo calls the person (display.user_name)."""
+    text = " ".join(str(value or "").split())
+    return text[:USER_NAME_MAX_CHARS]
+
+
+def setup_user_name(config: dict):
+    """Ask what Robo should call the person (display.user_name).
+
+    With a name set, the TUI heads each of their messages with `$<name>` the
+    way Robo's replies are headed `$Robo`. Enter keeps the current name; a
+    single `-` clears it.
+    """
+    print_header("Your Name")
+    current = normalize_user_name(cfg_get(config, "display", "user_name", default=""))
+    print_info("With a name, the TUI labels your messages $<name>, the way Robo's")
+    print_info("replies are labelled $Robo. Leave it empty to keep the plain prompt.")
+    if current:
+        print_info("Enter keeps the current name; type - to clear it.")
+    answer = prompt("What should Robo call you?", current or None)
+    name = "" if answer.strip() == "-" else normalize_user_name(answer)
+    display = config.setdefault("display", {})
+    if not isinstance(display, dict):
+        display = config["display"] = {}
+    display["user_name"] = name
+    if name:
+        print_success(f"Robo will label your messages ${name.replace(' ', '')}")
+    else:
+        print_info("No name set — your messages keep the plain prompt glyph.")
+
+
 def setup_agent_settings(config: dict):
     """Configure agent behavior: iterations, progress display, compression, session reset."""
 
@@ -2448,6 +2482,7 @@ def _model_section_has_credentials(config: dict) -> bool:
 # =============================================================================
 
 SETUP_SECTIONS = [
+    ("name", "Your Name", setup_user_name),
     ("model", "Model & Provider", setup_model_provider),
     ("tts", "Text-to-Speech", setup_tts),
     ("terminal", "Terminal Backend", setup_terminal_backend),
@@ -2602,6 +2637,9 @@ def run_setup_wizard(args):
     print()
     print_info("You can edit these files directly or use 'robo config edit'")
 
+    # Your name — what the TUI labels your messages with.
+    setup_user_name(config)
+
     # Section 1: Model & Provider
     setup_model_provider(config)
 
@@ -2725,6 +2763,9 @@ def _run_blank_slate_setup(config: dict, robo_home, is_existing: bool):
     print_info("Forced on: Provider & Model, File Operations, Terminal.")
     print_info("Everything else (web, browser, code exec, vision, memory,")
     print_info("delegation, cron, skills, plugins, MCP, …) starts disabled.")
+    print()
+
+    setup_user_name(config)
     print()
 
     # ── Step 1: Provider & Model (REQUIRED — the agent cannot run without it) ──

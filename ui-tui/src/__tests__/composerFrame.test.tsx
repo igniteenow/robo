@@ -95,10 +95,16 @@ describe('chat box mode', () => {
     expect(composerMode(false, '● REC', true)).toBe('rec')
   })
 
+  it('tags the chat box with the agent name, following a skin that renames it', () => {
+    const t = DEFAULT_THEME
+
+    expect(composerFrameStyle('chat', { ...t, brand: { ...t.brand, name: 'Cyber Agent' } }).tag).toBe('$CyberAgent')
+  })
+
   it('maps each mode to a tag and a frame colour from the theme', () => {
     const t = DEFAULT_THEME
 
-    expect(composerFrameStyle('chat', t)).toEqual({ color: t.color.accent, tag: `${t.brand.icon} ${t.brand.tool}` })
+    expect(composerFrameStyle('chat', t)).toEqual({ color: t.color.accent, tag: '$Robo' })
     expect(composerFrameStyle('shell', t)).toEqual({ color: t.color.shellDollar, tag: '$ SHELL' })
     expect(composerFrameStyle('rec', t)).toEqual({ color: t.color.error, tag: '● REC' })
     expect(composerFrameStyle('stt', t)).toEqual({ color: t.color.warn, tag: '◉ STT' })

@@ -2,6 +2,7 @@ import type { MouseTrackingMode } from '@robo/ink'
 import { useEffect, useRef } from 'react'
 
 import { resolveDetailsMode, resolveSections } from '../domain/details.js'
+import { normalizeUserName } from '../domain/roles.js'
 import type { GatewayClient } from '../gatewayClient.js'
 import type { ConfigFullResponse, ConfigMtimeResponse, ReloadMcpResponse } from '../gatewayTypes.js'
 import { DEFAULT_VOICE_RECORD_KEY, type ParsedVoiceRecordKey, parseVoiceRecordKey } from '../lib/platform.js'
@@ -293,6 +294,7 @@ export const applyDisplay = (
     detailsModeCommandOverride: false,
     focusView: !!d.focus_view,
     friendlyToolLabels: d.friendly_tool_labels !== false,
+    userName: normalizeUserName(d.user_name),
     idleExitMinutes: normalizeIdleExitMinutes(d.tui_idle_exit_minutes),
     indicatorStyle: normalizeIndicatorStyle(d.tui_status_indicator),
     inlineDiffs: d.inline_diffs !== false,

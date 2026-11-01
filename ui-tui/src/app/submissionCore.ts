@@ -11,6 +11,8 @@ const SESSION_BUSY_RE = /session busy|waiting for model response/i
 export const isSessionBusyError = (e: unknown) => e instanceof Error && SESSION_BUSY_RE.test(e.message)
 
 export interface SubmitPromptDeps {
+  /** Mid-turn sends: place the bubble in the live turn; false → appendMessage. */
+  appendLiveUserMessage?: (msg: Msg) => boolean
   appendMessage: (msg: Msg) => void
   enqueue: (text: string) => void
   expand: (text: string) => string
@@ -42,9 +44,12 @@ export function markSubmitting(): void {
 // The gateway echoes an accepted mid-turn message back as `message.user` so
 // every client renders it from the authoritative source. This client already
 // appends its own bubble synchronously at submit time, so remember what it
-// echoed and let the event handler skip the duplicate. Keyed on trimmed text;
-// a few seconds is plenty for the RPC round-trip.
-const LOCAL_ECHO_TTL_MS = 15_000
+// echoed and let the event handler skip the duplicate. Keyed on trimmed text.
+// The echo is sent when the gateway ACCEPTS the message, which on a busy
+// turn (heavy tool batch, long stream) can trail the submit by well over the
+// RPC round-trip; a short window let the late echo through as a second
+// bubble. Entries are consumed on match, so a wide window costs nothing.
+const LOCAL_ECHO_TTL_MS = 120_000
 const recentLocalEchoes: { at: number; text: string }[] = []
 
 export function rememberLocalUserEcho(text: string): void {
@@ -78,11 +83,41 @@ export function consumeLocalUserEcho(text: string): boolean {
 // the live reply block (streamed text, tool trail, reasoning). Once that block
 // is taller than the viewport the bubble is out of sight, and the user has no
 // way to tell whether Enter did anything until the model reacts, seconds or
-// minutes later. So the composer pane also lists every mid-turn send
-// (components/midTurnSent.tsx) — 'sending' at once, then what the gateway did
-// with it — until the turn ends (turnController.idle() clears the list).
+// minutes later. So the composer pane also shows each mid-turn send
+// (components/midTurnSent.tsx): 'sending' the instant Enter is pressed, then
+// what the gateway did with it. The row is an acknowledgement, not a fixture:
+// once settled it stays for MID_TURN_SETTLED_MS and then goes — the bubble is
+// the record — so nothing sits under the transcript for the rest of the turn.
+// turnController.idle() clears whatever is left when the turn ends.
 const MID_TURN_SENT_LIMIT = 5
+export const MID_TURN_SETTLED_MS = 4000
 let midTurnSentSeq = 0
+const midTurnDismissTimers = new Map<number, ReturnType<typeof setTimeout>>()
+
+function scheduleMidTurnDismiss(id: number): void {
+  const previous = midTurnDismissTimers.get(id)
+
+  if (previous) {
+    clearTimeout(previous)
+  }
+
+  midTurnDismissTimers.set(
+    id,
+    setTimeout(() => {
+      midTurnDismissTimers.delete(id)
+      dismissMidTurnSend(id)
+    }, MID_TURN_SETTLED_MS)
+  )
+}
+
+function cancelMidTurnDismiss(id: number): void {
+  const timer = midTurnDismissTimers.get(id)
+
+  if (timer) {
+    clearTimeout(timer)
+    midTurnDismissTimers.delete(id)
+  }
+}
 
 export function trackMidTurnSend(text: string, status: MidTurnSentStatus = 'sending'): number {
   const id = ++midTurnSentSeq
@@ -93,13 +128,20 @@ export function trackMidTurnSend(text: string, status: MidTurnSentStatus = 'send
     midTurnSent: [...state.midTurnSent, { id, status, text: label }].slice(-MID_TURN_SENT_LIMIT)
   }))
 
+  // A row that arrives already settled (the gateway's echo of a message
+  // another client sent) is acknowledged for the same short while.
+  if (status !== 'sending') {
+    scheduleMidTurnDismiss(id)
+  }
+
   return id
 }
 
 // Resolve a tracked send once the gateway has answered. 'dropped' removes the
-// row: the text went back to the local queue (its own panel shows it) or the
-// send errored (a sys note says so) — either way the strip must not claim it
-// reached the live turn.
+// row at once: the text went back to the local queue (its own panel shows it)
+// or the send errored (a sys note says so) — either way the strip must not
+// claim it reached the live turn. Any other status shows briefly, then the
+// row dismisses itself.
 export function settleMidTurnSend(id: number, status: 'dropped' | MidTurnSentStatus): void {
   patchUiState(state => {
     if (!state.midTurnSent.some(item => item.id === id)) {
@@ -114,9 +156,32 @@ export function settleMidTurnSend(id: number, status: 'dropped' | MidTurnSentSta
           : state.midTurnSent.map(item => (item.id === id ? { ...item, status } : item))
     }
   })
+
+  if (status === 'dropped') {
+    cancelMidTurnDismiss(id)
+  } else if (status !== 'sending') {
+    scheduleMidTurnDismiss(id)
+  }
+}
+
+// Remove one acknowledged row. A no-op when the row is already gone (the turn
+// ended first, or a later clear took it).
+export function dismissMidTurnSend(id: number): void {
+  cancelMidTurnDismiss(id)
+  patchUiState(state =>
+    state.midTurnSent.some(item => item.id === id)
+      ? { ...state, midTurnSent: state.midTurnSent.filter(item => item.id !== id) }
+      : state
+  )
 }
 
 export function clearMidTurnSends(): void {
+  for (const timer of midTurnDismissTimers.values()) {
+    clearTimeout(timer)
+  }
+
+  midTurnDismissTimers.clear()
+
   if (getUiState().midTurnSent.length) {
     patchUiState({ midTurnSent: [] })
   }
@@ -168,13 +233,28 @@ export function submitPrompt(
     clearMidTurnSends()
   }
 
-  const tracked = midTurn ? trackMidTurnSend(displayOverride || text) : null
+  // A mid-turn send placed in the live block is its own acknowledgement: it
+  // sits under the work so far, where Robo reads it next. The strip would
+  // only repeat it. The strip is kept for a send the live block could not
+  // take (it went to settled history, above the block and out of sight) —
+  // and, below, for the one thing the bubble cannot say: that the gateway
+  // parked the text (queued / steered) instead of reading it now.
+  let placedLive = false
 
   if (showUserMessage) {
+    const bubble: Msg = { role: 'user', text: displayOverride || text }
+
     deps.setLastUserMsg(text)
-    deps.appendMessage({ role: 'user', text: displayOverride || text })
+    placedLive = Boolean(midTurn && deps.appendLiveUserMessage?.(bubble))
+
+    if (!placedLive) {
+      deps.appendMessage(bubble)
+    }
+
     rememberLocalUserEcho(text)
   }
+
+  const tracked = midTurn && !placedLive ? trackMidTurnSend(displayOverride || text) : null
 
   const startSubmit = (submitText: string) => {
     const liveSid = getUiState().sid
@@ -203,8 +283,13 @@ export function submitPrompt(
     deps.gw
       .request<PromptSubmitResponse>('prompt.submit', { session_id: liveSid, text: submitText })
       .then(r => {
+        const outcome = midTurnStatusFromGateway(r?.status)
+
         if (tracked !== null) {
-          settleMidTurnSend(tracked, midTurnStatusFromGateway(r?.status))
+          settleMidTurnSend(tracked, outcome)
+        } else if (placedLive && (outcome === 'queued' || outcome === 'steered')) {
+          // Not read now after all: say so briefly, then let it go.
+          trackMidTurnSend(displayOverride || text, outcome)
         }
 
         // The gateway consumed a typed voice stop phrase server-side (voice

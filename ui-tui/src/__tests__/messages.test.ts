@@ -4,12 +4,14 @@ import { renderSync } from '@robo/ink'
 import React from 'react'
 import { describe, expect, it } from 'vitest'
 
+import { patchUiState, resetUiState } from '../app/uiStore.js'
 import { MessageLine } from '../components/messageLine.js'
 import { MAX_HISTORY } from '../config/limits.js'
 import { toTranscriptMessages } from '../domain/messages.js'
 import { capTranscriptHistory, upsert } from '../lib/messages.js'
 import { stripAnsi } from '../lib/text.js'
 import { DEFAULT_THEME } from '../theme.js'
+import type { Msg } from '../types.js'
 
 describe('toTranscriptMessages', () => {
   it('preserves assistant tool-call rows so resume does not drop prior turns', () => {
@@ -127,6 +129,77 @@ describe('MessageLine', () => {
       .find(line => line.includes('Okay'))
 
     expect(renderedLine).toContain('Ψ > Okay')
+  })
+
+  const renderLines = (msg: Msg, cols = 40) => {
+    const stdout = new PassThrough()
+    const stdin = new PassThrough()
+    const stderr = new PassThrough()
+    let output = ''
+
+    Object.assign(stdout, { columns: cols, isTTY: false, rows: 24 })
+    Object.assign(stdin, { isTTY: false })
+    Object.assign(stderr, { isTTY: false })
+    stdout.on('data', chunk => {
+      output += chunk.toString()
+    })
+
+    const instance = renderSync(React.createElement(MessageLine, { cols, msg, t: DEFAULT_THEME }), {
+      patchConsole: false,
+      stderr: stderr as NodeJS.WriteStream,
+      stdin: stdin as NodeJS.ReadStream,
+      stdout: stdout as NodeJS.WriteStream
+    })
+
+    instance.unmount()
+    instance.cleanup()
+
+    return stripAnsi(output)
+      .split('\n')
+      .map(line => line.trimEnd())
+      .filter(Boolean)
+  }
+
+  it('opens a reply with a `$Robo` header row and indents the text under it', () => {
+    const lines = renderLines({ role: 'assistant', text: 'Hey there' })
+    const header = lines.findIndex(line => line.startsWith('$Robo '))
+
+    expect(header).toBeGreaterThanOrEqual(0)
+    expect(lines[header]).toMatch(/^\$Robo ─{3,}$/)
+    // the rule stops at the transcript's right edge: 40 cols - 4 reserve
+    expect(lines[header]!.length).toBe(36)
+    // (a non-TTY stream repeats the frame on unmount, so match the start)
+    expect(lines[header + 1]).toMatch(/^ {3}Hey there/)
+  })
+
+  it('closes a reply with its receipt row under the body', () => {
+    const lines = renderLines({ receipt: '7.6s · 1 search · 10:39 PM', role: 'assistant', text: 'Here you go.' })
+    const body = lines.findIndex(line => line.startsWith('   Here you go.'))
+
+    expect(body).toBeGreaterThanOrEqual(0)
+    expect(lines[body + 1]).toMatch(/^ {3}✓ 7\.6s · 1 search · 10:39 PM/)
+  })
+
+  it('keeps the person’s prompt glyph and draws no header for their messages', () => {
+    const lines = renderLines({ role: 'user', text: 'hi' })
+
+    expect(lines.some(line => line.includes('$Robo'))).toBe(false)
+    expect(lines.some(line => /^\$/.test(line))).toBe(false)
+  })
+
+  it('heads the person’s messages $<name> once display.user_name is set', () => {
+    patchUiState({ userName: 'Ahmi' })
+
+    try {
+      const lines = renderLines({ role: 'user', text: 'hi' })
+      const header = lines.findIndex(line => line.startsWith('$Ahmi '))
+
+      expect(header).toBeGreaterThanOrEqual(0)
+      expect(lines[header]).toMatch(/^\$Ahmi ─{3,}$/)
+      expect(lines[header + 1]).toMatch(/^› hi/)
+    } finally {
+      resetUiState()
+    }
   })
 })
 

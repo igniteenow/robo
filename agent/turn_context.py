@@ -1138,6 +1138,8 @@ def build_turn_context(
     agent._turn_file_mutation_paths = set()
     agent._verification_stop_nudges = 0
     agent._pre_verify_nudges = 0
+    # Evidence-claims gate (agent/judgment.py): at most one follow-up per turn.
+    agent._evidence_claim_nudges = 0
     # Per-turn fact-check state: one check per turn, and the "kept as
     # written" footer for the finalizer.
     agent._fact_check_done = False

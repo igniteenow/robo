@@ -20,6 +20,7 @@ import { RESIZE_COALESCE_MS } from '../config/timing.js'
 import { hasLeadGap, prevRenderedMsg } from '../domain/blockLayout.js'
 import { SECTION_NAMES, sectionMode } from '../domain/details.js'
 import { composeTabTitle, shortCwd } from '../domain/paths.js'
+import { userLabel } from '../domain/roles.js'
 import { sessionScopedModelArg } from '../domain/slash.js'
 import { type GatewayClient } from '../gatewayClient.js'
 import type {
@@ -60,7 +61,7 @@ import { useConfigSync } from './useConfigSync.js'
 import { idleExitGoodbye, useIdleExit } from './useIdleExit.js'
 import { useInputHandlers } from './useInputHandlers.js'
 import { useLongRunToolCharms } from './useLongRunToolCharms.js'
-import { useSessionLifecycle } from './useSessionLifecycle.js'
+import { scheduleResumeScrollToBottom, useSessionLifecycle } from './useSessionLifecycle.js'
 import { useSubmission } from './useSubmission.js'
 
 const BRACKET_PASTE_ON = '\x1b[?2004h'
@@ -360,7 +361,7 @@ export function useMainApp(gw: GatewayClient) {
   const toolsDetailsVisible = toolsDetailsMode !== 'hidden'
   const detailsVisible = thinkingDetailsVisible || toolsDetailsVisible
   const userPromptWidth = composerPromptWidth(ui.theme.brand.prompt)
-  const heightCacheKey = `${ui.sid ?? 'draft'}:${cols}:${userPromptWidth}:${ui.compact ? '1' : '0'}:${detailsLayoutKey}`
+  const heightCacheKey = `${ui.sid ?? 'draft'}:${cols}:${userPromptWidth}:${ui.userName}:${ui.compact ? '1' : '0'}:${detailsLayoutKey}`
 
   // Build a render-local snapshot. Registering/pruning the shared cache is a
   // post-commit transition below, so an abandoned concurrent render cannot
@@ -397,8 +398,13 @@ export function useMainApp(gw: GatewayClient) {
         ),
         thinkingVisible: thinkingDetailsVisible,
         toolsVisible: toolsDetailsVisible,
+        userName: ui.userName,
         userPrompt: ui.theme.brand.prompt,
-        withSeparator: virtualRows[index]!.msg.role === 'user' && firstUserIdx >= 0 && index > firstUserIdx
+        withSeparator:
+          !userLabel(ui.userName) &&
+          virtualRows[index]!.msg.role === 'user' &&
+          firstUserIdx >= 0 &&
+          index > firstUserIdx
       }),
     [
       cols,
@@ -411,6 +417,7 @@ export function useMainApp(gw: GatewayClient) {
       ui.detailsModeCommandOverride,
       ui.sections,
       ui.theme.brand.prompt,
+      ui.userName,
       virtualRows
     ]
   )
@@ -447,6 +454,57 @@ export function useMainApp(gw: GatewayClient) {
   )
 
   const sys = useCallback((text: string) => appendMessage({ role: 'system', text }), [appendMessage])
+
+  // A message the person just sent must be on screen. The transcript only
+  // follows new rows while it is pinned to the tail; after a scroll-up (or a
+  // wheel nudge that released the pin) a sent message landed below the
+  // viewport and looked lost. Their own send re-pins the tail — the same
+  // settle-and-recheck used on resume, which still yields to a manual scroll
+  // made after it. Gateway echoes from other clients keep the plain append.
+  const cancelSendScrollRef = useRef<(() => void) | null>(null)
+
+  const appendOwnMessage = useCallback(
+    (msg: Msg) => {
+      appendMessage(msg)
+
+      if (msg.role === 'user') {
+        cancelSendScrollRef.current?.()
+        cancelSendScrollRef.current = scheduleResumeScrollToBottom(scrollRef)
+      }
+    },
+    [appendMessage]
+  )
+
+  // A message sent while Robo works joins the live turn where it was sent
+  // (turnController.recordMidTurnUserMessage) and the view follows it there.
+  const appendLiveUserMessage = useCallback((msg: Msg) => {
+    if (!turnController.recordMidTurnUserMessage(msg)) {
+      return false
+    }
+
+    cancelSendScrollRef.current?.()
+    cancelSendScrollRef.current = scheduleResumeScrollToBottom(scrollRef)
+
+    return true
+  }, [])
+
+  // The same placement for a clarify answer and the question's tool line:
+  // into the live block while the turn runs, otherwise the transcript.
+  const appendLiveOrSettled = useCallback(
+    (msgs: readonly Msg[]) => {
+      if (turnController.recordMidTurnMessages(msgs)) {
+        cancelSendScrollRef.current?.()
+        cancelSendScrollRef.current = scheduleResumeScrollToBottom(scrollRef)
+
+        return
+      }
+
+      msgs.forEach(appendMessage)
+    },
+    [appendMessage]
+  )
+
+  useEffect(() => () => cancelSendScrollRef.current?.(), [])
 
   // Hot-loaded user widgets announce themselves — a silently-registered
   // widget is indistinguishable from a failed one. Errors surface too.
@@ -720,13 +778,18 @@ export function useMainApp(gw: GatewayClient) {
 
         if (answer) {
           turnController.persistedToolLabels.add(label)
-          appendMessage({
-            kind: 'trail',
-            role: 'system',
-            text: '',
-            tools: [buildToolTrailLine('clarify', clarify.question)]
-          })
-          appendMessage({ kind: 'clarify', role: 'user', text: answer })
+          // The answer stays where it was given: in the live block under the
+          // work so far, not above it in settled history (where it vanished
+          // off screen the moment it was sent).
+          appendLiveOrSettled([
+            {
+              kind: 'trail',
+              role: 'system',
+              text: '',
+              tools: [buildToolTrailLine('clarify', clarify.question)]
+            },
+            { kind: 'clarify', role: 'user', text: answer }
+          ])
           patchUiState({ status: 'running…' })
         } else {
           // Esc / Ctrl+C cancel: persist the question + options as a system
@@ -741,14 +804,15 @@ export function useMainApp(gw: GatewayClient) {
         patchOverlayState({ clarify: null })
       })
     },
-    [appendMessage, overlay.clarify, rpc]
+    [appendLiveOrSettled, appendMessage, overlay.clarify, rpc]
   )
 
   sysRef.current = sys
   answerClarifyRef.current = answerClarify
 
   const { dispatchSubmission, send, sendQueued, submit } = useSubmission({
-    appendMessage,
+    appendLiveUserMessage,
+    appendMessage: appendOwnMessage,
     composerActions,
     composerRefs,
     composerState,

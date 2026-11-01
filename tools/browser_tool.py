@@ -344,6 +344,8 @@ def _get_open_command_timeout(*, first_open: bool = False) -> int:
 
 def _needs_chromium_sandbox_bypass() -> bool:
     """Return True when Chromium needs --no-sandbox to start reliably."""
+    if _sandbox_bypass_forced:
+        return True
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         return True
     if _running_in_docker():
@@ -356,6 +358,95 @@ def _needs_chromium_sandbox_bypass() -> bool:
     except OSError:
         pass
     return False
+
+
+# Set the first time Chromium reports that its sandbox could not start, so
+# every later launch in this process adds --no-sandbox (the same flags the
+# root / Docker / AppArmor detection above injects up front). The detection
+# knows the Linux cases; this catches the rest after the fact — Windows
+# machines where security software or the account's token blocks the sandbox,
+# Linux kernels with user namespaces turned off by sysctl, SELinux or snap
+# confinement, locked-down macOS — instead of leaving the browser tool dead.
+_sandbox_bypass_forced = False
+_sandbox_bypass_lock = threading.Lock()
+
+# Chromium's own diagnostics when its sandbox is the problem. Only these
+# count: a page URL or page text that contains "sandbox" (a staging host), or
+# a launcher's generic advice ("Hint: try --no-sandbox") attached to an
+# unrelated failure — e.g. Windows Chrome exiting with code 0 because another
+# instance holds the profile — must not trigger the relaunch.
+_SANDBOX_FAILURE_MARKERS = (
+    "no usable sandbox",
+    "sandbox_linux",
+    "sandbox_win",
+    "sandbox_mac",
+    "sandbox host",
+    "zygote",
+    "sandbox could not",
+    "failed to initialize sandbox",
+    "sandbox initialization",
+    "setuid sandbox",
+    "namespace sandbox",
+)
+
+
+def _looks_like_sandbox_failure(result: Dict[str, Any]) -> bool:
+    """True when a failed browser command reads like Chromium's sandbox refusing to start."""
+    if not isinstance(result, dict) or result.get("success"):
+        return False
+    text = str(result.get("error") or "").lower()
+    # Drop launcher advice so only Chromium's own words are judged.
+    text = text.split("hint:", 1)[0]
+    return any(marker in text for marker in _SANDBOX_FAILURE_MARKERS)
+
+
+def _windows_process_is_elevated() -> bool:
+    """True when this process runs with administrator rights on Windows.
+
+    Chrome refuses to run its browser process elevated: started from an
+    elevated process it spawns a de-elevated copy of itself and the original
+    exits with code 0 at once. The launcher only watches the original, so
+    every launch from an admin PowerShell reads as "exited early without
+    writing DevToolsActivePort" while the copy keeps running headless,
+    unowned — one leaked Chrome per attempt. `--do-not-de-elevate` keeps the
+    browser in the process the launcher started.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())  # type: ignore[attr-defined]
+    except Exception:
+        return False
+
+
+def _chromium_launch_flags() -> List[str]:
+    """Chromium flags Robo adds on its own for this host (none when nothing is needed)."""
+    flags: List[str] = []
+    if _needs_chromium_sandbox_bypass():
+        flags += ["--no-sandbox", "--disable-dev-shm-usage"]
+    if _windows_process_is_elevated():
+        flags.append("--do-not-de-elevate")
+    return flags
+
+
+def _arm_sandbox_bypass() -> bool:
+    """Turn on --no-sandbox for the rest of this process; True the first time only.
+
+    False when it was already on (so a retry can never loop) and when the
+    person set AGENT_BROWSER_ARGS / AGENT_BROWSER_CHROME_FLAGS themselves —
+    their flags win and are never overwritten (see _build_browser_env's
+    injection), so a retry would launch with the same flags and fail again.
+    """
+    global _sandbox_bypass_forced
+    if os.environ.get("AGENT_BROWSER_ARGS") or os.environ.get("AGENT_BROWSER_CHROME_FLAGS"):
+        return False
+    with _sandbox_bypass_lock:
+        if _sandbox_bypass_forced:
+            return False
+        _sandbox_bypass_forced = True
+        return True
 
 
 def _read_command_output_files(stdout_path: str, stderr_path: str) -> tuple[str, str]:
@@ -2620,11 +2711,14 @@ def _run_browser_command(
             idle_ms = str(BROWSER_SESSION_INACTIVITY_TIMEOUT * 1000)
             browser_env["AGENT_BROWSER_IDLE_TIMEOUT_MS"] = idle_ms
 
-        # Inject --no-sandbox when needed (issue #15765):
-        # - Running as root: Chromium always refuses to start without it
-        # - Ubuntu 23.10+ / AppArmor systems: unprivileged user namespaces
-        #   are restricted, causing Chromium to exit with "No usable sandbox"
-        #   even for non-root users running under systemd or containers.
+        # Inject Chromium flags this host needs (issue #15765):
+        # - --no-sandbox as root (Chromium refuses to start without it), in
+        #   Docker, on Ubuntu 23.10+ / AppArmor systems where unprivileged
+        #   user namespaces are restricted, or once a launch failed on the
+        #   sandbox (see _arm_sandbox_bypass).
+        # - --do-not-de-elevate when Robo runs as administrator on Windows,
+        #   so Chrome stays in the process the launcher watches instead of
+        #   relaunching itself de-elevated and reading as a failed start.
         # Honour either the legacy AGENT_BROWSER_CHROME_FLAGS (never consumed by
         # agent-browser itself, but documented in older notes) or the real
         # AGENT_BROWSER_ARGS — if the user pre-sets either, don't overwrite it.
@@ -2632,14 +2726,10 @@ def _run_browser_command(
             "AGENT_BROWSER_ARGS" not in browser_env
             and "AGENT_BROWSER_CHROME_FLAGS" not in browser_env
         ):
-            if _needs_chromium_sandbox_bypass():
-                logger.debug(
-                    "browser: sandbox bypass needed (root/docker/AppArmor userns) — "
-                    "injecting --no-sandbox"
-                )
-                browser_env["AGENT_BROWSER_ARGS"] = (
-                    "--no-sandbox,--disable-dev-shm-usage"
-                )
+            launch_flags = _chromium_launch_flags()
+            if launch_flags:
+                logger.debug("browser: injecting Chromium flags %s", launch_flags)
+                browser_env["AGENT_BROWSER_ARGS"] = ",".join(launch_flags)
 
         # Use temp files for stdout/stderr instead of pipes.
         # agent-browser starts a background daemon that inherits file
@@ -2782,6 +2872,28 @@ def _run_browser_command(
     except Exception as e:
         logger.warning("browser '%s' exception: %s", command, e, exc_info=True)
         result = {"success": False, "error": str(e)}
+
+    # --- Sandbox retry ---
+    # Chromium refused to start because its sandbox could not be set up
+    # (some Windows machines, Linux without user namespaces, locked-down
+    # macOS). Once per process: turn on --no-sandbox, drop the session whose
+    # daemon holds the old launch flags, and run the same command again on a
+    # fresh one. The second attempt cannot arm again, so this never loops.
+    if (
+        not session_info.get("cdp_url")
+        and _looks_like_sandbox_failure(result)
+        and _arm_sandbox_bypass()
+    ):
+        logger.warning(
+            "browser: Chromium's sandbox could not start (%s); relaunching with "
+            "--no-sandbox for the rest of this session",
+            str(result.get("error") or "")[:200],
+        )
+        try:
+            _cleanup_single_browser_session(task_id)
+        except Exception as e:
+            logger.debug("browser: session cleanup before sandbox retry: %s", e)
+        return _run_browser_command(task_id, command, args, timeout, _engine_override=_engine_override)
 
     # --- Lightpanda automatic Chrome fallback ---
     # If engine is lightpanda and the result looks broken, retry with Chrome.

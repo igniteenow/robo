@@ -40,6 +40,39 @@ const isBarrierMessage = (msg: Msg | undefined) => {
 
 const isToolCarryingTrail = (msg: Msg | undefined) => Boolean(msg?.kind === 'trail' && !msg.text && msg.tools?.length)
 
+// A trail that already holds model reasoning — the Thinking panel of the
+// current working phase. MoA reference blocks are the person's own feature,
+// shown as separate entries, so they never absorb reasoning.
+const isThinkingHolder = (msg: Msg | undefined) =>
+  Boolean(msg?.kind === 'trail' && !msg.text && msg.thinking?.trim() && !msg.isMoaReference && !msg.todos?.length)
+
+/**
+ * Where a new piece of reasoning belongs: the Thinking panel of the working
+ * phase in progress, or nowhere (a new one). Walks back from the end the same
+ * way appendToolShelfMessage does for tool rows — past tool-only shelves,
+ * stopping at anything a person sees as a step of the conversation (assistant
+ * prose, their own message, a diff, a MoA reference). So every model call
+ * between two visible updates adds to ONE Thinking panel and ONE Tool calls
+ * panel, instead of opening a new "Thinking" row per call.
+ */
+export const findThinkingHolder = (prev: readonly Msg[]): null | number => {
+  for (let index = prev.length - 1; index >= 0; index--) {
+    const candidate = prev[index]
+
+    if (isThinkingHolder(candidate)) {
+      return index
+    }
+
+    if (isBarrierMessage(candidate) || candidate?.isMoaReference) {
+      return null
+    }
+  }
+
+  return null
+}
+
+export const joinThinking = (base: string, next: string): string => (base ? `${base}\n\n${next}` : next)
+
 export const appendToolShelfMessage = (prev: readonly Msg[], msg: Msg): Msg[] => {
   if (!isToolShelfMessage(msg)) {
     return [...prev, msg]

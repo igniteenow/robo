@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
 import type { StatusBarSegments } from '../components/appChrome.js'
-import { busyIndicatorWidth, statusBarSegments, statusRuleWidths } from '../components/appChrome.js'
+import {
+  busyIndicatorWidth,
+  statusBarSegments,
+  statusRuleWidths,
+  VERB_PAD_LEN,
+  WORK_DOTS_FRAMES,
+  workDotsFrame
+} from '../components/appChrome.js'
 
 describe('statusRuleWidths', () => {
   it('keeps the status rule within the terminal width', () => {
@@ -110,6 +117,22 @@ describe('busyIndicatorWidth', () => {
     // kaomoji face which carries a wide glyph + rotating verb.
     expect(busyIndicatorWidth('unicode', false)).toBeLessThan(busyIndicatorWidth('kaomoji', false))
     expect(busyIndicatorWidth('unicode', false)).toBe(1)
+  })
+
+  it('reserves the flipping dots ahead of the face and emoji styles only', () => {
+    // ` ⠛ ` + `[o_o]` + verb slot: three cells more than the face alone.
+    expect(busyIndicatorWidth('kaomoji', false)).toBe(3 + 5 + 1 + VERB_PAD_LEN)
+    expect(busyIndicatorWidth('ascii', false)).toBe(1 + 1 + VERB_PAD_LEN)
+    expect(WORK_DOTS_FRAMES.every(frame => frame.length === 1)).toBe(true)
+    // The square holds, flips on one diagonal, holds, flips on the other.
+    const square = WORK_DOTS_FRAMES[0]!
+    const flips = WORK_DOTS_FRAMES.filter(frame => frame !== square)
+
+    expect(flips).toHaveLength(2)
+    expect(new Set(flips).size).toBe(2)
+    expect(WORK_DOTS_FRAMES.filter(frame => frame === square).length).toBeGreaterThanOrEqual(flips.length * 3)
+    expect(workDotsFrame(0)).toBe(square)
+    expect(workDotsFrame(WORK_DOTS_FRAMES.length)).toBe(square)
   })
 
   it('reserves room for the elapsed-time tail only when a turn is timed', () => {

@@ -1,4 +1,5 @@
 import { TERMUX_TUI_MODE } from '../config/env.js'
+import { shouldShowReplyHeader, userLabel } from '../domain/roles.js'
 import type { Msg } from '../types.js'
 
 import { transcriptBodyWidth } from './inputMetrics.js'
@@ -26,7 +27,11 @@ export const messageHeightKey = (msg: Msg) => {
   return [
     msg.role,
     msg.kind ?? '',
-    hashText([msg.text, msg.thinking ?? '', msg.tools?.join('\n') ?? '', todoSig, panelSig, introSig].join('\0'))
+    hashText(
+      [msg.text, msg.thinking ?? '', msg.tools?.join('\n') ?? '', todoSig, panelSig, introSig, msg.receipt ?? ''].join(
+        '\0'
+      )
+    )
   ].join(':')
 }
 
@@ -75,6 +80,7 @@ export const estimatedMsgHeight = (
     leadGap = false,
     thinkingVisible = details,
     toolsVisible = details,
+    userName = '',
     userPrompt = '',
     withSeparator = false
   }: {
@@ -83,6 +89,8 @@ export const estimatedMsgHeight = (
     leadGap?: boolean
     thinkingVisible?: boolean
     toolsVisible?: boolean
+    // display.user_name: the person's messages carry a header row too.
+    userName?: string
     userPrompt?: string
     withSeparator?: boolean
   }
@@ -126,10 +134,23 @@ export const estimatedMsgHeight = (
         (hasVisibleTools ? (msg.tools?.length ?? 0) : 0) +
         (hasVisibleThinking ? wrappedLines(msg.thinking ?? '', bodyWidth) : 0)
 
+      // The gap under the trail, plus the `└─ Response` marker row where no
+      // `$Robo` header row (counted below) stands in for it.
       if (msg.role === 'assistant' && /\S/.test(msg.text)) {
-        h += 2
+        h += shouldShowReplyHeader(msg) ? 1 : 2
       }
     }
+  }
+
+  // The `$Robo ─────` header row that opens a reply, or the `$<name>` row
+  // over the person's message once a name is set.
+  if (shouldShowReplyHeader(msg) || (msg.role === 'user' && userLabel(userName))) {
+    h++
+  }
+
+  // The receipt row that closes it (plus its gap outside compact mode).
+  if (msg.receipt) {
+    h += compact ? 1 : 2
   }
 
   if (msg.role === 'user' || msg.kind === 'diff') {

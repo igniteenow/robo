@@ -43,8 +43,18 @@ export const prepareSubmission = (display: string, tokens: ComposerToken[]) => (
 export const shouldInterpolateSubmission = (display: string) => hasInterpolation(display)
 
 export function useSubmission(opts: UseSubmissionOptions) {
-  const { appendMessage, composerActions, composerRefs, composerState, gw, setLastUserMsg, slashRef, submitRef, sys } =
-    opts
+  const {
+    appendLiveUserMessage,
+    appendMessage,
+    composerActions,
+    composerRefs,
+    composerState,
+    gw,
+    setLastUserMsg,
+    slashRef,
+    submitRef,
+    sys
+  } = opts
 
   const lastEmptyAt = useRef(0)
   const typingIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -93,6 +103,7 @@ export function useSubmission(opts: UseSubmissionOptions) {
       submitPrompt(
         text,
         {
+          appendLiveUserMessage,
           appendMessage,
           enqueue: composerActions.enqueue,
           expand,
@@ -105,7 +116,7 @@ export function useSubmission(opts: UseSubmissionOptions) {
         midTurn
       )
     },
-    [appendMessage, composerActions, composerRefs, gw, setLastUserMsg, sys]
+    [appendLiveUserMessage, appendMessage, composerActions, composerRefs, gw, setLastUserMsg, sys]
   )
 
   const shellExec = useCallback(
@@ -226,7 +237,12 @@ export function useSubmission(opts: UseSubmissionOptions) {
             const r = asRpcResult<SessionSteerResponse>(raw)
 
             if (r?.status === 'queued') {
-              appendMessage({ role: 'user', text: item.display })
+              const bubble: Msg = { role: 'user', text: item.display }
+
+              if (!appendLiveUserMessage?.(bubble)) {
+                appendMessage(bubble)
+              }
+
               // session.steer's "queued" means queued INTO the live run — a
               // steer: read after the current step, and the strip says so.
               settleMidTurnSend(tracked, 'steered')
@@ -250,7 +266,7 @@ export function useSubmission(opts: UseSubmissionOptions) {
       // the composer strip until the gateway reports what it did with it.
       send(item.text, true, undefined, undefined, true)
     },
-    [appendMessage, composerActions, gw, send, sys]
+    [appendLiveUserMessage, appendMessage, composerActions, gw, send, sys]
   )
 
   const dispatchSubmission = useCallback(
@@ -423,6 +439,8 @@ export function useSubmission(opts: UseSubmissionOptions) {
 }
 
 export interface UseSubmissionOptions {
+  /** Place a mid-turn send in the live turn; false → appendMessage. */
+  appendLiveUserMessage?: (msg: Msg) => boolean
   appendMessage: (msg: Msg) => void
   composerActions: ComposerActions
   composerRefs: ComposerRefs

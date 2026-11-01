@@ -110,12 +110,13 @@ Every other slash command (including installed skills, quick commands, and perso
 
 ## The chat box
 
-The composer is a box on all four sides whose tag and colour say what it is doing: `◆ ROBO` for chat, `$ SHELL` when the line starts with `!`, `● REC` / `◉ STT` while the microphone captures and transcribes, `✎ EDIT` while you edit your last message. The top edge shows the keys that apply right now; the bottom edge shows the voice state. While a question or approval prompt owns the keyboard, the input row reads *waiting on the prompt above* instead of disappearing — answer it, or Esc to dismiss.
+The composer is a box on all four sides whose tag and colour say what it is doing: `$Robo` for chat (the same label that heads each of Robo's replies in the transcript, as a `$Robo ─────` row with the reply indented under it; with `display.user_name` set — `robo setup name` asks for it — your own messages are headed `$<name> ─────` the same way), `$ SHELL` when the line starts with `!`, `● REC` / `◉ STT` while the microphone captures and transcribes, `✎ EDIT` while you edit your last message. The top edge shows the keys that apply right now; the bottom edge shows the voice state. While a question or approval prompt owns the keyboard, the input row reads *waiting on the prompt above* instead of disappearing — answer it, or Esc to dismiss.
 
 **Changing your mind while Robo works.** You are never locked out while a turn runs:
 
-- **Type and send a new message** — Robo reads it at once and redirects the live turn, keeping in mind what it was already doing (`display.busy_input_mode: interrupt`, the default). `queue` parks the message for the next turn instead; `steer` hands it over only after the current step finishes, which for a long tool run or a slow reply feels like the message never arrived — the box's hint tells you which mode is on, `/busy status` shows it and `/busy interrupt` switches (persisted to `config.yaml`).
+- **Type and send a new message** — Robo reads it at once and redirects the live turn, keeping in mind what it was already doing (`display.busy_input_mode: interrupt`, the default). `queue` parks the message for the next turn instead; `steer` hands it over only after the current step finishes, which for a long tool run or a slow reply feels like the message never arrived — the box's hint tells you which mode is on, `/busy status` shows it and `/busy interrupt` switches (persisted to `config.yaml`). Your message appears at once at the bottom, right under what Robo has done so far, and stays at that point in the conversation — what Robo does next appears below it. That is the whole acknowledgement: nothing else is shown when Robo reads it now. Only when the message was parked instead (*read after this step*, *queued for next turn*) does a one-line note under the transcript say so, and it goes away a few seconds later.
 - **`/edit`** — Robo stops, the exchange is backed out of history, and your last message comes back into the box under `✎ EDIT`. Change it and press Enter: Robo starts again from that point as if the first version had never been sent. Esc Esc keeps the text in ↑ history. With messages still queued, `/edit` refuses — they would be sent the moment Robo stops — so remove them first (↑ into the queue, Ctrl+X) or send them (Ctrl+K).
+- **Answering a question Robo asks** works the same way: your answer, with the question's line above it, stays in the conversation at the point Robo asked, under the work so far.
 - **Ctrl+C** — stop the turn and send nothing.
 - **Enter twice on an empty box** — stop the turn (the same as Ctrl+C, for when your hands are on Enter).
 
@@ -168,16 +169,18 @@ export ROBO_TUI_THEME=light
 
 While a turn runs, the TUI says what Robo is doing in plain words, in two places, and keeps it to one line each:
 
-- **The status bar** — the busy indicator's verb is the current step: `running…` while a command runs, `reading…`, `editing…`, `searching…`, `writing…` while the answer streams in, `thinking…` while Robo waits on the model.
-- **The live area** — the collapsed `Tool calls` row names the step and how long it has taken: `▸ Tool calls (3)  ⠋ Running npm test (12s)`. Open it (click, or `/details tools expanded`) and every step reads the same way: `Ran npm test (1.2s)`, `Read src/app.ts`, `Searched the web for vite 8 release notes`, each with its result underneath. Tools Robo has no plain phrase for (plugins, MCP servers) keep their own name.
+- **The status bar** — four dots flip over the whole time Robo works (`⠛ [o_o] running… · 25s`: the square holds, turns over on one diagonal, snaps back, turns over on the other), and the verb is the current step: `running…` while a command runs, `reading…`, `editing…`, `searching…`, `writing…` while the answer streams in, `thinking…` while Robo waits on the model. The dots stop when the turn ends, so a still status bar means Robo is done.
+- **The live area** — one `Thinking` panel and one `Tool calls` panel per working phase: every model call between two things Robo says adds to the same two panels, so a long task reads as *Thinking · Tool calls (6) · what Robo said · Thinking · Tool calls (2) · the answer*, not as a new `Thinking` row for every call. The collapsed `Tool calls` row names the step and how long it has taken: `▸ Tool calls (3)  ⠋ Running npm test (12s)`. Open it (click, or `/details tools expanded`) and every step reads the same way: `Ran npm test (1.2s)`, `Read src/app.ts`, `Searched the web for vite 8 release notes`, each with its result underneath. Tools Robo has no plain phrase for (plugins, MCP servers) keep their own name.
 
 Robo also writes one short line before each step it takes ("Checking the config files to find the current port.") — see `agent.step_narration` in `config.yaml`.
+
+**The receipt.** Every reply closes with one dim line under it — `✓ 7.6s · 1 search · 10:39 PM`: how long the turn took, what Robo did to get there (`3 commands · 2 edits · 1 file read`, with plugin and MCP tools counted as tool calls), and the time it finished. It is written when the turn ends, so a reply with a receipt under it is finished; one without is still being written.
 
 Token counts are detail, not status: they show inside an opened `Thinking` or `Tool calls` panel and never on the collapsed rows. `display.friendly_tool_labels: false` in `config.yaml` brings back the raw labels (`Terminal("npm test")`) and the rotating decorative verbs in the status bar.
 
 ## Busy indicator styles
 
-The status-bar busy indicator is pluggable — the default shows Robo's kawaii face next to the current step (`running…`, `thinking…`) and the elapsed time. Pick a different style via config or the `/indicator` slash command:
+The status-bar busy indicator is pluggable — the default shows the flipping dots and Robo's face next to the current step (`running…`, `thinking…`) and the elapsed time; `emoji` keeps the dots, `ascii` and `unicode` are spinners of their own. Pick a different style via config or the `/indicator` slash command:
 
 ```yaml
 display:

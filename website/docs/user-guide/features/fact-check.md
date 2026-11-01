@@ -17,7 +17,7 @@ This is the layer that goes and looks. Robo already asks the model to verify bef
 
 1. The model finishes its answer.
 2. Robo lists the statements in it that are specific, checkable, and consequential if wrong — at most `fact_check.max_claims` of them. Opinions, plans, code the answer itself wrote, and anything the answer already marks as uncertain are skipped. An answer with nothing checkable (small talk, a question back to you) passes straight through.
-3. Robo researches each statement with the tools above, within `max_steps` tool calls and `timeout_seconds`. You see a status line while this runs — `🔎 Checking 2 statements in the answer against sources…` — and one when it is done.
+3. Robo researches each statement with the tools above, within `max_steps` tool calls and `timeout_seconds`. You see a status line while this runs — `🔎 Checking 2 statements in the answer against sources…` — and one when it is done. In the TUI the status bar also follows the check step by step (`🔎 Checking the answer for statements to verify…`, then `🔎 Checking the answer (2/8): reading settings.py`, …), so the time between the streamed answer and its delivery is never a silent spinner.
 4. Every statement gets a verdict: **confirmed**, **contradicted** (a source Robo actually read says otherwise), or **unverified** (could not be settled — never a guess).
 5. If nothing was contradicted, the answer is delivered unchanged.
 6. If something was contradicted, Robo proposes the correction and asks you.
@@ -28,7 +28,7 @@ The prompt is the same checkpoint the command approvals use, so it looks the sam
 
 | Surface | What you see |
 |---------|--------------|
-| TUI | The `ROBO CHECKPOINT // APPROVAL` panel with what the answer says, what the source says, and the source, then **Allow once / Allow for this session / Deny**. |
+| TUI | The approval card asks **Apply Robo's correction to the answer?**, shows what the answer says, what the source says, and the source, then **Apply correction / Apply corrections this session / Keep answer**. |
 | Desktop | A bar above the composer: **Correction proposed** with **Apply correction**, **Keep answer**, and **Details** (the full proposal). The menu has **Apply corrections this session**. |
 | CLI | The approval panel with the same three choices. |
 | Messaging (Telegram, Discord, Slack, …) | A text message with the proposal; reply `/approve`, `/approve session`, or `/deny`. |
