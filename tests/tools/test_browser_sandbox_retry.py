@@ -17,6 +17,28 @@ import pytest
 import tools.browser_tool as bt
 
 
+_APPARMOR_USERNS = "apparmor_restrict_unprivileged_userns"
+
+
+def _host_apparmor(monkeypatch, value):
+    """Pretend the host's AppArmor user-namespace switch reads `value`
+    (None: the file does not exist). Ubuntu 23.10+ ships it on, so without
+    this the result would depend on the machine running the tests."""
+    real_open = open
+
+    def fake_open(path, *args, **kwargs):
+        if str(path).endswith(_APPARMOR_USERNS):
+            if value is None:
+                raise FileNotFoundError(path)
+            handle = MagicMock()
+            handle.__enter__ = MagicMock(return_value=MagicMock(read=MagicMock(return_value=value)))
+            handle.__exit__ = MagicMock(return_value=False)
+            return handle
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+
+
 @pytest.fixture(autouse=True)
 def _disarmed(monkeypatch):
     monkeypatch.setattr(bt, "_sandbox_bypass_forced", False)
@@ -65,6 +87,7 @@ class TestArming:
     def test_arms_once_and_makes_the_bypass_needed(self, monkeypatch):
         monkeypatch.setattr(bt, "_running_in_docker", lambda: False)
         monkeypatch.setattr(os, "geteuid", lambda: 1000, raising=False)
+        _host_apparmor(monkeypatch, None)
 
         assert bt._needs_chromium_sandbox_bypass() is False
         assert bt._arm_sandbox_bypass() is True
