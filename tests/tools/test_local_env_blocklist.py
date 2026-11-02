@@ -722,3 +722,25 @@ class TestRoboInternalDynamicSecrets:
         assert "GATEWAY_RELAY_SECRET" in _build_provider_env_blocklist()
         assert "GATEWAY_RELAY_DELIVERY_KEY" in _build_provider_env_blocklist()
         assert "GATEWAY_RELAY_ID" in _build_provider_env_blocklist()
+
+
+class TestBlocklistCaseInsensitivity:
+    """A differently-cased spelling of a blocked name is still blocked.
+
+    POSIX treats the names as distinct variables, but Windows children
+    read them as the same one, and the dict built here feeds both.
+    """
+
+    def test_lowercase_provider_key_stripped(self):
+        result_env = _run_with_env(extra_os_env={
+            "openai_api_key": "sk-lowercase",
+            "Openai_Api_Key": "sk-mixedcase",
+        })
+        assert "openai_api_key" not in result_env
+        assert "Openai_Api_Key" not in result_env
+
+    def test_unrelated_lowercase_var_preserved(self):
+        result_env = _run_with_env(extra_os_env={
+            "tenor_api_key": "not-a-robo-credential",
+        })
+        assert result_env.get("tenor_api_key") == "not-a-robo-credential"
