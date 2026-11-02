@@ -283,9 +283,12 @@ class SignalAdapter(BasePlatformAdapter):
         # Stored here so the reaction hooks can skip unauthorized senders
         # (reactions fire before run.py's auth gate, so without this check
         # every inbound DM from any contact gets a 👀 reaction).
-        # "*" means all users allowed (open mode); empty means no restriction
-        # recorded at adapter level (run.py still enforces auth separately).
-        dm_allowed_str = os.getenv("SIGNAL_ALLOWED_USERS", "*")
+        # An explicitly set "*" means all users allowed (open mode). When
+        # the variable is unset the adapter cannot tell who run.py will
+        # authorize (pairing approvals live gateway-side), so the set
+        # stays empty and the reaction gate fails closed for DM senders
+        # instead of announcing the bot to arbitrary contacts.
+        dm_allowed_str = os.getenv("SIGNAL_ALLOWED_USERS", "")
         self.dm_allow_from = set(_parse_comma_list(dm_allowed_str))
 
         # HTTP client
