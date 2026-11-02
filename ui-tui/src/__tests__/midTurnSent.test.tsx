@@ -588,6 +588,49 @@ describe('a message sent mid-turn stays where it was sent', () => {
     expect(appended.some(m => m.tools?.some(line => line.includes('Which one?')))).toBe(true)
   })
 
+  it('lands under the text Robo was streaming, not above it', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'Shall I go ahead and delete the old builds? ' }, type: 'message.delta' } as any)
+    onEvent({ payload: { text: 'Say yes to continue.' }, type: 'message.delta' } as any)
+
+    expect(turnController.recordMidTurnUserMessage({ role: 'user', text: 'yes' })).toBe(true)
+
+    // The question Robo was in the middle of writing is sealed above the
+    // answer; nothing of it is left streaming under the answer.
+    expect(getTurnState().streamSegments.map(m => m.text)).toEqual([
+      'Shall I go ahead and delete the old builds? Say yes to continue.',
+      'yes'
+    ])
+    expect(getTurnState().streaming).toBe('')
+
+    onEvent({ payload: { text: 'Deleting them now.' }, type: 'message.delta' } as any)
+    onEvent({ payload: { text: 'Deleted.' }, type: 'message.complete' } as any)
+
+    expect(appended.map(m => m.text).filter(Boolean)).toEqual([
+      'Shall I go ahead and delete the old builds? Say yes to continue.',
+      'yes',
+      'Deleted.'
+    ])
+  })
+
+  it('a clarify answer lands under the text Robo streamed before asking', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'Two ways to do this; which one?' }, type: 'message.delta' } as any)
+
+    const question: Msg = { kind: 'trail', role: 'system', text: '', tools: ['Clarify("Which one?")'] }
+    const answer: Msg = { kind: 'clarify', role: 'user', text: 'the second' }
+
+    expect(turnController.recordMidTurnMessages([question, answer])).toBe(true)
+    expect(getTurnState().streamSegments.map(m => m.text)).toEqual(['Two ways to do this; which one?', '', 'the second'])
+    expect(getTurnState().streaming).toBe('')
+  })
+
   it('falls back to the transcript when no turn is live', () => {
     expect(turnController.recordMidTurnMessages([{ kind: 'clarify', role: 'user', text: 'idle answer' }])).toBe(false)
     expect(turnController.recordMidTurnUserMessage({ role: 'user', text: 'idle send' })).toBe(false)

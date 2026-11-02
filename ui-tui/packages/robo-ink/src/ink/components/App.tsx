@@ -71,7 +71,20 @@ const STDIN_RESUME_GAP_MS = 5000
 // reports it lost. Terminals that gate delivery without clearing the mode
 // report SET, so an *active* user toggle is never fought; terminals that
 // don't answer DECRQM at all disable the watchdog permanently.
-const MOUSE_WATCHDOG_INTERVAL_MS = 2000
+//
+// Ten seconds: the toggle it recovers from is rare and a few seconds'
+// delay is fine, while every probe is a round of escape sequences on the
+// wire — over SSH, a reply that is still in flight when the link drops is
+// typed into the shell as `1000;2$y61;4;...;52c`. Fewer probes, fewer
+// chances of that.
+const MOUSE_WATCHDOG_INTERVAL_MS = 10_000
+
+// How long a lone ESC may be held back while a terminal query is still
+// waiting for its reply (see flushIncomplete). The reply follows at link
+// latency, so this is an upper bound on how late a real Escape key press
+// can be delivered during that window — never hit on a terminal that
+// answers, and spent once on one that does not.
+const QUERY_REPLY_HOLD_MS = 1000
 type Props = {
   readonly children: ReactNode
   readonly stdin: NodeJS.ReadStream
@@ -201,10 +214,16 @@ export default class App extends PureComponent<Props, State> {
   lastHoverRow = -1
   mouseCaptureTarget: DOMElement | undefined
 
-  // Timestamp of last stdin chunk. Used to detect long gaps (tmux attach,
-  // ssh reconnect, laptop wake) and trigger terminal mode re-assert.
-  // Initialized to now so startup doesn't false-trigger.
+  // Timestamp of the last stdin chunk that carried input from the person
+  // (keys, mouse) — not the terminal's replies to our own queries, which
+  // arrive on the same stream and say nothing about the person being
+  // back. Used to detect long gaps (tmux attach, ssh reconnect, laptop
+  // wake) and trigger terminal mode re-assert. Initialized to now so
+  // startup doesn't false-trigger.
   lastStdinTime = Date.now()
+  // When the current readable event fired; one Date.now() covers all of
+  // its chunks.
+  readableAt = 0
 
   // Mouse-mode watchdog (see MOUSE_WATCHDOG_INTERVAL_MS). Runs while raw
   // mode is on; each tick DECRQM-probes mode 1000 unless a mouse event
@@ -218,6 +237,18 @@ export default class App extends PureComponent<Props, State> {
   // Terminal ignored DECRQM (or reported the mode permanently reset) —
   // probing is useless; the watchdog disables itself for the session.
   mouseWatchdogUnsupported = false
+  // The last probe said RESET and tracking was re-asserted. If the next
+  // probe says RESET again, the terminal's DECRQM does not follow the mode
+  // (Windows Terminal answers RESET for mode 1000 while tracking works) —
+  // probing it would re-assert forever, so the watchdog stops instead.
+  mouseWatchdogReasserted = false
+  // When a lone ESC started being held back for a pending query reply
+  // (0 = not holding). See flushIncomplete.
+  escHoldSince = 0
+  // A hold ran out without any reply: this terminal does not answer
+  // queries, so holding would only delay real Escape presses. Cleared
+  // the moment a reply does arrive.
+  queryReplyHoldSpent = false
   // Timestamp of the last parsed mouse event (any kind).
   lastMouseEventTime = 0
 
@@ -483,9 +514,24 @@ export default class App extends PureComponent<Props, State> {
         // Re-check expectation: state may have legitimately changed (e.g.
         // /mouse off, pause) while the probe was in flight.
         if (r.status === DECRPM_STATUS.RESET && instances.get(this.props.stdout)?.expectsMouseTracking) {
+          if (this.mouseWatchdogReasserted) {
+            // Re-asserted last time and the terminal still says RESET: its
+            // answer does not follow the mode, so there is nothing to learn
+            // from asking again.
+            this.mouseWatchdogUnsupported = true
+            logForDebugging('mouse watchdog: DECRQM does not reflect mode 1000 on this terminal, disabling')
+
+            return
+          }
+
+          this.mouseWatchdogReasserted = true
           logForDebugging('mouse watchdog: terminal lost mouse tracking, re-asserting')
           instances.get(this.props.stdout)?.reassertTerminalModes()
+
+          return
         }
+
+        this.mouseWatchdogReasserted = false
       })
       .catch(() => {
         this.mouseWatchdogProbeInFlight = false
@@ -521,6 +567,32 @@ export default class App extends PureComponent<Props, State> {
       return
     }
 
+    // A lone ESC while the terminal owes us a query reply is almost always
+    // that reply's first byte, split off by the link (SSH and conpty split
+    // anywhere). Flushed now it would become the Escape key — two of them
+    // in a row clear the input — and the rest of the reply would then be
+    // typed as text. Hold it until the reply follows, bounded by
+    // QUERY_REPLY_HOLD_MS so a terminal that never answers cannot delay a
+    // real Escape press for more than that, and only once for such a
+    // terminal.
+    if (this.keyParseState.incomplete === '\x1b' && this.querier.hasPending() && !this.queryReplyHoldSpent) {
+      const now = Date.now()
+
+      if (!this.escHoldSince) {
+        this.escHoldSince = now
+      }
+
+      if (now - this.escHoldSince < QUERY_REPLY_HOLD_MS) {
+        this.incompleteEscapeTimer = setTimeout(this.flushIncomplete, this.NORMAL_TIMEOUT)
+
+        return
+      }
+
+      this.queryReplyHoldSpent = true
+    }
+
+    this.escHoldSince = 0
+
     // Process incomplete/paste state as a flush operation (input=null).
     // This reuses all existing parsing logic.
     this.processInput(null)
@@ -528,9 +600,29 @@ export default class App extends PureComponent<Props, State> {
 
   // Process input through the parser and handle the results
   processInput = (input: string | Buffer | null): void => {
+    if (input !== null) {
+      // Real bytes arrived: whatever was being held is now complete or
+      // continued; the hold starts over for the next lone ESC.
+      this.escHoldSince = 0
+    }
+
     // Parse input using our state machine
     const [keys, newState] = parseMultipleKeypresses(this.keyParseState, input)
     this.keyParseState = newState
+
+    // Detect long stdin gaps (tmux attach, ssh reconnect, laptop wake).
+    // The terminal may have reset DEC private modes; re-assert mouse
+    // tracking. Terminal replies to our queries don't count: they are the
+    // terminal talking, not the person.
+    if (input !== null && keys.some(key => key.kind !== 'response')) {
+      const now = this.readableAt || Date.now()
+
+      if (now - this.lastStdinTime > STDIN_RESUME_GAP_MS) {
+        this.props.onStdinResume?.()
+      }
+
+      this.lastStdinTime = now
+    }
 
     // Process ALL keys in a SINGLE discreteUpdates call to prevent
     // "Maximum update depth exceeded" error when many keys arrive at once
@@ -557,17 +649,11 @@ export default class App extends PureComponent<Props, State> {
     }
   }
   handleReadable = (): void => {
-    // Detect long stdin gaps (tmux attach, ssh reconnect, laptop wake).
-    // The terminal may have reset DEC private modes; re-assert mouse
-    // tracking. Checked before the read loop so one Date.now() covers
-    // all chunks in this readable event.
-    const now = Date.now()
-
-    if (now - this.lastStdinTime > STDIN_RESUME_GAP_MS) {
-      this.props.onStdinResume?.()
-    }
-
-    this.lastStdinTime = now
+    // Long stdin gaps (tmux attach, ssh reconnect, laptop wake) are
+    // detected in processInput, once the chunk is parsed: only input from
+    // the person counts, so the watchdog's own query replies — the one
+    // thing that arrives on an idle session — never read as a resume.
+    this.readableAt = Date.now()
 
     try {
       let chunk
@@ -696,6 +782,9 @@ function processKeysInBatch(app: App, items: ParsedInput[], _unused1: undefined,
     // Terminal responses (DECRPM, DA1, OSC replies, etc.) are not user
     // input — route them to the querier to resolve pending promises.
     if (item.kind === 'response') {
+      // The terminal does answer: holding a lone ESC for its replies is
+      // worth it again (see flushIncomplete).
+      app.queryReplyHoldSpent = false
       app.querier.onResponse(item.response)
 
       continue
