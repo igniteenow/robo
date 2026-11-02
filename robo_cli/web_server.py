@@ -4414,6 +4414,19 @@ async def warm_up_audio_transcription(profile: Optional[str] = None):
     return {"ok": True, "scheduled": _start_desktop_stt_warm_up(profile)}
 
 
+def _local_stt_provider_active(profile: Optional[str] = None) -> bool:
+    """True when speech-to-text runs on this machine (faster-whisper or a
+    local command): free to run as often as a live preview needs."""
+    try:
+        from tools.transcription_tools import _get_provider, _load_stt_config
+
+        with _config_profile_scope(profile):
+            return _get_provider(_load_stt_config()) in {"local", "local_command"}
+    except Exception:
+        _log.debug("could not resolve the STT provider for a preview", exc_info=True)
+        return False
+
+
 @app.post("/api/audio/transcribe")
 async def transcribe_audio_upload(
     payload: AudioTranscriptionRequest, profile: Optional[str] = None
@@ -4449,6 +4462,12 @@ async def transcribe_audio_upload(
         raise HTTPException(status_code=400, detail="Audio recording is empty")
     if len(audio_bytes) > _MAX_TRANSCRIPTION_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Audio recording is too large")
+
+    if payload.preview and not _local_stt_provider_active(profile):
+        # Previews re-send the whole recording so far every couple of
+        # seconds; on a cloud provider each one is billed. The client stops
+        # asking for this recording and shows the words when it ends.
+        return {"ok": True, "transcript": "", "preview_unsupported": True}
 
     temp_path = ""
     try:

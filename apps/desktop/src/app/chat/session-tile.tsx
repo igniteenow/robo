@@ -112,6 +112,12 @@ const noop = () => undefined
 const tileTranscribeAudio = async (audio: Blob) =>
   (await transcribeAudio(await blobToDataUrl(audio), audio.type)).transcript
 
+const tilePreviewAudio = async (audio: Blob) => {
+  const result = await transcribeAudio(await blobToDataUrl(audio), audio.type, { preview: true })
+
+  return result.preview_unsupported ? null : result.transcript
+}
+
 /** The real chat surface for ONE bound session, used by tile panes and by
  *  Team mode's member panes: the same ChatView/composer tree as the primary,
  *  pointed at this runtime through its own SessionView + ComposerScope. */
@@ -216,6 +222,7 @@ export function TileChat({
           onPickFiles={onPickFiles}
           onPickFolders={onPickFolders}
           onPickImages={onPickImages}
+          onPreviewAudio={tilePreviewAudio}
           onReload={actions.reloadFromMessage}
           onRemoveAttachment={onRemoveAttachment}
           onRestoreToMessage={actions.restoreToMessage}

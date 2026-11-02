@@ -37,6 +37,7 @@ interface UseComposerVoiceArgs {
    *  user speaks over the model while it is still generating. */
   onInterrupt?: () => Promise<void> | void
   onSubmit: ChatBarProps['onSubmit']
+  onPreviewAudio?: ChatBarProps['onPreviewAudio']
   onTranscribeAudio: ChatBarProps['onTranscribeAudio']
   sessionId: string | null | undefined
   /** This composer's focus-bus key — voice toggles targeting another
@@ -59,6 +60,7 @@ export function useComposerVoice({
   maxRecordingSeconds,
   onInterrupt,
   onSubmit,
+  onPreviewAudio,
   onTranscribeAudio,
   sessionId,
   target
@@ -75,6 +77,7 @@ export function useComposerVoice({
   const { dictate, voiceActivityState, voiceStatus } = useVoiceRecorder({
     focusInput,
     maxRecordingSeconds,
+    onPreviewAudio,
     onTranscript: insertText,
     onTranscribeAudio
   })

@@ -95,6 +95,10 @@ class WhatsAppOnboardingApply(BaseModel):
 class AudioTranscriptionRequest(BaseModel):
     data_url: str
     mime_type: Optional[str] = None
+    # A live preview of a recording still in progress (desktop dictation
+    # shows the words as they are spoken). Only ever run on a local provider:
+    # a paid cloud provider would bill the same audio again on every preview.
+    preview: bool = False
 
 
 class ManagedFileUpload(BaseModel):

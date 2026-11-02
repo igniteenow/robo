@@ -48,8 +48,16 @@ class FakeRecorder {
     return true
   }
 
-  start() {
+  timeslice: number | undefined
+
+  start(timeslice?: number) {
+    this.timeslice = timeslice
     this.state = 'recording'
+  }
+
+  /** One slice arriving mid-recording, the way a timesliced recorder delivers. */
+  slice(data: string) {
+    this.ondataavailable?.({ data: new Blob([data], { type: 'audio/webm' }) })
   }
 
   stop() {
@@ -117,6 +125,34 @@ describe('useMicRecorder', () => {
     expect(stream.tracks[0].readyState).toBe('ended')
     expect(FakeAudioContext.instances[0].closed).toBe(true)
     expect(result.current.recording).toBe(false)
+  })
+
+  it('snapshot() reads the audio so far without disturbing the recording', async () => {
+    const { result } = renderHook(() => useMicRecorder(copy))
+
+    expect(result.current.handle.snapshot()).toBeNull()
+    await act(() => result.current.handle.start())
+
+    const recorder = FakeRecorder.instances[0]
+
+    // Recorded in slices, so there is something to read before stop().
+    expect(recorder.timeslice).toBeGreaterThan(0)
+    expect(result.current.handle.snapshot()).toBeNull()
+
+    recorder.slice('ab')
+    recorder.slice('cd')
+
+    const soFar = result.current.handle.snapshot()
+
+    expect(soFar).toBeInstanceOf(Blob)
+    expect(await soFar!.text()).toBe('abcd')
+    expect(recorder.state).toBe('recording')
+
+    // The final recording is every slice, the one stop() flushes included.
+    const recording = await act(() => result.current.handle.stop())
+
+    expect(await recording!.audio.text()).toBe('abcdx')
+    expect(result.current.handle.snapshot()).toBeNull()
   })
 
   it('cancel() releases the device and delivers nothing', async () => {

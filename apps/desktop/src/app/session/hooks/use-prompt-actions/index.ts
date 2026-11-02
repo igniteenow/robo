@@ -571,6 +571,21 @@ export function usePromptActions({
     [copy.sttDisabled, sttEnabled]
   )
 
+  /** The words of a dictation still being recorded, or null when this
+   *  machine's speech-to-text cannot preview (not local, or turned off). */
+  const previewVoiceAudio = useCallback(
+    async (audio: Blob): Promise<string | null> => {
+      if (!sttEnabled) {
+        return null
+      }
+
+      const result = await transcribeAudio(await blobToDataUrl(audio), audio.type, { preview: true })
+
+      return result.preview_unsupported ? null : result.transcript
+    },
+    [sttEnabled]
+  )
+
   const cancelRun = useCallback(async () => {
     // Read from the ref, not the closure-captured `activeSessionId`. The
     // actions bag is a stable ref mutated in place (Object.assign on each
@@ -979,6 +994,7 @@ export function usePromptActions({
     /** @deprecated Use `redirectPrompt` — this is an active-turn redirect, not tool steer. */
     steerPrompt: redirectPrompt,
     submitText,
+    previewVoiceAudio,
     transcribeVoiceAudio
   }
 }

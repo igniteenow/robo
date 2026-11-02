@@ -172,6 +172,66 @@ export function VoiceActivity({ state }: { state: VoiceActivityState }) {
 
   const recording = state.status === 'recording'
   const title = recording ? t.composer.dictating : t.composer.transcribing
+  const liveText = state.liveText?.trim() ?? ''
+
+  return (
+    <>
+      {liveText && <LiveTranscript text={liveText} />}
+      <VoiceActivityPill
+        elapsedSeconds={state.elapsedSeconds}
+        level={state.level}
+        recording={recording}
+        title={title}
+      />
+    </>
+  )
+}
+
+// Characters of the live transcript kept on screen: about two lines of the
+// pill's width. The newest words are what tells you it is still listening.
+const LIVE_TEXT_TAIL = 160
+
+/** The tail of `text` that fits LIVE_TEXT_TAIL, cut at a word boundary. */
+export function liveTranscriptTail(text: string, max = LIVE_TEXT_TAIL): string {
+  const clean = text.replace(/\s+/g, ' ').trim()
+
+  if (clean.length <= max) {
+    return clean
+  }
+
+  const tail = clean.slice(clean.length - max)
+  const space = tail.indexOf(' ')
+
+  return `…${space > 0 && space < 24 ? tail.slice(space + 1) : tail}`
+}
+
+/** The words heard so far, above the recording pill. Screen readers are not
+ *  sent every update (the pill's own status says "recording"); the final
+ *  text lands in the input. */
+function LiveTranscript({ text }: { text: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="line-clamp-2 rounded-xl border border-border/40 bg-muted/35 px-2.5 py-1 text-xs leading-4 text-foreground/80"
+      data-testid="voice-live-transcript"
+    >
+      {liveTranscriptTail(text)}
+    </div>
+  )
+}
+
+function VoiceActivityPill({
+  elapsedSeconds,
+  level,
+  recording,
+  title
+}: {
+  elapsedSeconds: number
+  level: number
+  recording: boolean
+  title: string
+}) {
+  const state = { elapsedSeconds, level }
 
   return (
     <div

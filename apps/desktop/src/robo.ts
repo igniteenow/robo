@@ -1621,14 +1621,22 @@ export function warmUpTranscription(): Promise<{ ok: boolean; scheduled?: boolea
   })
 }
 
-export function transcribeAudio(dataUrl: string, mimeType?: string): Promise<AudioTranscriptionResponse> {
+/** `preview`: a live look at a recording still in progress. The backend only
+ *  runs it on a local (free) provider and otherwise answers
+ *  `preview_unsupported` without transcribing anything. */
+export function transcribeAudio(
+  dataUrl: string,
+  mimeType?: string,
+  options: { preview?: boolean } = {}
+): Promise<AudioTranscriptionResponse> {
   return window.roboDesktop.api<AudioTranscriptionResponse>({
     path: '/api/audio/transcribe',
     method: 'POST',
     ...profileScoped(),
     body: {
       data_url: dataUrl,
-      mime_type: mimeType
+      mime_type: mimeType,
+      ...(options.preview && { preview: true })
     },
     // Transcription blocks until provider STT, file handling, and response
     // encoding finish. Remote providers and long clips regularly exceed the
