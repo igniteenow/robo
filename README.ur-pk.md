@@ -176,6 +176,6 @@ HTTP API (صرف `API_SERVER_KEY` سیٹ ہونے پر چلتی ہے) اور Doc
 
 [MIT](LICENSE) · [Ignitee Now](https://igniteenow.com) کی تیار کردہ۔
 
-<sub>Nous Research کے MIT لائسنس یافتہ [Hermes Agent](https://github.com/NousResearch/hermes-agent) پر مبنی۔ دیکھیں [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)۔</sub>
+<sub>تیسرے فریق کے نوٹس: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)۔</sub>
 
 </div>

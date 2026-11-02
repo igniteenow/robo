@@ -199,4 +199,4 @@ hardware; `robo doctor` muestra lo que está disponible.
 
 [MIT](LICENSE) · Creado por [Ignitee Now](https://igniteenow.com).
 
-<sub>Basado en [Hermes Agent](https://github.com/NousResearch/hermes-agent) de Nous Research, con licencia MIT. Ver [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>
+<sub>Avisos de terceros: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>
