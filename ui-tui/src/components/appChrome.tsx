@@ -23,13 +23,41 @@ import type { Msg, Usage } from '../types.js'
 import { scrollbarColors } from './overlayPrimitives.js'
 
 const FACE_TICK_MS = 2500
+
+// Four dots that flip while Robo works: a 2×2 square of dots holds for
+// half a second, turns over on one diagonal — for one tick only the two
+// dots on the axis show — snaps back to a square, then turns over on the
+// other diagonal. It leads the face and the verb so the status rule shows
+// motion between the slow face changes — the face alone ticks every 2.5 s
+// and read as frozen. Braille cells (U+2800 block) are one column in every
+// monospace font, the same block the `unicode` indicator style uses.
+const DOTS_SQUARE = '⠛' // dots 1 2 4 5: the 2×2 square
+const DOTS_FLIP_A = '⠑' // dots 1 5: the ╲ diagonal
+const DOTS_FLIP_B = '⠊' // dots 2 4: the ╱ diagonal
+const DOTS_HOLD = 4 // ticks the square holds between flips
+
+export const WORK_DOTS_FRAMES = [
+  ...Array<string>(DOTS_HOLD).fill(DOTS_SQUARE),
+  DOTS_FLIP_A,
+  ...Array<string>(DOTS_HOLD).fill(DOTS_SQUARE),
+  DOTS_FLIP_B
+]
+export const WORK_DOTS_TICK_MS = 125
+// The face advances once per FACE_TICK_MS on the same ticker as the dots.
+const FACE_TICKS_PER_FRAME = FACE_TICK_MS / WORK_DOTS_TICK_MS
+
+export const workDotsFrame = (tick: number) => WORK_DOTS_FRAMES[tick % WORK_DOTS_FRAMES.length] ?? DOTS_SQUARE
 const HEART_COLORS = ['#ff5fa2', '#ff4d6d']
 
 // Keep verb segment width stable so status-bar content to the right doesn't
 // jitter when the verb changes between short/long words. Sized for the
 // decorative rotation AND the live activity verbs (lib/toolPhrase.ts), which
 // are capped at STATUS_VERB_MAX so they can never widen the slot.
-const LONGEST_VERB = Math.max(VERBS.reduce((max, v) => Math.max(max, v.length), 0), STATUS_VERB_MAX)
+const LONGEST_VERB = Math.max(
+  VERBS.reduce((max, v) => Math.max(max, v.length), 0),
+  STATUS_VERB_MAX
+)
+
 export const VERB_PAD_LEN = LONGEST_VERB + 1 // + ellipsis
 export const padVerb = (verb: string) => `${verb}…`.padEnd(VERB_PAD_LEN, ' ')
 
@@ -50,26 +78,30 @@ interface IndicatorRender {
   // styles keep the verb-rotation flavour users associate with the
   // running… status.
   showVerb: boolean
+  // The flipping dots lead the frame (kaomoji / emoji). The ascii and
+  // unicode styles are spinners already and keep their single glyph.
+  dots: boolean
 }
 
 const renderIndicator = (style: IndicatorStyle, tick: number): IndicatorRender => {
   if (style === 'kaomoji') {
-    return { frame: FACES[tick % FACES.length] ?? '', intervalMs: FACE_TICK_MS, showVerb: true }
+    const face = FACES[Math.floor(tick / FACE_TICKS_PER_FRAME) % FACES.length] ?? ''
+
+    return { frame: face, intervalMs: WORK_DOTS_TICK_MS, showVerb: true, dots: true }
   }
 
   if (style === 'emoji') {
-    return {
-      frame: EMOJI_FRAMES[tick % EMOJI_FRAMES.length] ?? '◆ ',
-      intervalMs: SPINNER_TICK_MS * 6,
-      showVerb: true
-    }
+    const frame = EMOJI_FRAMES[Math.floor(tick / 5) % EMOJI_FRAMES.length] ?? '◆ '
+
+    return { frame, intervalMs: WORK_DOTS_TICK_MS, showVerb: true, dots: true }
   }
 
   if (style === 'ascii') {
     return {
       frame: ASCII_FRAMES[tick % ASCII_FRAMES.length] ?? '|',
       intervalMs: SPINNER_TICK_MS,
-      showVerb: true
+      showVerb: true,
+      dots: false
     }
   }
 
@@ -80,7 +112,7 @@ const renderIndicator = (style: IndicatorStyle, tick: number): IndicatorRender =
   const spinner = unicodeSpinners.braille
   const frame = spinner.frames[tick % spinner.frames.length] ?? '⠋'
 
-  return { frame, intervalMs: Math.max(SPINNER_TICK_MS, spinner.interval), showVerb: false }
+  return { frame, intervalMs: Math.max(SPINNER_TICK_MS, spinner.interval), showVerb: false, dots: false }
 }
 
 // `FACES` / `EMOJI_FRAMES` are static, so measure their widest glyph once at
@@ -88,13 +120,17 @@ const renderIndicator = (style: IndicatorStyle, tick: number): IndicatorRender =
 const KAOMOJI_FRAME_WIDTH = FACES.reduce((max, f) => Math.max(max, stringWidth(f)), 1)
 const EMOJI_FRAME_WIDTH = EMOJI_FRAMES.reduce((max, f) => Math.max(max, stringWidth(f)), 1)
 
+// ` dots ` ahead of the face for the styles that carry them — spaced off
+// the rule's left border so the two accent glyphs never read as one.
+const WORK_DOTS_WIDTH = 3
+
 const indicatorFrameWidth = (style: IndicatorStyle): number => {
   if (style === 'kaomoji') {
-    return KAOMOJI_FRAME_WIDTH
+    return WORK_DOTS_WIDTH + KAOMOJI_FRAME_WIDTH
   }
 
   if (style === 'emoji') {
-    return EMOJI_FRAME_WIDTH
+    return WORK_DOTS_WIDTH + EMOJI_FRAME_WIDTH
   }
 
   // 'ascii' and 'unicode' are single-column glyphs.
@@ -124,7 +160,17 @@ export const busyIndicatorWidth = (style: IndicatorStyle, hasDuration: boolean):
   return indicatorFrameWidth(style) + verb + duration
 }
 
-function FaceTicker({ color, startedAt, style }: { color: string; startedAt?: null | number; style: IndicatorStyle }) {
+function FaceTicker({
+  color,
+  dotsColor,
+  startedAt,
+  style
+}: {
+  color: string
+  dotsColor: string
+  startedAt?: null | number
+  style: IndicatorStyle
+}) {
   const [tick, setTick] = useState(() => Math.floor(Math.random() * 1000))
   const [verbTick, setVerbTick] = useState(() => Math.floor(Math.random() * VERBS.length))
   const [now, setNow] = useState(() => Date.now())
@@ -173,7 +219,7 @@ function FaceTicker({ color, startedAt, style }: { color: string; startedAt?: nu
     }
   }, [intervalMs, isOccluded, showVerb])
 
-  const { frame } = renderIndicator(style, tick)
+  const { dots, frame } = renderIndicator(style, tick)
   const verb = liveVerb || (VERBS[verbTick % VERBS.length] ?? '')
   const verbSegment = showVerb ? ` ${padVerb(verb)}` : ''
   // Leading space keeps a gap between the frame and the duration when the
@@ -184,6 +230,7 @@ function FaceTicker({ color, startedAt, style }: { color: string; startedAt?: nu
 
   return (
     <Text color={color}>
+      {dots ? <Text color={dotsColor}> {workDotsFrame(tick)} </Text> : null}
       {frame}
       {verbSegment}
       {durationSegment}
@@ -634,7 +681,7 @@ export function StatusRule({
       <Text color={t.color.accent}> │ {sessionCountText}</Text>
     </Box>
   ) : (
-    <Text color={t.color.muted}>  ·  {sessionCountText}</Text>
+    <Text color={t.color.muted}> · {sessionCountText}</Text>
   )
 
   return (
@@ -645,7 +692,9 @@ export function StatusRule({
             renders as a separate shrinkable box below so a long notice
             ellipsizes instead of crushing model │ ctx (R3-M7). */}
         <Box flexDirection="row" flexShrink={0}>
-          <Text bold color={t.color.accent}>{'▍'}</Text>
+          <Text bold color={t.color.accent}>
+            {'▍'}
+          </Text>
           {showBattery ? (
             <Text color={batteryColorVal}>
               {batteryText}
@@ -653,7 +702,12 @@ export function StatusRule({
             </Text>
           ) : null}
           {busy ? (
-            <FaceTicker color={statusColor} startedAt={turnStartedAt} style={indicatorStyle} />
+            <FaceTicker
+              color={statusColor}
+              dotsColor={t.color.accent}
+              startedAt={turnStartedAt}
+              style={indicatorStyle}
+            />
           ) : showNotice ? null : (
             <Text color={statusColor} wrap="truncate-end">
               {status}

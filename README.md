@@ -12,6 +12,7 @@ It runs on your own computer, uses real tools, and asks before anything risky.
 
 ![Windows · macOS · Linux](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0E1437?style=for-the-badge)
 ![Terminal · Desktop · Browser · Voice · API](https://img.shields.io/badge/Terminal%20%C2%B7%20Desktop%20%C2%B7%20Browser%20%C2%B7%20Voice%20%C2%B7%20API-3F3E98?style=for-the-badge)
+[![MIT license](https://img.shields.io/badge/License-MIT-0E1437?style=for-the-badge)](LICENSE)
 
 [Install](#install) · [Run it](#run-it) · [Use it from anywhere](#use-it-from-anywhere) · [What it can do](#what-it-can-do)
 
@@ -34,8 +35,9 @@ It runs on your own computer, uses real tools, and asks before anything risky.
 | "Compare these two spreadsheets and list who is missing from the new one." | "Research the three best options for X, compare them, and give me the sources." |
 
 Robo plans the job, does it with real tools (terminal, files, browser, code), checks its own work,
-and asks **Allow once / Allow for this session / Deny** before anything risky. *Allow for this session*
-stops the questions until that session ends; commands on Robo's block list stay blocked.
+and asks **Allow once / Allow for this session / Deny** before anything risky — saying what it was
+trying to do and what to look at before you allow it. *Allow for this session* stops the questions
+until that session ends; commands on Robo's block list stay blocked.
 It works with the model you choose: OpenAI, Anthropic, Gemini, DeepSeek, Kimi, OpenRouter,
 or a local model through Ollama or any OpenAI-compatible server.
 
@@ -121,7 +123,7 @@ You can also message Robo from **Telegram, WhatsApp, Discord, Slack**, and more:
 
 - **Works from your documents.** Attach logs, notes, code, CSV, JSON, HTML, or PowerPoint files of any size (`/attach <file>`). Robo indexes them on your machine and answers with the exact passages.
 - **Gets real work done.** Coding, debugging, research, writing, data work, file cleanup, and system admin, with a real terminal, file editing, a real browser, and code execution.
-- **Shows its work and checks it.** Writes one short line before each step it takes, and checks each answer against sources with its own research — when a source disagrees, it asks before correcting the answer.
+- **Shows its work and checks it.** Writes one short line before each step, reads a file before it edits it, and won't tell you "tests pass" without having run them. Each answer is checked against sources with its own research — when a source disagrees, it asks before correcting — and ends with a receipt: how long it took, what it did, when it finished.
 - **Looks inside software safely.** Static analysis of programs with Ghidra, radare2, or rizin when installed, or a built-in parser when not. The file is never run.
 - **Gets sharper with use.** Saves what works as reusable skills, keeps long-term memory, searches past conversations, and learns how you like things done.
 - **Works while you don't.** Scheduled jobs ("every morning at 8…") and parallel sub-agents.
@@ -134,6 +136,7 @@ You can also message Robo from **Telegram, WhatsApp, Discord, Slack**, and more:
 | `robo model` | Switch model or provider |
 | `robo update` | Update Robo (or **Update now** in the desktop app) |
 | `robo doctor` | Check your setup |
+| `robo setup name` | Tell Robo what to call you |
 | `/help` | All commands inside a chat |
 | `/edit` | Take back your last message and rewrite it |
 
@@ -142,6 +145,10 @@ was running is stopped). `/busy steer` lets the current step finish first; `/bus
 message for the next turn.
 
 ## Make it yours
+
+Tell Robo your name with `robo setup name` (the setup wizard asks too). In the terminal your messages
+are then headed with your name — `$Ahmi` — and Robo's with `$Robo`, so a long conversation is easy to
+read back.
 
 Everything is plain files in `~/.robo`, easy to edit, back up, or move. On Windows the folder is
 `%USERPROFILE%\.robo` when you installed with `install-robo.ps1`, and `%LOCALAPPDATA%\robo` when you
@@ -192,12 +199,20 @@ Docker Desktop 4.34 or later: sign in, then **Settings → Resources → Network
 
 </details>
 
+## Security
+
+Robo runs on your computer and asks before anything risky. A short block list — wiping a disk,
+rebooting the machine, that kind of thing — stays blocked no matter what, even with approvals turned
+off, and you can add your own rules. Heavy or untrusted jobs can run in Docker, over SSH, or in a
+cloud sandbox. Details in [SECURITY.md](SECURITY.md).
+
 ## Early access
 
 Robo 3.0.1 is in early access. Try it and tell us what you think:
 [open an issue](https://github.com/igniteenow/robo/issues) or email
 [support@igniteenow.com](mailto:support@igniteenow.com). Voice and GPU behavior depend on
-your hardware; `robo doctor` shows what's available.
+your hardware; `robo doctor` shows what's available. Want to help build it? See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

@@ -97,6 +97,48 @@ describe('createGatewayEventHandler', () => {
     expect(getTurnState().todos).toEqual([])
   })
 
+  it('closes the reply with a receipt: how long, what Robo did, when', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { name: 'web_search', text: 'weather', tool_id: 't1' }, type: 'tool.start' } as any)
+    onEvent({ payload: { name: 'terminal', text: 'ls', tool_id: 't2' }, type: 'tool.start' } as any)
+    onEvent({ payload: { text: 'Here you go.' }, type: 'message.complete' } as any)
+
+    const reply = appended.find(msg => msg.role === 'assistant' && msg.text === 'Here you go.')
+
+    expect(reply?.receipt).toMatch(/^\d+\.\ds · 1 command · 1 search · .*\d/)
+
+    // The next turn starts its own count.
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'Done.' }, type: 'message.complete' } as any)
+
+    const next = appended.find(msg => msg.role === 'assistant' && msg.text === 'Done.')
+
+    expect(next?.receipt).toMatch(/^\d+\.\ds · .*\d/)
+    expect(next?.receipt).not.toContain('search')
+
+    // An answer already published mid-turn gets the receipt on that piece.
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'All set.' }, type: 'message.interim' } as any)
+    onEvent({ payload: { response_previewed: true, text: 'All set.' }, type: 'message.complete' } as any)
+
+    const previewed = appended.filter(msg => msg.role === 'assistant' && msg.text === 'All set.')
+
+    expect(previewed).toHaveLength(1)
+    expect(previewed[0]?.receipt).toMatch(/\d/)
+
+    // A failed turn is not a finished reply: no receipt under the error.
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { error: 'boom', status: 'error', text: 'Error: boom' }, type: 'message.complete' } as any)
+
+    const failed = appended.find(msg => msg.role === 'assistant' && msg.text === 'Error: boom')
+
+    expect(failed).toBeDefined()
+    expect(failed?.receipt).toBeUndefined()
+  })
+
   it('opens a billing confirm dialog routing Ignitee Now to /topup', () => {
     const appended: Msg[] = []
     const ctx = buildCtx(appended)
@@ -217,6 +259,47 @@ describe('createGatewayEventHandler', () => {
 
       vi.advanceTimersByTime(6001)
       expect(getUiState().status).toBe('ready')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a fact-check progress line in the status bar until the next step, unlike other lifecycle lines', () => {
+    const ctx = buildCtx([])
+    const onEvent = createGatewayEventHandler(ctx)
+
+    vi.useFakeTimers()
+
+    try {
+      patchUiState({ busy: true, status: 'running…' })
+
+      onEvent({
+        payload: { kind: 'lifecycle', text: '🔎 Checking 2 statements in the answer against sources…' },
+        type: 'status.update'
+      } as any)
+      expect(getUiState().status).toBe('🔎 Checking 2 statements in the answer against sources…')
+      vi.advanceTimersByTime(4001)
+      // A lifecycle line still reverts after a few seconds.
+      expect(getUiState().status).toBe('running…')
+
+      onEvent({
+        payload: { kind: 'fact_check', text: '🔎 Checking the answer (1/8): reading settings.py' },
+        type: 'status.update'
+      } as any)
+      expect(getUiState().status).toBe('🔎 Checking the answer (1/8): reading settings.py')
+      vi.advanceTimersByTime(60_000)
+      // The research step stays on screen while it runs…
+      expect(getUiState().status).toBe('🔎 Checking the answer (1/8): reading settings.py')
+      // …and is in the live activity feed too.
+      expect(getTurnState().activity.map(item => item.text)).toContain(
+        '🔎 Checking the answer (1/8): reading settings.py'
+      )
+
+      onEvent({
+        payload: { kind: 'fact_check', text: '🔎 Checking the answer (2/8): searching files for "PORT"' },
+        type: 'status.update'
+      } as any)
+      expect(getUiState().status).toBe('🔎 Checking the answer (2/8): searching files for "PORT"')
     } finally {
       vi.useRealTimers()
     }
@@ -467,6 +550,47 @@ describe('createGatewayEventHandler', () => {
     expect(appended[0]?.thinking).toBe(streamed)
     expect(appended[0]?.thinkingTokens).toBe(estimateTokensRough(streamed))
     expect(appended[1]).toMatchObject({ role: 'assistant', text: 'final answer' })
+  })
+
+  it('keeps one Thinking panel per working phase: every model call adds to it until Robo says something', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'Plan: read the config first.' }, type: 'reasoning.delta' } as any)
+    onEvent({ payload: { name: 'read_file', text: 'config.yaml', tool_id: 't1' }, type: 'tool.start' } as any)
+    onEvent({ payload: { name: 'read_file', tool_id: 't1' }, type: 'tool.complete' } as any)
+    onEvent({ payload: { text: 'The port is 9119; now the test.' }, type: 'reasoning.delta' } as any)
+    onEvent({ payload: { name: 'terminal', text: 'npm test', tool_id: 't2' }, type: 'tool.start' } as any)
+    onEvent({ payload: { name: 'terminal', tool_id: 't2' }, type: 'tool.complete' } as any)
+    onEvent({ payload: { text: 'Tests pass; writing the answer.' }, type: 'reasoning.delta' } as any)
+    onEvent({ payload: { text: 'All good.' }, type: 'message.complete' } as any)
+
+    const thinking = appended.filter(msg => msg.kind === 'trail' && msg.thinking?.trim())
+
+    // Three model calls, one Thinking panel, in order, with the tool rows beside it.
+    expect(thinking).toHaveLength(1)
+    expect(thinking[0]?.thinking).toBe(
+      'Plan: read the config first.\n\nThe port is 9119; now the test.\n\nTests pass; writing the answer.'
+    )
+    expect(appended.flatMap(msg => msg.tools ?? [])).toHaveLength(2)
+    expect(appended.at(-1)).toMatchObject({ role: 'assistant', text: 'All good.' })
+  })
+
+  it('opens a new Thinking panel after Robo says something mid-turn', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'First look.' }, type: 'reasoning.delta' } as any)
+    onEvent({ payload: { text: 'Found the cause, fixing it now.' }, type: 'message.interim' } as any)
+    onEvent({ payload: { text: 'Second look.' }, type: 'reasoning.delta' } as any)
+    onEvent({ payload: { text: 'Fixed.' }, type: 'message.complete' } as any)
+
+    const thinking = appended.filter(msg => msg.kind === 'trail' && msg.thinking?.trim()).map(msg => msg.thinking)
+
+    expect(thinking).toEqual(['First look.', 'Second look.'])
+    expect(appended.map(msg => msg.text).filter(Boolean)).toEqual(['Found the cause, fixing it now.', 'Fixed.'])
   })
 
   it('renders moa.reference as a labelled thinking-style segment', () => {
@@ -1237,6 +1361,59 @@ describe('createGatewayEventHandler', () => {
       allowPermanent: false,
       choices: ['once', 'session', 'deny']
     })
+  })
+
+  it('carries the optional approval context (intent, check, review, kind) when the gateway sends it', () => {
+    const onEvent = createGatewayEventHandler(buildCtx([]))
+
+    onEvent({
+      payload: {
+        check: 'Rewrites or discards git history.',
+        command: 'git push --force origin main',
+        description: 'git force push (rewrites remote history)',
+        intent: 'Pushing the branch so the PR can be opened.',
+        review: "Robo's reviewer could not clear this on its own: it rewrites main."
+      },
+      type: 'approval.request'
+    } as any)
+
+    expect(getOverlayState().approval).toMatchObject({
+      check: 'Rewrites or discards git history.',
+      intent: 'Pushing the branch so the PR can be opened.',
+      kind: 'command',
+      review: "Robo's reviewer could not clear this on its own: it rewrites main."
+    })
+  })
+
+  it('leaves the context fields out when an older gateway omits them or sends blanks', () => {
+    const onEvent = createGatewayEventHandler(buildCtx([]))
+
+    onEvent({
+      payload: { check: '   ', command: 'rm -rf /tmp/x', description: 'dangerous command', intent: 42 },
+      type: 'approval.request'
+    } as any)
+
+    const approval = getOverlayState().approval
+
+    expect(approval?.intent).toBeUndefined()
+    expect(approval?.check).toBeUndefined()
+    expect(approval?.review).toBeUndefined()
+    expect(approval?.kind).toBe('command')
+  })
+
+  it('marks a fact-check correction so the prompt uses correction wording', () => {
+    const onEvent = createGatewayEventHandler(buildCtx([]))
+
+    onEvent({
+      payload: {
+        command: 'Answer says: 8080\nSource says: 9090',
+        description: 'Correction proposed',
+        kind: 'correction'
+      },
+      type: 'approval.request'
+    } as any)
+
+    expect(getOverlayState().approval).toMatchObject({ kind: 'correction' })
   })
 
   it('preserves allow_permanent=false on approval overlays (tirith warning)', () => {

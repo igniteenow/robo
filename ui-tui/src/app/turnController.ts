@@ -5,8 +5,9 @@ import {
   STREAM_SCROLL_BATCH_MS,
   STREAM_TYPING_BATCH_MS
 } from '../config/timing.js'
+import { turnReceipt } from '../domain/receipt.js'
 import type { SessionInterruptResponse, SubagentEventPayload } from '../gatewayTypes.js'
-import { appendToolShelfMessage, isToolShelfMessage } from '../lib/liveProgress.js'
+import { appendToolShelfMessage, findThinkingHolder, isToolShelfMessage, joinThinking } from '../lib/liveProgress.js'
 import { hasReasoningTag, splitReasoning } from '../lib/reasoning.js'
 import {
   boundedLiveRenderText,
@@ -122,10 +123,18 @@ class TurnController {
   statusTimer: Timer = null
   toolTokenAcc = 0
   turnTools: string[] = []
+  // For the receipt that closes the reply (domain/receipt.ts): when the turn
+  // started and every tool it called. Both clear in idle(), so each end of a
+  // turn — complete, interrupt, error, reset — starts the next one fresh.
+  turnStartedAt: null | number = null
+  turnToolNames: string[] = []
 
   private activeTools: ActiveTool[] = []
   private activeReasoningText = ''
   private reasoningSegmentIndex: null | number = null
+  // Reasoning already in the segment at reasoningSegmentIndex from earlier
+  // model calls of the same working phase; the live text is appended to it.
+  private reasoningSegmentBase = ''
   private interimBoundaryIndex: null | number = null
   private activityId = 0
   private reasoningStreamingTimer: Timer = null
@@ -161,6 +170,7 @@ class TurnController {
     this.reasoningTimer = clear(this.reasoningTimer)
     this.activeReasoningText = ''
     this.reasoningSegmentIndex = null
+    this.reasoningSegmentBase = ''
     this.reasoningText = ''
     this.toolTokenAcc = 0
     patchTurnState({ reasoning: '', reasoningTokens: 0, toolTokens: 0 })
@@ -288,6 +298,8 @@ class TurnController {
     // The turn the mid-turn sends were aimed at is over: their bubbles are in
     // the transcript, so the composer strip has nothing left to vouch for.
     patchUiState({ busy: false, midTurnSent: [] })
+    this.turnStartedAt = null
+    this.turnToolNames = []
     resetFlowOverlays()
   }
 
@@ -362,27 +374,41 @@ class TurnController {
   }
 
   private syncReasoningSegment() {
-    const thinking = this.activeReasoningText.trim()
+    const active = this.activeReasoningText.trim()
 
-    if (!thinking) {
+    if (!active) {
       return
     }
 
-    const msg: Msg = {
-      kind: 'trail',
-      role: 'system',
-      text: '',
-      thinking,
-      thinkingTokens: estimateTokensRough(thinking),
-      toolTokens: this.toolTokenAcc || undefined
+    if (this.reasoningSegmentIndex === null) {
+      // One Thinking panel per working phase: a later model call's reasoning
+      // joins the panel of the call before it unless something the person
+      // sees (prose, their message, a diff) came between.
+      const holder = findThinkingHolder(this.segmentMessages)
+
+      if (holder !== null) {
+        this.reasoningSegmentIndex = holder
+        this.reasoningSegmentBase = this.segmentMessages[holder]?.thinking ?? ''
+      } else {
+        this.reasoningSegmentIndex = this.segmentMessages.length
+        this.reasoningSegmentBase = ''
+        this.segmentMessages = [...this.segmentMessages, { kind: 'trail', role: 'system', text: '' }]
+      }
     }
 
-    if (this.reasoningSegmentIndex === null) {
-      this.reasoningSegmentIndex = this.segmentMessages.length
-      this.segmentMessages = [...this.segmentMessages, msg]
-    } else {
-      this.segmentMessages = this.segmentMessages.map((item, i) => (i === this.reasoningSegmentIndex ? msg : item))
-    }
+    const thinking = joinThinking(this.reasoningSegmentBase, active)
+    const index = this.reasoningSegmentIndex
+
+    this.segmentMessages = this.segmentMessages.map((item, i) =>
+      i === index
+        ? {
+            ...item,
+            thinking,
+            thinkingTokens: estimateTokensRough(thinking),
+            toolTokens: this.toolTokenAcc || undefined
+          }
+        : item
+    )
 
     patchTurnState({ streamSegments: this.segmentMessages })
   }
@@ -391,6 +417,7 @@ class TurnController {
     this.syncReasoningSegment()
     this.activeReasoningText = ''
     this.reasoningSegmentIndex = null
+    this.reasoningSegmentBase = ''
   }
 
   private pushSegment(msg: Msg) {
@@ -544,7 +571,12 @@ class TurnController {
     })
   }
 
-  recordError() {
+  // Returns the messages the person sent during the failed turn so the caller
+  // can keep them in the transcript: the live block is dropped on an error,
+  // and a message they typed must never vanish with it.
+  recordError(): Msg[] {
+    const sentDuringTurn = this.segmentMessages.filter(msg => msg.role === 'user')
+
     this.idle()
     this.clearReasoning()
     this.clearStatusTimer()
@@ -555,12 +587,57 @@ class TurnController {
 
     // Real turn end: surface any notice held back while busy.
     this.flushPendingNotice()
+
+    return sentDuringTurn
+  }
+
+  /**
+   * A message the person sent while this turn is running. It joins the live
+   * block at the point it was sent — under the work shown so far, above what
+   * the turn does next — and moves into the transcript with the rest of the
+   * turn, in that order, when the turn ends (complete, interrupted or
+   * failed). Appending it to settled history instead put it ABOVE the whole
+   * live block: it was pushed off screen at once and, at the turn's end,
+   * landed above work that happened before it was sent.
+   *
+   * Returns false when no turn is live (nothing streaming to sit inside, or
+   * a local interrupt already flushed the block); the caller then appends it
+   * to the transcript as usual.
+   */
+  recordMidTurnUserMessage(msg: Msg): boolean {
+    if (msg.role !== 'user') {
+      return false
+    }
+
+    return this.recordMidTurnMessages([msg])
+  }
+
+  /**
+   * Messages that belong at the point the turn has reached — the person's
+   * answer to a clarify question, with the question's own tool line ahead of
+   * it — placed in the live block like a mid-turn send (see above). Returns
+   * false when no turn is live; the caller then appends them to the
+   * transcript as usual.
+   */
+  recordMidTurnMessages(msgs: readonly Msg[]): boolean {
+    if (this.interrupted || !getUiState().busy || !msgs.length) {
+      return false
+    }
+
+    for (const msg of msgs) {
+      this.pushSegment(msg)
+    }
+
+    patchTurnState({ streamSegments: this.segmentMessages })
+
+    return true
   }
 
   recordMessageComplete(payload: {
     rendered?: string
     reasoning?: string
     response_previewed?: boolean
+    status?: string
     text?: string
   }) {
     this.closeReasoningSegment()
@@ -585,6 +662,14 @@ class TurnController {
     const existingReasoning = this.reasoningText.trim() || String(payload.reasoning ?? '').trim()
     const savedReasoning = [existingReasoning, existingReasoning ? '' : split.reasoning].filter(Boolean).join('\n\n')
     const savedToolTokens = this.toolTokenAcc
+
+    // Read before idle() clears them. A failed turn (status: error) gets no
+    // receipt: its text is the error, not a finished reply.
+    const receipt =
+      payload.status === 'error'
+        ? undefined
+        : turnReceipt({ endedAt: Date.now(), startedAt: this.turnStartedAt, toolNames: this.turnToolNames })
+
     let tools = this.pendingSegmentTools
     const last = this.segmentMessages[this.segmentMessages.length - 1]
 
@@ -634,7 +719,15 @@ class TurnController {
     ]
 
     if (finalText) {
-      finalMessages.push({ role: 'assistant', text: finalText })
+      finalMessages.push({ ...(receipt && { receipt }), role: 'assistant', text: finalText })
+    } else if (receipt) {
+      // The whole answer was already published as an interim segment: the
+      // receipt closes that last piece of prose instead.
+      const index = finalMessages.findLastIndex(msg => msg.role === 'assistant' && !msg.kind && /\S/.test(msg.text))
+
+      if (index >= 0) {
+        finalMessages[index] = { ...finalMessages[index]!, receipt }
+      }
     }
 
     const wasInterrupted = this.interrupted
@@ -712,6 +805,9 @@ class TurnController {
     // interimBoundaryIndex marks it as interim-sealed.
     this.flushStreamingSegment()
     this.interimBoundaryIndex = this.segmentMessages.length
+    // Robo said something: the working phase it described is over, so the
+    // next model call's reasoning opens a new Thinking panel below it.
+    this.closeReasoningSegment()
   }
 
   recordReasoningAvailable(text: string, force = false) {
@@ -913,6 +1009,7 @@ class TurnController {
 
     this.toolTokenAcc += sample ? estimateTokensRough(sample) : 0
     this.activeTools = [...this.activeTools, { context, id: toolId, name, startedAt: Date.now(), verboseArgs }]
+    this.turnToolNames.push(name)
 
     patchTurnState({ toolTokens: this.toolTokenAcc, tools: this.activeTools })
   }
@@ -980,6 +1077,15 @@ class TurnController {
   }
 
   startMessage() {
+    // A redirect mid-turn restarts the message, not the turn: keep the
+    // first start and the tools so far, so the receipt covers the whole
+    // exchange. A fresh turn starts its own count.
+    if (!getUiState().busy) {
+      this.turnStartedAt = null
+      this.turnToolNames = []
+    }
+
+    this.turnStartedAt ??= Date.now()
     this.endReasoningPhase()
     this.clearReasoning()
     this.activeTools = []

@@ -7655,6 +7655,18 @@ class AIAgent:
         """
         tool_calls = assistant_message.tool_calls
 
+        # Bind the model's step line ("Pushing the branch so the PR can be
+        # opened.") to this batch so an approval prompt raised by any of these
+        # tool calls can show the person what Robo said it was doing. The
+        # contextvar propagates into the tool worker threads with the session
+        # key; nothing else reads it. Display-only; never affects the decision.
+        _intent_token = None
+        try:
+            from tools.approval import set_current_action_intent
+            _intent_token = set_current_action_intent(getattr(assistant_message, "content", None))
+        except Exception:
+            _intent_token = None
+
         # Allow _vprint during tool execution even with stream consumers
         self._executing_tools = True
         try:
@@ -7685,6 +7697,12 @@ class AIAgent:
             )
         finally:
             self._executing_tools = False
+            if _intent_token is not None:
+                try:
+                    from tools.approval import reset_current_action_intent
+                    reset_current_action_intent(_intent_token)
+                except Exception:
+                    pass
 
     def _dispatch_delegate_task(self, function_args: dict) -> str:
         """Single call site for delegate_task dispatch.

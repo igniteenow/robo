@@ -792,10 +792,23 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
           return
         }
 
-        appendMessage({ role: 'user', text })
+        const echoed: Msg = { role: 'user', text }
+        const midTurn = Boolean(ev.payload?.mid_turn && getUiState().busy)
+        const placedLive = midTurn && turnController.recordMidTurnUserMessage(echoed)
 
-        if (ev.payload?.mid_turn && getUiState().busy) {
-          trackMidTurnSend(text, midTurnStatusFromGateway(ev.payload.status))
+        if (!placedLive) {
+          appendMessage(echoed)
+        }
+
+        // Same rule as a local send (submissionCore): a bubble in the live
+        // block is the acknowledgement; the strip speaks only when the text
+        // went to settled history, or was parked instead of read now.
+        if (midTurn) {
+          const outcome = midTurnStatusFromGateway(ev.payload?.status)
+
+          if (!placedLive || outcome === 'queued' || outcome === 'steered') {
+            trackMidTurnSend(text, outcome)
+          }
         }
 
         return
@@ -843,6 +856,16 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
             p.text,
             p.kind === 'error' ? 'error' : p.kind === 'warn' || p.kind === 'approval' ? 'warn' : 'info'
           )
+        }
+
+        // The end-of-turn fact check reports each research step through this
+        // kind. Keep the line in the status bar until the next one (or the
+        // turn ends): reverting to "running…" after four seconds left the
+        // whole check looking like a silent hang after the answer streamed.
+        if (p.kind === 'fact_check') {
+          turnController.clearStatusTimer()
+
+          return
         }
 
         restoreStatusAfter(4000)
@@ -1278,13 +1301,21 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
         return
       case 'approval.request': {
         const description = String(ev.payload.description ?? 'dangerous command')
+        // Optional display-only context (tools/approval.py): what Robo said it
+        // was doing, what to look at first, and the reviewer's take. Strings
+        // only — an older gateway simply omits them.
+        const optionalText = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined)
 
         patchOverlayState({
           approval: {
             allowPermanent: false,
+            check: optionalText(ev.payload.check),
             choices: ['once', 'session', 'deny'],
             command: String(ev.payload.command ?? ''),
             description,
+            intent: optionalText(ev.payload.intent),
+            kind: ev.payload.kind === 'correction' ? 'correction' : 'command',
+            review: optionalText(ev.payload.review),
             smartDenied: ev.payload.smart_denied === true
           }
         })
@@ -1504,7 +1535,7 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
       }
 
       case 'error':
-        turnController.recordError()
+        turnController.recordError().forEach(appendMessage)
         flashPet('failed')
 
         {

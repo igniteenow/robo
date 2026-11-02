@@ -92,9 +92,17 @@ export interface DelegationStatus {
 export interface ApprovalReq {
   // Retained for wire compatibility. Robo's UI exposes session approval, not a persistent allowlist.
   allowPermanent?: boolean
+  /** One line to look at before allowing (derived from the detector category). */
+  check?: string
   choices?: string[]
   command: string
   description: string
+  /** The step line Robo wrote before this tool call — what it said it was doing. */
+  intent?: string
+  /** A fact-check correction uses the same prompt with its own words. */
+  kind?: 'command' | 'correction'
+  /** What Robo's reviewer concluded when it could not clear the command itself. */
+  review?: string
   smartDenied?: boolean
 }
 
@@ -119,6 +127,9 @@ export interface Msg {
   // user bubble, but part of the exchange it answers, not a prompt of its own.
   kind?: 'clarify' | 'diff' | 'event' | 'intro' | 'panel' | 'slash' | 'trail'
   panelData?: PanelData
+  // The line that closes a reply: how long the turn took, what Robo did,
+  // and when it finished ("7.6s · 1 search · 10:39 PM"; domain/receipt.ts).
+  receipt?: string
   role: Role
   text: string
   thinking?: string

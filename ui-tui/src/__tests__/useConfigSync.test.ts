@@ -30,7 +30,8 @@ describe('applyDisplay', () => {
             show_reasoning: true,
             streaming: false,
             tui_compact: true,
-            tui_statusbar: false
+            tui_statusbar: false,
+            user_name: '  Ahmi  Khan '
           }
         }
       },
@@ -39,6 +40,7 @@ describe('applyDisplay', () => {
 
     const s = $uiState.get()
     expect(setBell).toHaveBeenCalledWith(true)
+    expect(s.userName).toBe('Ahmi Khan')
     expect(s.compact).toBe(true)
     expect(s.detailsMode).toBe('expanded')
     expect(s.inlineDiffs).toBe(false)

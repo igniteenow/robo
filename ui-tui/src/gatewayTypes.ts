@@ -115,6 +115,9 @@ export interface ConfigDisplayConfig {
   /** Theme mode pin: 'light' / 'dark' beat background auto-detection; 'auto'
    *  (default) trusts the OSC-11 probe + env signals. */
   tui_theme?: string
+  /** What Robo calls the person: the TUI heads their messages `$<name>`.
+   *  Raw config value; `normalizeUserName` trims and bounds it. */
+  user_name?: unknown
 }
 
 export interface ConfigVoiceConfig {
@@ -716,9 +719,13 @@ export type GatewayEvent =
   | {
       payload: {
         allow_permanent?: boolean
+        check?: string
         choices?: string[]
         command: string
         description: string
+        intent?: string
+        kind?: string
+        review?: string
         smart_denied?: boolean
       }
       session_id?: string
@@ -748,6 +755,8 @@ export type GatewayEvent =
         reasoning?: string
         rendered?: string
         response_previewed?: boolean
+        // 'error' closes a failed turn (tui_gateway's error frame).
+        status?: string
         text?: string
         usage?: Usage
       }

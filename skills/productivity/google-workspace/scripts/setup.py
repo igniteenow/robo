@@ -67,7 +67,7 @@ REQUIRED_PACKAGES = [
     "google-auth-httplib2==0.3.1",
     # GHSA-j5g9-f88f-gfj3 — Decompression Bomb DoS via unbounded gzip/deflate
     "httplib2==0.32.0",
-    "pyasn1==0.6.4",
+    "pyasn1==0.6.5",
     # GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v (via requests-oauthlib)
     "oauthlib==4.0.0",
 ]

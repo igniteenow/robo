@@ -106,7 +106,7 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     # google-auth is NOT in [all] so plain installs don't carry it.
     "provider.vertex": (
         "google-auth==2.55.1",
-        "pyasn1==0.6.4",
+        "pyasn1==0.6.5",
     ),
     # Microsoft Foundry — Entra ID auth (managed identity, workload identity,
     # service principal, az login, VS Code, azd, PowerShell). Only loaded
@@ -293,7 +293,7 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
         # (GHSA-j5g9-f88f-gfj3 decompression bomb DoS), stale pyasn1/google-auth,
         # oauthlib 3.x (GHSA-xpv3-w29h-x7cv, GHSA-hj66-6f7g-4r5v; via requests-oauthlib).
         "httplib2==0.32.0",
-        "pyasn1==0.6.4",
+        "pyasn1==0.6.5",
         "oauthlib==4.0.0",
     ),
     "skill.youtube": ("youtube-transcript-api==1.2.4",),

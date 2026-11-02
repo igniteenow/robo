@@ -528,6 +528,17 @@ def _hermetic_environment(tmp_path, monkeypatch):
     # tests/agent/test_fact_check.py opts back in explicitly.
     monkeypatch.setenv("ROBO_FACT_CHECK", "0")
 
+    # The judgment gates (agent/judgment.py) change the plain tool/turn-end
+    # paths that thousands of existing tests exercise in isolation: the
+    # read-before-edit guard would turn a direct patch_tool() call on a
+    # fixture file into a one-time "read it first" error, and the
+    # evidence-claims gate would add a follow-up turn to loop tests whose
+    # mocked answer says "tests pass". Off for the suite;
+    # tests/agent/test_judgment.py and tests/tools/test_read_before_edit.py
+    # opt back in explicitly.
+    monkeypatch.setenv("ROBO_READ_BEFORE_EDIT", "0")
+    monkeypatch.setenv("ROBO_EVIDENCE_CLAIMS", "0")
+
     # 5. Reset plugin singleton so tests don't leak plugins from
     #    ~/.robo/plugins/ (which, per step 3, is now empty — but the
     #    singleton might still be cached from a previous test).

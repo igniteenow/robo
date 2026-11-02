@@ -2,15 +2,15 @@ import { useStore } from '@nanostores/react'
 import { Ansi, Box, NoSelect, Text } from '@robo/ink'
 import { memo, useState } from 'react'
 
-import { $friendlyToolLabels } from '../app/uiStore.js'
+import { $friendlyToolLabels, $userName } from '../app/uiStore.js'
 import { TERMUX_TUI_MODE } from '../config/env.js'
 import { LONG_MSG } from '../config/limits.js'
 import { hasLeadGap } from '../domain/blockLayout.js'
 import { sectionMode } from '../domain/details.js'
 import { userDisplay } from '../domain/messages.js'
-import { ROLE } from '../domain/roles.js'
+import { ROLE, shouldShowReplyHeader, userLabel } from '../domain/roles.js'
 import { splitSlashSkillRefs } from '../domain/slash.js'
-import { transcriptBodyWidth, transcriptGutterWidth } from '../lib/inputMetrics.js'
+import { replyHeaderRuleWidth, transcriptBodyWidth, transcriptGutterWidth } from '../lib/inputMetrics.js'
 import {
   boundedLiveRenderText,
   compactPreview,
@@ -54,6 +54,9 @@ export const MessageLine = memo(function MessageLine({
   const activityMode = sectionMode('activity', detailsMode, sections, detailsModeCommandOverride)
   const thinking = msg.thinking?.trim() ?? ''
   const friendlyToolLabels = useStore($friendlyToolLabels)
+  // display.user_name: the person's messages get a `$<name> ─────` header
+  // row like Robo's replies; without a name they keep the bare prompt glyph.
+  const userName = useStore($userName)
 
   // One blank line above this block iff it opens a new visual group relative
   // to the block directly above it (`prev`) — the flex-grouping rule. Applied
@@ -150,7 +153,12 @@ export const MessageLine = memo(function MessageLine({
   const showDetails =
     (toolsMode !== 'hidden' && Boolean(msg.tools?.length)) || (thinkingMode !== 'hidden' && Boolean(thinking))
 
-  const showResponseSeparator = shouldShowResponseSeparator(msg, showDetails)
+  // Each reply opens with a `$Robo ─────` header row; it also takes over from
+  // the old `└─ Response` marker under the reasoning/tool trail. The person's
+  // messages get the same row with their own label once a name is set.
+  const showReplyHeader = shouldShowReplyHeader(msg)
+  const headerLabel = showReplyHeader ? glyph : msg.role === 'user' ? userLabel(userName) : ''
+  const showResponseSeparator = !showReplyHeader && shouldShowResponseSeparator(msg, showDetails)
 
   const content = (() => {
     if (msg.kind === 'slash') {
@@ -199,7 +207,7 @@ export const MessageLine = memo(function MessageLine({
       const [head, ...rest] = userDisplay(msg.text).split('[long message]')
 
       return (
-        <Text color={body}>
+        <Text bold color={body}>
           {head}
           <Text color={t.color.muted} dimColor>
             [long message]
@@ -216,7 +224,7 @@ export const MessageLine = memo(function MessageLine({
       const segments = splitSlashSkillRefs(msg.text)
 
       return (
-        <Text {...(body ? { color: body } : {})}>
+        <Text bold {...(body ? { color: body } : {})}>
           {segments.map((segment, i) =>
             segment.ref ? (
               <Text color={t.color.accent} key={i}>
@@ -271,15 +279,37 @@ export const MessageLine = memo(function MessageLine({
         </Box>
       )}
 
+      {headerLabel && (
+        <NoSelect flexShrink={0} fromLeftEdge>
+          <Text bold color={prefix}>
+            {headerLabel}
+          </Text>
+          <Text color={t.color.border}> {'─'.repeat(replyHeaderRuleWidth(cols, headerLabel, TERMUX_TUI_MODE))}</Text>
+        </NoSelect>
+      )}
+
       <Box>
         <NoSelect flexShrink={0} fromLeftEdge width={gutterWidth}>
           <Text bold={msg.role === 'user'} color={prefix}>
-            {glyph}{' '}
+            {msg.role === 'assistant' ? ' ' : glyph}{' '}
           </Text>
         </NoSelect>
 
         <Box width={transcriptBodyWidth(cols, msg.role, t.brand.prompt, TERMUX_TUI_MODE)}>{content}</Box>
       </Box>
+
+      {msg.receipt ? (
+        // The receipt closes the reply: ✓, then how long, what Robo did, when.
+        // Its own row under the body so a reply can never look half-written.
+        <Box marginTop={compact ? 0 : 1}>
+          <NoSelect flexShrink={0} fromLeftEdge width={gutterWidth}>
+            <Text> </Text>
+          </NoSelect>
+          <Text color={t.color.muted} wrap="truncate-end">
+            <Text color={t.color.statusGood}>✓</Text> {msg.receipt}
+          </Text>
+        </Box>
+      ) : null}
     </Box>
   )
 })

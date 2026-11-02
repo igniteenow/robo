@@ -400,8 +400,15 @@ BROWSER_INACTIVITY_TIMEOUT=120
 # Extra Chromium launch flags (comma- or newline-separated). Robo auto-injects
 # `--no-sandbox,--disable-dev-shm-usage` when it detects root or AppArmor-restricted
 # unprivileged user namespaces (Ubuntu 23.10+, DGX Spark, many container images),
-# so most users don't need to set this. Set it manually only if you need a flag
-# Robo doesn't add automatically; setting it disables the auto-injection.
+# and, if Chromium still reports that its sandbox could not start (some Windows
+# machines with security software, Linux kernels with user namespaces turned off,
+# locked-down macOS), relaunches once with the same flags for the rest of the
+# session — so most users never need to set this. On Windows, when Robo runs
+# from an administrator terminal, it also adds `--do-not-de-elevate`: without
+# it Chrome relaunches itself de-elevated, the launch reads as "exited early
+# without writing DevToolsActivePort", and a headless Chrome is left running
+# per attempt. Set this manually only if you need a flag Robo doesn't add
+# automatically; setting it disables the auto-injection and the relaunch.
 AGENT_BROWSER_ARGS=--no-sandbox
 ```
 

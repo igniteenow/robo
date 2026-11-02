@@ -253,6 +253,45 @@ class TestResearchClaims:
         assert fake.calls[0][0] == "read_file" and fake.calls[0][1] == {"path": "settings.py", "limit": 400}
         assert result.confirmed and result.sources == 1
 
+    def test_progress_reports_each_research_step_in_plain_words(self):
+        fake = _FakeTools([
+            {"action": "web_search", "query": "python 3.12 release date"},
+            {"action": "web_extract", "urls": ["https://www.python.org/downloads/release/python-3120/"]},
+            {"action": "done", "verdicts": [{"claim": 1, "verdict": "confirmed", "finding": "x", "source": "y"}]},
+        ])
+        seen: list[str] = []
+        research_claims([_claim()], "q", _settings(max_steps=6), tools=ALL_TOOLS,
+                        aux=fake.aux, dispatch=fake.dispatch, progress=seen.append)
+        assert seen == [
+            '🔎 Checking the answer (1/6): searching the web for "python 3.12 release date"',
+            "🔎 Checking the answer (2/6): reading https://www.python.org/downloads/release/python-3120/",
+        ]
+
+    def test_progress_failure_never_stops_the_research(self):
+        fake = _FakeTools([
+            {"action": "read_file", "path": "settings.py"},
+            {"action": "done", "verdicts": [{"claim": 1, "verdict": "confirmed", "finding": "PORT = 8080", "source": "settings.py"}]},
+        ])
+
+        def boom(_text):
+            raise RuntimeError("status channel down")
+
+        result = research_claims([_claim(text="settings.py sets PORT to 8080", check="code")], "q",
+                                 _settings(), tools=ALL_TOOLS, aux=fake.aux, dispatch=fake.dispatch, progress=boom)
+        assert result.steps == 1 and result.confirmed
+
+    def test_progress_line_wording(self):
+        assert fc.progress_line(3, 8, "search_files", {"pattern": "PORT ="}) == (
+            '🔎 Checking the answer (3/8): searching files for "PORT ="'
+        )
+        long_path = "/very/long/" + "sub/" * 30 + "settings.py"
+        tail = fc.progress_line(1, 8, "read_file", {"path": long_path})
+        assert "…" in tail and tail.endswith("settings.py")
+        assert fc.progress_line(2, 8, "web_extract", {"urls": ["https://a.example/x", "https://b.example/y"]}) == (
+            "🔎 Checking the answer (2/8): reading https://a.example/x (+1 more)"
+        )
+        assert fc.progress_line(1, 8, "mystery", "not a dict") == "🔎 Checking the answer (1/8): mystery"
+
     def test_web_tool_not_offered_when_unavailable(self):
         fake = _FakeTools([{"action": "web_search", "query": "x"}, {"action": "done", "verdicts": []}])
         result = research_claims([_claim()], "q", _settings(), tools={"read_file": object()},
@@ -725,3 +764,39 @@ def test_real_research_over_the_registry_keeps_and_footnotes_when_nobody_can_be_
     texts = [t for _k, t in statuses]
     assert any(t.startswith("🔎 Checking 1 statement in the answer") for t in texts)
     assert "🔎 Checked 1 statement against 1 source: 1 contradicted" in texts
+    # A surface with a live status line also sees the check start before the
+    # statements are picked out, and every research step as it runs — on its
+    # own kind, so the status bar can keep it until the next step.
+    progress = [t for k, t in statuses if k == "fact_check"]
+    assert progress[0] == fc.CHECK_STARTING_LINE
+    assert progress[1].startswith("🔎 Checking the answer (1/") and progress[1].endswith("settings.py")
+    # The two summary lines keep their lifecycle kind (printed CLI lines, chat
+    # platforms) and nothing else goes there.
+    assert [t for k, t in statuses if k == "lifecycle" and t.startswith("🔎")] == [
+        "🔎 Checking 1 statement in the answer against sources…",
+        "🔎 Checked 1 statement against 1 source: 1 contradicted",
+    ]
+
+
+class TestProgressChannel:
+    def test_none_without_a_status_callback(self):
+        assert fc._progress_channel(SimpleNamespace(status_callback=None)) is None
+
+    def test_none_on_messaging_surfaces(self):
+        agent = SimpleNamespace(status_callback=lambda k, t: None)
+        with patch("agent.judgment.on_messaging_surface", return_value=True):
+            assert fc._progress_channel(agent) is None
+
+    def test_routes_to_the_fact_check_kind_and_swallows_callback_errors(self):
+        seen = []
+
+        def callback(kind, text):
+            seen.append((kind, text))
+            raise RuntimeError("surface gone")
+
+        agent = SimpleNamespace(status_callback=callback)
+        with patch("agent.judgment.on_messaging_surface", return_value=False):
+            progress = fc._progress_channel(agent)
+        assert progress is not None
+        progress("🔎 step")  # must not raise
+        assert seen == [("fact_check", "🔎 step")]

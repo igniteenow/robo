@@ -550,11 +550,14 @@ def research_claims(
     dispatch: Callable[[str, dict, Optional[str]], str] = _dispatch,
     deadline: Optional[float] = None,
     is_interrupted: Callable[[], bool] = lambda: False,
+    progress: Optional[Callable[[str], None]] = None,
 ) -> FactCheckResult:
     """Drive the auxiliary model through the research tools until it reports
     verdicts, a budget runs out, or the turn is interrupted.
 
     Every statement without a verdict when the loop ends is ``unverified``.
+    ``progress`` (optional) gets one short line per research step — what is
+    being read or searched right now — for surfaces with a live status line.
     """
     result = FactCheckResult(claims=list(claims))
     if not claims:
@@ -620,6 +623,11 @@ def research_claims(
             convo.append({"role": "user", "content": f"<result>Unknown or malformed action: {action or '(none)'}. Use one of the listed tools or finish with \"done\".</result>"})
             continue
         result.steps += 1
+        if progress is not None:
+            try:
+                progress(progress_line(result.steps, settings.max_steps, action, args))
+            except Exception:
+                logger.debug("fact check: progress callback failed", exc_info=True)
         output = dispatch(action, args, task_id)
         if action in ("web_search", "web_extract"):
             for url in re.findall(r"https?://[^\s\"'<>)\]]+", output):
@@ -820,6 +828,46 @@ def build_keep_note(result: FactCheckResult) -> str:
     return "\n".join(lines)
 
 
+_PROGRESS_TARGET_CHARS = 60
+
+
+def progress_line(step: int, max_steps: int, action: str, args: dict) -> str:
+    """What the research is doing right now, in the person's terms.
+
+    Shown in the status bar and activity feed of surfaces with a live status
+    line (TUI) while the check runs, so the time between the streamed answer
+    and its delivery is never silent.
+    """
+    args = args if isinstance(args, dict) else {}
+    if action == "web_search":
+        what = f"searching the web for \"{_short(str(args.get('query') or ''), _PROGRESS_TARGET_CHARS)}\""
+    elif action == "web_extract":
+        urls = args.get("urls")
+        if isinstance(urls, str):
+            urls = [urls]
+        urls = [str(u) for u in (urls or []) if str(u).strip()]
+        what = f"reading {_short_tail(urls[0] if urls else '', _PROGRESS_TARGET_CHARS)}"
+        if len(urls) > 1:
+            what += f" (+{len(urls) - 1} more)"
+    elif action == "search_files":
+        what = f"searching files for \"{_short(str(args.get('pattern') or ''), _PROGRESS_TARGET_CHARS)}\""
+    elif action == "read_file":
+        what = f"reading {_short_tail(str(args.get('path') or ''), _PROGRESS_TARGET_CHARS)}"
+    else:
+        what = _short(str(action or "checking"), _PROGRESS_TARGET_CHARS)
+    return f"🔎 Checking the answer ({step}/{max_steps}): {what}"
+
+
+def _short_tail(text: str, limit: int) -> str:
+    """Like ``_short`` but keeps the END — the file name of a long path, the
+    page of a long URL."""
+    text = " ".join((text or "").split())
+    return text if len(text) <= limit else "…" + text[-(limit - 1):].lstrip()
+
+
+CHECK_STARTING_LINE = "🔎 Checking the answer for statements to verify…"
+
+
 def status_line(result: FactCheckResult) -> str:
     """One line for the status channel once the research is done."""
     checked = len(result.claims)
@@ -876,8 +924,13 @@ def run_fact_check(agent: Any, final_response: str, messages: list) -> Optional[
         logger.debug("fact check skipped: no research tools available")
         return None
     emit = getattr(agent, "_emit_status", None)
+    progress = _progress_channel(agent)
     deadline = time.monotonic() + settings.timeout_seconds
     request_text = _last_request_text(messages)
+    # The first thing the person sees after the answer streams is this line,
+    # not a silent spinner while the statements are being picked out.
+    if progress is not None:
+        progress(CHECK_STARTING_LINE)
     try:
         claims = extract_claims(request_text, final_response, settings)
     except Exception:
@@ -905,6 +958,7 @@ def run_fact_check(agent: Any, final_response: str, messages: list) -> Optional[
             task_id=getattr(agent, "_current_task_id", None),
             deadline=deadline,
             is_interrupted=is_interrupted,
+            progress=progress,
         )
     except Exception:
         logger.debug("fact check: research raised", exc_info=True)
@@ -912,6 +966,34 @@ def run_fact_check(agent: Any, final_response: str, messages: list) -> Optional[
     if callable(emit):
         emit(status_line(result))
     return result
+
+
+def _progress_channel(agent: Any) -> Optional[Callable[[str], None]]:
+    """Per-step progress for surfaces with a live status line, else ``None``.
+
+    Goes through ``status_callback`` with its own kind (``fact_check``) so the
+    TUI can keep it in the status bar until the next step; the CLI's printed
+    lifecycle lines and the messaging gateways (which relay every status as a
+    chat message) only get the two summary lines they always had.
+    """
+    callback = getattr(agent, "status_callback", None)
+    if not callable(callback):
+        return None
+    try:
+        from agent.judgment import on_messaging_surface
+
+        if on_messaging_surface():
+            return None
+    except Exception:
+        return None
+
+    def _progress(text: str) -> None:
+        try:
+            callback("fact_check", text)
+        except Exception:
+            logger.debug("fact check: status callback failed", exc_info=True)
+
+    return _progress
 
 
 def gate_decision(agent: Any, result: FactCheckResult) -> str:

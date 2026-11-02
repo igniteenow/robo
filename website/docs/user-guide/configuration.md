@@ -954,6 +954,24 @@ agent:
 
 For a user/plugin policy gate at the same point — keep the agent going with your own checks — see the [`pre_verify` hook](/user-guide/features/hooks#pre_verify).
 
+## Judgment (edits and claims tied to evidence)
+
+Two deterministic checks — no model calls, no new tools — that stop the two most common ways an agent drifts from the facts in front of it. Both are on by default and fail open: an error inside either leaves the turn exactly as it would have been.
+
+```yaml
+agent:
+  judgment:
+    read_before_edit: true     # the first patch/write_file on a file this task never read is stopped once
+    evidence_claims: true      # "tests pass" in the answer needs a passing run in this turn
+```
+
+| Key | What it does |
+|-----|--------------|
+| `read_before_edit` | A `patch` or `write_file` aimed at a file that exists, is not empty, and was never read in this task returns one message asking Robo to read it first. The same call goes through on the next attempt, so the guard costs at most one round-trip per file and can never wedge a task. New files, empty files, binary files, files already read (even partially), and non-local terminal backends are never stopped. `ROBO_READ_BEFORE_EDIT=0` turns it off for one process. |
+| `evidence_claims` | When the final answer says a test, lint, type check or build **passed** but no such command ran successfully in this turn — read from the turn's own tool results, so a quoted summary of an earlier run or an invented `12 passed` does not count — Robo sends the model one follow-up: run the check now, or rewrite that part of the answer to say exactly what was and was not verified. Once per turn, shares the verify-on-stop attempt budget, and never on messaging surfaces (Telegram, Discord, …), where the follow-up would read as chat noise. Answers that used no tools at all are never checked. `ROBO_EVIDENCE_CLAIMS=0` turns it off for one process. |
+
+These sit alongside the layers Robo already has: the "verify before you claim" guidance in the system prompt, the auxiliary second opinion on definitive claims (`agent.claim_verification`), [verify-on-stop](#verify-on-stop-coding-verification) for edited code, the [fact check](#fact-check-robo-checks-the-answer) against sources, and the [smart-approval reviewer](#smart-approvals) for risky commands.
+
 ## Step narration (what Robo is doing)
 
 While working a task, Robo writes one short line before each step that uses tools — "Checking the config files to find the current port." — so you (or a client watching a shared session) can follow along without reading tool output. The lines are interim assistant messages, so they reach every surface: the TUI and desktop transcript, the CLI stream, and messaging platforms (where `display.interim_assistant_messages` controls them). Tool progress itself is a separate setting, `display.tool_progress`, and stays on by default.
@@ -1684,6 +1702,7 @@ display:
   show_reasoning: true    # Show model reasoning/thinking above each response (default: true; toggle with /reasoning show|hide)
   streaming: false        # Stream tokens to terminal as they arrive (real-time output)
   show_cost: false        # Show estimated $ cost in the CLI status bar
+  user_name: ""           # What Robo calls you: the TUI heads your messages `$<name> ─────` like Robo's `$Robo ─────`. Asked by `robo setup` / `robo setup name`
   timestamps: false       # When true, prefixes user and assistant labels with timestamps in the CLI / TUI transcript
   timestamp_format: "%H:%M"  # strftime format for those timestamps (e.g. "%b-%d %H:%M" for month-day)
   tool_preview_length: 0  # Max chars for tool call previews (0 = no limit, show full paths/commands)
@@ -2247,6 +2266,18 @@ approvals:
 | `off` | Skip all approval checks. Equivalent to `ROBO_YOLO_MODE=true`. **Use with caution.** |
 
 Smart mode is particularly useful for reducing approval fatigue — it lets the agent work more autonomously on safe operations while still catching genuinely destructive commands.
+
+### What the approval card shows
+
+When a command does reach you, the TUI card asks one question (**Allow Robo to run this command?** — or *run this script* for `execute_code`, *use &lt;tool&gt;* for a plugin rule, *Apply Robo's correction to the answer?* for a fact-check correction), shows the plain reason it was raised and the exact command, then up to three lines of context:
+
+| Row | Where it comes from |
+|-----|---------------------|
+| **Robo** | The step line Robo wrote just before this tool call — what it said it was doing, e.g. *Pushing the branch so the PR can be opened.* Shown when there is one. |
+| **Review** | What the smart-approval reviewer concluded when it could not clear the command itself: *could not clear this on its own* (escalated) or *flagged this as dangerous* (denied, with your one-time override), followed by its one-sentence reason. Only in `smart` mode. |
+| **Check** | A one-line "look at this before you allow it" note for the kind of command flagged — deletion, history rewrite, running uninspected code, config/credential files, services, container hosts, `sudo`, security-scan findings. |
+
+The choices are unchanged — **1 Allow once · 2 Allow for this session · 3 Deny** (↑/↓ + Enter, or the digit; Esc denies) — and none of the context changes what is approved or how it is remembered. The same fields ride on the gateway payload, so desktop and messaging clients can show them too; a client that does not know them ignores them.
 
 :::warning
 Setting `approvals.mode: off` disables all safety checks for terminal commands. Only use this in trusted, sandboxed environments.

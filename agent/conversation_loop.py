@@ -7214,6 +7214,58 @@ def run_conversation(
                     final_response = None
                     continue
 
+                # ── Evidence-claims gate ───────────────────────────────
+                # The answer says a test/lint/typecheck/build passed, but
+                # nothing of the kind ran successfully in this turn (read
+                # from the turn's own tool results — no ledger, no model
+                # call). One follow-up per turn, same continuation contract
+                # as verify-on-stop, and it stays inside verify-on-stop's
+                # attempt budget so the two gates cannot ping-pong. Off on
+                # messaging surfaces (the follow-up would read as chat
+                # noise there). See agent/judgment.py.
+                _claim_nudge = None
+                try:
+                    from agent.judgment import build_evidence_claim_nudge, evidence_claims_active
+
+                    if (
+                        evidence_claims_active()
+                        and getattr(agent, "_evidence_claim_nudges", 0) < 1
+                        and getattr(agent, "_verification_stop_nudges", 0) < 2
+                        and not getattr(agent, "_delegate_depth", 0)
+                    ):
+                        _claim_nudge = build_evidence_claim_nudge(final_response, messages)
+                except Exception:
+                    logger.debug("evidence-claims check failed", exc_info=True)
+                    _claim_nudge = None
+
+                if _claim_nudge:
+                    agent._evidence_claim_nudges = (
+                        getattr(agent, "_evidence_claim_nudges", 0) + 1
+                    )
+                    agent._verification_stop_nudges = (
+                        getattr(agent, "_verification_stop_nudges", 0) + 1
+                    )
+                    final_msg["finish_reason"] = "verification_required"
+                    agent._emit_interim_assistant_message(final_msg)
+                    messages.append(final_msg)
+                    try:
+                        agent._flush_messages_to_session_db(messages, conversation_history)
+                    except Exception:
+                        logger.debug("evidence-claims interim flush failed", exc_info=True)
+                    messages.append({
+                        "role": "user",
+                        "content": _claim_nudge,
+                        "_verification_stop_synthetic": True,
+                    })
+                    agent._session_messages = messages
+                    logger.debug("evidence-claims nudge issued")
+                    _pending_verification_response = final_response
+                    _pending_verification_response_previewed = (
+                        agent._interim_content_was_streamed(final_response or "")
+                    )
+                    final_response = None
+                    continue
+
                 # ── Kanban worker terminal-tool stop guard ─────────────
                 # Workers must end with kanban_complete / kanban_block.
                 # Models sometimes narrate the next step ("Let me write the

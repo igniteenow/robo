@@ -2,13 +2,14 @@ import { PassThrough } from 'stream'
 
 import { renderSync } from '@robo/ink'
 import React from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createGatewayEventHandler } from '../app/createGatewayEventHandler.js'
 import { resetOverlayState } from '../app/overlayStore.js'
 import {
   clearMidTurnSends,
   consumeLocalUserEcho,
+  MID_TURN_SETTLED_MS,
   midTurnStatusFromGateway,
   rememberLocalUserEcho,
   settleMidTurnSend,
@@ -17,7 +18,7 @@ import {
   trackMidTurnSend
 } from '../app/submissionCore.js'
 import { turnController } from '../app/turnController.js'
-import { resetTurnState } from '../app/turnStore.js'
+import { getTurnState, resetTurnState } from '../app/turnStore.js'
 import { getUiState, patchUiState, resetUiState } from '../app/uiStore.js'
 import { MID_TURN_STATUS_LABEL, MidTurnSent, midTurnSentHeading } from '../components/midTurnSent.js'
 import type { GatewayClient } from '../gatewayClient.js'
@@ -213,6 +214,75 @@ describe('submissionCore.submitPrompt — mid-turn sends', () => {
   })
 })
 
+describe('a settled row is an acknowledgement, not a fixture', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetUiState()
+    patchUiState({ sid: 'sess-1' })
+  })
+
+  afterEach(() => {
+    clearMidTurnSends()
+    vi.useRealTimers()
+  })
+
+  it('dismisses itself a few seconds after the gateway answers', () => {
+    const id = trackMidTurnSend('also check the logs')
+
+    settleMidTurnSend(id, 'steered')
+    expect(rows()).toEqual([['also check the logs', 'steered']])
+
+    vi.advanceTimersByTime(MID_TURN_SETTLED_MS - 1)
+    expect(rows()).toEqual([['also check the logs', 'steered']])
+
+    vi.advanceTimersByTime(1)
+    expect(rows()).toEqual([])
+  })
+
+  it('stays while the gateway has not answered yet', () => {
+    trackMidTurnSend('still on its way')
+
+    vi.advanceTimersByTime(MID_TURN_SETTLED_MS * 10)
+    expect(rows()).toEqual([['still on its way', 'sending']])
+  })
+
+  it('a row that arrives already settled (another client’s echo) goes the same way', () => {
+    trackMidTurnSend('from the desktop', 'redirected')
+    expect(rows()).toEqual([['from the desktop', 'redirected']])
+
+    vi.advanceTimersByTime(MID_TURN_SETTLED_MS)
+    expect(rows()).toEqual([])
+  })
+
+  it('a late settle restarts the clock and a dropped row cancels it', () => {
+    const a = trackMidTurnSend('first')
+    const b = trackMidTurnSend('second')
+
+    settleMidTurnSend(a, 'sent')
+    vi.advanceTimersByTime(MID_TURN_SETTLED_MS / 2)
+    settleMidTurnSend(a, 'queued')
+    settleMidTurnSend(b, 'dropped')
+    vi.advanceTimersByTime(MID_TURN_SETTLED_MS / 2)
+    // Re-settled half-way through: the clock restarted, so it is still here.
+    expect(rows()).toEqual([['first', 'queued']])
+
+    vi.advanceTimersByTime(MID_TURN_SETTLED_MS / 2)
+    expect(rows()).toEqual([])
+  })
+
+  it('dismissing after the turn already cleared the strip is a no-op', () => {
+    const id = trackMidTurnSend('late')
+
+    settleMidTurnSend(id, 'sent')
+    turnController.idle()
+    expect(rows()).toEqual([])
+
+    const settled = getUiState()
+    vi.advanceTimersByTime(MID_TURN_SETTLED_MS)
+    expect(getUiState()).toBe(settled)
+  })
+})
+
 describe('turnController.idle clears the strip', () => {
   beforeEach(() => {
     resetUiState()
@@ -271,7 +341,7 @@ describe('message.user echo → strip', () => {
     patchUiState({ busy: true, sid: 'sess-1' })
   })
 
-  it('paints a message another client sent mid-turn and lists it with its disposition', () => {
+  it('paints a message another client sent mid-turn in the live block, with no strip row to repeat it', () => {
     const appended: Msg[] = []
     const onEvent = createGatewayEventHandler(buildCtx(appended))
 
@@ -280,11 +350,22 @@ describe('message.user echo → strip', () => {
       type: 'message.user'
     } as any)
 
-    expect(appended).toEqual([{ role: 'user', text: 'from the desktop' }])
-    expect(rows()).toEqual([['from the desktop', 'redirected']])
+    // It joins the live turn (shown under the work so far), not settled
+    // history above it…
+    expect(appended).toEqual([])
+    expect(getTurnState().streamSegments).toEqual([{ role: 'user', text: 'from the desktop' }])
+    // The bubble under the work is the acknowledgement.
+    expect(rows()).toEqual([])
+
+    // …and moves into the transcript with the turn when it ends.
+    onEvent({ payload: { text: 'done' }, type: 'message.complete' } as any)
+    expect(appended).toEqual([
+      { role: 'user', text: 'from the desktop' },
+      { receipt: expect.stringMatching(/\d/), role: 'assistant', text: 'done' }
+    ])
   })
 
-  it('lists a queued echo as queued', () => {
+  it('lists a queued echo as queued (the bubble alone cannot say it was parked)', () => {
     const appended: Msg[] = []
     const onEvent = createGatewayEventHandler(buildCtx(appended))
 
@@ -375,5 +456,207 @@ describe('<MidTurnSent />', () => {
 
     expect(out).toContain('…')
     expect(out).not.toContain('second paragraph')
+  })
+})
+
+describe('a message sent mid-turn stays where it was sent', () => {
+  const ref = <T,>(current: T) => ({ current })
+
+  const buildCtx = (appended: Msg[]) =>
+    ({
+      composer: {
+        dequeue: () => undefined,
+        queueEditRef: ref<null | number>(null),
+        sendQueued: vi.fn(),
+        setInput: vi.fn()
+      },
+      gateway: { gw: { request: vi.fn() }, rpc: vi.fn(async () => null) },
+      prompts: { answerClarifyRef: { current: vi.fn() } },
+      session: {
+        STARTUP_RESUME_ID: '',
+        colsRef: ref(80),
+        newSession: vi.fn(),
+        resetSession: vi.fn(),
+        resumeById: vi.fn(),
+        setCatalog: vi.fn()
+      },
+      submission: { submitRef: { current: vi.fn() } },
+      system: { bellOnComplete: false, sys: vi.fn() },
+      transcript: { appendMessage: (msg: Msg) => appended.push(msg), panel: vi.fn(), setHistoryItems: vi.fn() },
+      voice: { setProcessing: vi.fn(), setRecording: vi.fn(), setVoiceEnabled: vi.fn() }
+    }) as any
+
+  const userTexts = (msgs: Msg[]) => msgs.filter(m => m.role === 'user').map(m => m.text)
+
+  beforeEach(() => {
+    resetOverlayState()
+    resetUiState()
+    resetTurnState()
+    turnController.fullReset()
+    patchUiState({ sid: 'sess-1' })
+  })
+
+  it('shows under the work done so far and lands in that order when the turn completes', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'Checking the config files.' }, type: 'message.interim' } as any)
+
+    expect(turnController.recordMidTurnUserMessage({ role: 'user', text: 'also check the logs' })).toBe(true)
+
+    onEvent({ payload: { text: 'Reading the logs now.' }, type: 'message.interim' } as any)
+
+    // Live: in order, nothing in history yet.
+    expect(appended).toEqual([])
+    expect(getTurnState().streamSegments.map(m => m.text)).toEqual([
+      'Checking the config files.',
+      'also check the logs',
+      'Reading the logs now.'
+    ])
+
+    onEvent({ payload: { text: 'Both look fine.' }, type: 'message.complete' } as any)
+
+    const texts = appended.map(m => m.text).filter(Boolean)
+
+    expect(texts).toEqual([
+      'Checking the config files.',
+      'also check the logs',
+      'Reading the logs now.',
+      'Both look fine.'
+    ])
+    // Exactly once, and the live block is empty again.
+    expect(userTexts(appended)).toEqual(['also check the logs'])
+    expect(getTurnState().streamSegments).toEqual([])
+  })
+
+  it('is kept in the transcript when the turn fails', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    turnController.recordMidTurnUserMessage({ role: 'user', text: 'and the docs too' })
+    onEvent({ payload: { message: 'provider exploded' }, type: 'error' } as any)
+
+    expect(userTexts(appended)).toEqual(['and the docs too'])
+    expect(getTurnState().streamSegments).toEqual([])
+  })
+
+  it('is kept, in order, when the person interrupts the turn', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'Step one.' }, type: 'message.interim' } as any)
+    turnController.recordMidTurnUserMessage({ role: 'user', text: 'stop after this' })
+    turnController.interruptTurn({
+      appendMessage: m => appended.push(m),
+      gw: { request: vi.fn(async () => ({})) } as any,
+      sid: 'sess-1',
+      sys: vi.fn()
+    })
+
+    expect(appended.map(m => m.text).slice(0, 2)).toEqual(['Step one.', 'stop after this'])
+  })
+
+  it('places a clarify answer, with its question line, where the turn has reached', () => {
+    const appended: Msg[] = []
+    const onEvent = createGatewayEventHandler(buildCtx(appended))
+
+    onEvent({ payload: {}, type: 'message.start' } as any)
+    onEvent({ payload: { text: 'Two ways to do this.' }, type: 'message.interim' } as any)
+
+    const question: Msg = { kind: 'trail', role: 'system', text: '', tools: ['Clarify("Which one?")'] }
+    const answer: Msg = { kind: 'clarify', role: 'user', text: 'the second' }
+
+    expect(turnController.recordMidTurnMessages([question, answer])).toBe(true)
+    // Nothing in settled history: the answer sits in the live block, under the work so far.
+    expect(appended).toEqual([])
+    expect(getTurnState().streamSegments.map(m => m.text)).toEqual(['Two ways to do this.', '', 'the second'])
+
+    onEvent({ payload: { text: 'Going with the second.' }, type: 'message.interim' } as any)
+    onEvent({ payload: { text: 'Done.' }, type: 'message.complete' } as any)
+
+    // Lands in the transcript in that order, once, with the question line kept.
+    expect(appended.map(m => m.text).filter(Boolean)).toEqual([
+      'Two ways to do this.',
+      'the second',
+      'Going with the second.',
+      'Done.'
+    ])
+    expect(appended.filter(m => m.kind === 'clarify')).toHaveLength(1)
+    expect(appended.some(m => m.tools?.some(line => line.includes('Which one?')))).toBe(true)
+  })
+
+  it('falls back to the transcript when no turn is live', () => {
+    expect(turnController.recordMidTurnMessages([{ kind: 'clarify', role: 'user', text: 'idle answer' }])).toBe(false)
+    expect(turnController.recordMidTurnUserMessage({ role: 'user', text: 'idle send' })).toBe(false)
+    expect(getTurnState().streamSegments).toEqual([])
+
+    patchUiState({ busy: true })
+    expect(turnController.recordMidTurnUserMessage({ role: 'assistant', text: 'not a user message' })).toBe(false)
+  })
+
+  it('a send placed live gets no strip row: the bubble under the work is the acknowledgement', async () => {
+    const { gw } = makeGateway({ status: 'redirected' })
+    const live: Msg[] = []
+
+    submitPrompt(
+      'use Postgres',
+      makeDeps(gw, { appendLiveUserMessage: msg => (live.push(msg), true) }),
+      true,
+      undefined,
+      true
+    )
+
+    expect(live).toEqual([{ role: 'user', text: 'use Postgres' }])
+    expect(rows()).toEqual([])
+
+    await flush()
+
+    expect(rows()).toEqual([])
+  })
+
+  it('a send placed live still says so when the gateway parked it for later', async () => {
+    const { gw } = makeGateway({ status: 'queued' })
+
+    submitPrompt('after this one', makeDeps(gw, { appendLiveUserMessage: () => true }), true, undefined, true)
+
+    expect(rows()).toEqual([])
+    await flush()
+
+    expect(rows()).toEqual([['after this one', 'queued']])
+  })
+
+  it('a send the live block could not take keeps the strip from the moment of sending', () => {
+    const { gw } = makeGateway({ status: 'redirected' })
+
+    submitPrompt('hurry up', makeDeps(gw, { appendLiveUserMessage: () => false }), true, undefined, true)
+
+    expect(rows()).toEqual([['hurry up', 'sending']])
+  })
+
+  it('submitPrompt places a mid-turn send live and an ordinary send in history', () => {
+    const gw = { request: vi.fn(() => Promise.resolve({ matched: false })) } as unknown as GatewayClient
+    const live: Msg[] = []
+    const history: Msg[] = []
+
+    const deps: SubmitPromptDeps = {
+      appendLiveUserMessage: msg => (live.push(msg), true),
+      appendMessage: msg => history.push(msg),
+      enqueue: vi.fn(),
+      expand: (t: string) => t,
+      gw,
+      setLastUserMsg: vi.fn(),
+      sys: vi.fn()
+    }
+
+    submitPrompt('fresh turn', deps)
+    submitPrompt('while it works', deps, true, undefined, true)
+
+    expect(history).toEqual([{ role: 'user', text: 'fresh turn' }])
+    expect(live).toEqual([{ role: 'user', text: 'while it works' }])
+
+    clearMidTurnSends()
   })
 })

@@ -21,7 +21,9 @@ export const midTurnSentHeading = (count: number) => `sent to the running turn (
 // bubbles land above the live reply block — out of view once that block is
 // taller than the screen — so this strip, anchored to the composer like the
 // queue panel, is where the user sees that Enter did something and what the
-// gateway did with the text. Cleared when the turn ends.
+// gateway did with the text. Each row is a short acknowledgement: it dismisses
+// itself a few seconds after the gateway answers (submissionCore), and the
+// turn's end clears whatever is still showing.
 export function MidTurnSent({ cols, items, t }: MidTurnSentProps) {
   if (!items.length) {
     return null

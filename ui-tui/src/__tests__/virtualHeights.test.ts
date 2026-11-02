@@ -43,12 +43,37 @@ describe('virtual height estimates', () => {
     )
   })
 
-  it('accounts for the response separator when assistant details are visible', () => {
+  it('accounts for the trail and its gap above the reply when assistant details are visible', () => {
     const msg: Msg = { role: 'assistant', text: 'ok', thinking: 'plan' }
 
+    // one thinking row + the gap; the `$Robo` header row is counted either way
     expect(estimatedMsgHeight(msg, 80, { compact: false, details: true })).toBe(
-      estimatedMsgHeight(msg, 80, { compact: false, details: false }) + 3
+      estimatedMsgHeight(msg, 80, { compact: false, details: false }) + 2
     )
+  })
+
+  it('counts the receipt row that closes a reply, with its gap outside compact mode', () => {
+    const reply: Msg = { receipt: '7.6s · 1 search · 10:39 PM', role: 'assistant', text: 'ok' }
+
+    expect(estimatedMsgHeight(reply, 80, { compact: false, details: false })).toBe(4)
+    expect(estimatedMsgHeight(reply, 80, { compact: true, details: false })).toBe(3)
+    expect(messageHeightKey(reply)).not.toBe(messageHeightKey({ role: 'assistant', text: 'ok' }))
+  })
+
+  it('counts the `$<name>` header row over the person’s message once a name is set', () => {
+    const msg: Msg = { role: 'user', text: 'hi' }
+    const base = estimatedMsgHeight(msg, 80, { compact: false, details: false })
+
+    expect(estimatedMsgHeight(msg, 80, { compact: false, details: false, userName: 'Ahmi' })).toBe(base + 1)
+    expect(estimatedMsgHeight(msg, 80, { compact: false, details: false, userName: '  ' })).toBe(base)
+  })
+
+  it('counts the `$Robo` header row that opens a reply', () => {
+    expect(estimatedMsgHeight({ role: 'assistant', text: 'ok' }, 80, { compact: false, details: false })).toBe(2)
+    expect(estimatedMsgHeight({ role: 'system', text: 'ok' }, 80, { compact: false, details: false })).toBe(1)
+    expect(
+      estimatedMsgHeight({ kind: 'slash', role: 'assistant', text: 'ok' }, 80, { compact: false, details: false })
+    ).toBe(2)
   })
 
   it('does not account for a response separator without visible details', () => {

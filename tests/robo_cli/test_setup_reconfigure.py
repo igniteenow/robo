@@ -107,6 +107,7 @@ class TestExistingInstallDefault:
                 stack,
                 prompt_choice="robo_cli.setup.prompt_choice",
                 quick="robo_cli.setup._run_quick_setup",
+                name="robo_cli.setup.setup_user_name",
                 model="robo_cli.setup.setup_model_provider",
                 terminal="robo_cli.setup.setup_terminal_backend",
                 agent="robo_cli.setup.setup_agent_settings",
@@ -139,6 +140,7 @@ class TestQuickFlag:
             m = _enter_existing_install_patches(
                 stack,
                 quick="robo_cli.setup._run_quick_setup",
+                name="robo_cli.setup.setup_user_name",
                 model="robo_cli.setup.setup_model_provider",
                 terminal="robo_cli.setup.setup_terminal_backend",
                 agent="robo_cli.setup.setup_agent_settings",
@@ -173,6 +175,7 @@ class TestFreshInstall:
             m = _enter_fresh_install_patches(
                 stack,
                 prompt=("robo_cli.setup.prompt_choice", {"return_value": 0}),
+                name="robo_cli.setup.setup_user_name",
                 model="robo_cli.setup.setup_model_provider",
                 terminal="robo_cli.setup.setup_terminal_backend",
                 agent="robo_cli.setup.setup_agent_settings",

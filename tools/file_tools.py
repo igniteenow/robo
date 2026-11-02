@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import posixpath
+import stat
 import sys
 import threading
 from pathlib import Path, PurePosixPath
@@ -1720,6 +1721,71 @@ def _check_file_staleness(filepath: str, task_id: str) -> str | None:
     return None
 
 
+_UNREAD_EDIT_WARNED_CAP = 500
+
+
+def _check_unread_edit(filepath: str, task_id: str, tool_name: str) -> str | None:
+    """Stop the FIRST edit of an existing file this task has never read.
+
+    The model's view of a file it has not opened is a guess; ``patch`` on a
+    guessed ``old_string`` usually fails, and ``write_file`` on a guessed
+    layout silently destroys what was there. So the first ``patch`` /
+    ``write_file`` against an existing, non-empty, text file with no
+    ``read_file`` record in this task returns a blocking message asking for
+    the read. The path is then remembered, and the SAME call goes through on
+    the next attempt — the guard costs at most one round-trip per path and can
+    never wedge a task (``agent/judgment.py``, ``read_before_edit``).
+
+    Only the local backend is checked (host ``stat`` is meaningless for a
+    container/SSH path); binary and extracted-document files are exempt
+    because ``read_file`` does not record them. Every failure path returns
+    ``None`` so the edit proceeds exactly as before.
+    """
+    try:
+        from agent.judgment import judgment_enabled, read_before_edit_message
+
+        if not judgment_enabled("read_before_edit"):
+            return None
+        if _terminal_env_type_for_task(task_id) != "local":
+            return None
+        resolved = str(_resolve_path_for_task(filepath, task_id))
+        if has_binary_extension(resolved):
+            return None
+        try:
+            from tools.read_extract import is_extractable_document
+
+            if is_extractable_document(resolved):
+                return None
+        except Exception:
+            pass
+        try:
+            st = os.stat(resolved)
+        except OSError:
+            return None  # new file (or unreadable) — nothing to read first
+        if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
+            return None
+        with _read_tracker_lock:
+            task_data = _read_tracker.get(task_id)
+            if task_data is not None and resolved in (task_data.get("read_timestamps") or {}):
+                return None
+            if task_data is None:
+                task_data = _read_tracker.setdefault(task_id, {
+                    "last_key": None, "consecutive": 0,
+                    "read_history": set(), "dedup": {},
+                    "dedup_hits": {}, "read_timestamps": {},
+                })
+            warned = task_data.setdefault("unread_edit_warned", set())
+            if resolved in warned:
+                return None  # second attempt — the model chose to proceed
+            if len(warned) >= _UNREAD_EDIT_WARNED_CAP:
+                warned.pop()
+            warned.add(resolved)
+        return read_before_edit_message(filepath, tool_name)
+    except Exception:
+        logger.debug("read-before-edit check failed; allowing the edit", exc_info=True)
+        return None
+
+
 def _mark_verification_stale(
     task_id: str,
     resolved_paths: list[str],
@@ -1778,6 +1844,9 @@ def write_file_tool(path: str, content: str, task_id: str = "default",
             "Strip read_file line-number prefixes or reconstruct the intended "
             "file contents before writing."
         )
+    unread_err = _check_unread_edit(path, task_id, "write_file")
+    if unread_err:
+        return tool_error(unread_err, path=path, read_required=True)
     try:
         # Resolve once for the registry lock + stale check.  Failures here
         # fall back to the legacy path — write proceeds, per-task staleness
@@ -1900,6 +1969,10 @@ def patch_tool(mode: str = "replace", path: str = None, old_string: str = None,
             cross_warning = _check_cross_profile_path(_p, task_id)
             if cross_warning:
                 return tool_error(cross_warning)
+    for _p in _paths_to_check:
+        unread_err = _check_unread_edit(_p, task_id, "patch")
+        if unread_err:
+            return tool_error(unread_err, path=_p, read_required=True)
     try:
         # Resolve paths for locking.  Ordered + deduplicated so concurrent
         # callers lock in the same order — prevents deadlock on overlapping

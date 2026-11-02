@@ -14,6 +14,7 @@ import { usePet } from '../app/usePet.js'
 import { INLINE_MODE, SHOW_FPS, TERMUX_TUI_MODE } from '../config/env.js'
 import { PLACEHOLDER } from '../content/placeholders.js'
 import { prevRenderedMsg } from '../domain/blockLayout.js'
+import { userLabel } from '../domain/roles.js'
 import {
   COMPOSER_PROMPT_GAP_WIDTH,
   composerPromptWidth,
@@ -186,11 +187,14 @@ const TranscriptPane = memo(function TranscriptPane({
   // Index of the first user-role message; every later user message gets a
   // small dash above it so multi-turn transcripts visually segment by
   // turn. -1 when no user message has been sent yet → no separator ever
-  // renders.
+  // renders. With display.user_name set, the `$<name> ─────` header row
+  // over each message is that boundary, so the dash stays off.
   const firstUserIdx = useMemo(
     () => transcript.historyItems.findIndex(m => m.role === 'user'),
     [transcript.historyItems]
   )
+
+  const turnDash = !userLabel(ui.userName)
 
   return (
     <>
@@ -211,7 +215,7 @@ const TranscriptPane = memo(function TranscriptPane({
 
           {transcript.virtualRows.slice(transcript.virtualHistory.start, transcript.virtualHistory.end).map(row => (
             <Box flexDirection="column" key={row.key} ref={transcript.virtualHistory.measureRef(row.key)}>
-              {row.msg.role === 'user' && firstUserIdx >= 0 && row.index > firstUserIdx && (
+              {turnDash && row.msg.role === 'user' && firstUserIdx >= 0 && row.index > firstUserIdx && (
                 <Box marginTop={1}>
                   <Text color={ui.theme.color.border}>───</Text>
                 </Box>

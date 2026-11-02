@@ -211,3 +211,13 @@ export function stableComposerColumns(totalCols: number, promptWidth: number, te
 
   return Math.max(1, totalCols - promptWidth - 2 - reserveScrollbar - heartGutter)
 }
+
+// Robo's replies open with a header row: the `$Robo` label, a space, then a
+// thin rule out to the transcript's right edge (the same edge the body text
+// wraps at). Returns how many rule cells fit; never less than three so the
+// header still reads as a header on a very narrow pane.
+export function replyHeaderRuleWidth(totalCols: number, label: string, termuxMode = false) {
+  const horizontalReserve = termuxMode ? 2 : 4
+
+  return Math.max(3, totalCols - horizontalReserve - stringWidth(label) - 1)
+}

@@ -1,6 +1,6 @@
 // The chat box frame: a rounded box on all four sides around the composer.
 //
-//   ╭─ ◆ ROBO ────────────────────── ↑ history · Ctrl+B voice · /help ─╮
+//   ╭─ $Robo ─────────────────────── ↑ history · Ctrl+B voice · /help ─╮
 //   │ ▍ready  ·  model  ·  39.2k/1m  ·  [███░░░░░░░] 4%  ·  idle 1s     │
 //   │ › type here…                                                     ♥ │
 //   ╰──────────────────────────────────────────────────────── voice off ─╯
@@ -13,6 +13,7 @@
 // (/edit: the last message is back in the composer, waiting to be resent).
 import { stringWidth, Text } from '@robo/ink'
 
+import { agentLabel } from '../domain/roles.js'
 import type { Theme } from '../theme.js'
 
 /** Columns the frame takes on EACH side of the input: border + inner padding. */
@@ -68,7 +69,7 @@ export function composerFrameStyle(mode: ComposerMode, t: Theme): { color: strin
       return { color: t.color.primary, tag: '✎ EDIT' }
 
     default:
-      return { color: t.color.accent, tag: `${t.brand.icon} ${t.brand.tool}` }
+      return { color: t.color.accent, tag: agentLabel(t.brand.name) }
   }
 }
 

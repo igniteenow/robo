@@ -82,6 +82,7 @@ class TestBlankSlateFork:
     def _patch_common(self, monkeypatch):
         import robo_cli.setup as s
         # Neutralize side-effecting setup steps and I/O.
+        monkeypatch.setattr(s, "setup_user_name", lambda cfg, **k: None)
         monkeypatch.setattr(s, "setup_model_provider", lambda cfg, **k: None)
         monkeypatch.setattr(s, "setup_terminal_backend", lambda cfg, **k: None)
         monkeypatch.setattr(s, "save_config", lambda cfg: None)

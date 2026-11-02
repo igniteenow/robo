@@ -301,7 +301,7 @@ the full guide, supported languages, and configuration knobs.
 ## `robo setup`
 
 ```bash
-robo setup [model|tts|terminal|gateway|tools|agent] [--non-interactive] [--reset] [--quick] [--reconfigure]
+robo setup [name|model|tts|terminal|gateway|tools|agent] [--non-interactive] [--reset] [--quick] [--reconfigure]
 ```
 
 **Easiest path:** `robo setup` — pick a provider, authenticate, and go.
@@ -314,6 +314,7 @@ Jump into one section instead of the full wizard:
 
 | Section | Description |
 |---------|-------------|
+| `name` | What Robo calls you — the TUI heads your messages `$<name>` (see `display.user_name`). |
 | `model` | Provider and model setup. |
 | `terminal` | Terminal backend and sandbox setup. |
 | `gateway` | Messaging platform setup. |
