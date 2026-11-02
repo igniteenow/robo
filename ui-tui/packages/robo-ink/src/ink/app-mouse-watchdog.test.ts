@@ -20,7 +20,7 @@ const DECRPM_1000_RESET = csi(`?${DEC.MOUSE_NORMAL};2$y`)
 const DA1_REPLY = csi('?62c')
 
 // Watchdog cadence (mirrors MOUSE_WATCHDOG_INTERVAL_MS in App.tsx).
-const TICK_MS = 2000
+const TICK_MS = 10_000
 
 class FakeStdout extends EventEmitter {
   chunks: string[] = []
@@ -211,6 +211,48 @@ describe('App mouse-mode watchdog', () => {
     await h.tickWatchdog()
     await h.tickWatchdog()
     expect(h.stdout.chunks.join('')).not.toContain(DECRQM_1000)
+
+    h.ink.unmount()
+  })
+
+  it('stops probing when the terminal says RESET again right after a re-assert', async () => {
+    // Windows Terminal answers RESET for mode 1000 while tracking works;
+    // believing it would re-assert the modes on every tick forever.
+    const h = await mount('all')
+
+    await h.tickWatchdog()
+    h.stdout.chunks = []
+    await h.answer(DECRPM_1000_RESET + DA1_REPLY)
+    expect(h.stdout.chunks.join('')).toContain(enableMouseTrackingFor('all'))
+
+    h.stdout.chunks = []
+    await h.tickWatchdog()
+    expect(h.stdout.chunks.join('')).toContain(DECRQM_1000)
+    h.stdout.chunks = []
+    await h.answer(DECRPM_1000_RESET + DA1_REPLY)
+
+    // No second re-assert, and no further probes.
+    expect(h.stdout.chunks.join('')).not.toContain(enableMouseTrackingFor('all'))
+    await h.tickWatchdog()
+    await h.tickWatchdog()
+    expect(h.stdout.chunks.join('')).not.toContain(DECRQM_1000)
+
+    h.ink.unmount()
+  })
+
+  it('keeps probing when a re-assert brought the mode back', async () => {
+    const h = await mount('all')
+
+    await h.tickWatchdog()
+    await h.answer(DECRPM_1000_RESET + DA1_REPLY)
+    await h.tickWatchdog()
+    await h.answer(DECRPM_1000_SET + DA1_REPLY)
+    h.stdout.chunks = []
+
+    // Lost again later: re-asserted again, not written off.
+    await h.tickWatchdog()
+    await h.answer(DECRPM_1000_RESET + DA1_REPLY)
+    expect(h.stdout.chunks.join('')).toContain(enableMouseTrackingFor('all'))
 
     h.ink.unmount()
   })

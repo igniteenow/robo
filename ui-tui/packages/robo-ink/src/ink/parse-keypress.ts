@@ -34,6 +34,10 @@ const MODIFY_OTHER_KEYS_RE = /^\x1b\[27;(\d+);(\d+)~/
 // DECRPM: CSI ? Ps ; Pm $ y  — response to DECRQM (request mode)
 // eslint-disable-next-line no-control-regex
 const DECRPM_RE = /^\x1b\[\?(\d+);(\d+)\$y$/
+// The tails of the CSI-shaped terminal replies above, as they look when the
+// leading ESC was split off and flushed on its own: DECRPM, DA1, DA2, kitty
+// keyboard flags, DECXCPR. Nothing a person types matches these.
+const RESPONSE_TAIL_RE = /^\[(?:\?\d+;\d+\$y|\?[\d;]*c|>[\d;]*c|\?\d+u|\?\d+;\d+R)$/
 // DA1: CSI ? Ps ; ... c  — primary device attributes response
 // eslint-disable-next-line no-control-regex
 const DA1_RE = /^\x1b\[\?([\d;]*)c$/
@@ -283,6 +287,20 @@ export function parseMultipleKeypresses(
     } else if (token.type === 'text') {
       if (inPaste) {
         pasteBuffer += token.value
+      } else if (RESPONSE_TAIL_RE.test(token.value)) {
+        // A terminal reply (DECRPM, DA1, DA2, kitty flags, cursor report)
+        // whose ESC arrived on its own and was flushed as the Escape key —
+        // SSH and conpty split a reply anywhere, including right after the
+        // ESC. The rest (`[?1000;2$y`, `[?61;4;...;52c`) is not something a
+        // person typed: re-synthesize the reply and route it to the querier
+        // instead of typing digits into the input.
+        const response = parseTerminalResponse('\x1b' + token.value)
+
+        if (response) {
+          keys.push({ kind: 'response', response, sequence: '\x1b' + token.value })
+        } else {
+          keys.push(parseKeypress(token.value))
+        }
       } else if (/^\[M[\x60-\x7f][\x20-\uffff]{2}$/.test(token.value)) {
         // Orphaned X10 wheel tail (legacy 1000/1002 terminals, fullscreen
         // only). If the buffered ESC was flushed as a lone Escape and the X10

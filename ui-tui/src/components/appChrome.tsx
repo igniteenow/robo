@@ -34,19 +34,28 @@ const FACE_TICK_MS = 2500
 const DOTS_SQUARE = '⠛' // dots 1 2 4 5: the 2×2 square
 const DOTS_FLIP_A = '⠑' // dots 1 5: the ╲ diagonal
 const DOTS_FLIP_B = '⠊' // dots 2 4: the ╱ diagonal
+export const WORK_DOTS_TICK_MS = 125 // a flip shows for one tick
 const DOTS_HOLD = 4 // ticks the square holds between flips
 
-export const WORK_DOTS_FRAMES = [
-  ...Array<string>(DOTS_HOLD).fill(DOTS_SQUARE),
-  DOTS_FLIP_A,
-  ...Array<string>(DOTS_HOLD).fill(DOTS_SQUARE),
-  DOTS_FLIP_B
+// The animation as steps: the glyph and how long it stays. The status rule
+// repaints only when the glyph changes — four repaints per 1.25 s cycle, not
+// ten — because in an Ink TUI every repaint is a whole frame, and on a slow
+// terminal those frames are what make typing feel late.
+export const WORK_DOTS_STEPS: ReadonlyArray<readonly [glyph: string, ms: number]> = [
+  [DOTS_SQUARE, DOTS_HOLD * WORK_DOTS_TICK_MS],
+  [DOTS_FLIP_A, WORK_DOTS_TICK_MS],
+  [DOTS_SQUARE, DOTS_HOLD * WORK_DOTS_TICK_MS],
+  [DOTS_FLIP_B, WORK_DOTS_TICK_MS]
 ]
-export const WORK_DOTS_TICK_MS = 125
-// The face advances once per FACE_TICK_MS on the same ticker as the dots.
-const FACE_TICKS_PER_FRAME = FACE_TICK_MS / WORK_DOTS_TICK_MS
+export const WORK_DOTS_CYCLE_MS = WORK_DOTS_STEPS.reduce((sum, [, ms]) => sum + ms, 0)
+
+// The same animation tick by tick (one entry per WORK_DOTS_TICK_MS).
+export const WORK_DOTS_FRAMES = WORK_DOTS_STEPS.flatMap(([glyph, ms]) =>
+  Array<string>(Math.max(1, Math.round(ms / WORK_DOTS_TICK_MS))).fill(glyph)
+)
 
 export const workDotsFrame = (tick: number) => WORK_DOTS_FRAMES[tick % WORK_DOTS_FRAMES.length] ?? DOTS_SQUARE
+export const workDotsStep = (step: number) => WORK_DOTS_STEPS[step % WORK_DOTS_STEPS.length] ?? WORK_DOTS_STEPS[0]!
 const HEART_COLORS = ['#ff5fa2', '#ff4d6d']
 
 // Keep verb segment width stable so status-bar content to the right doesn't
@@ -72,6 +81,8 @@ const SPINNER_TICK_MS = 100
 
 interface IndicatorRender {
   frame: string
+  // How often the glyph timer fires. The styles that carry the dots run on
+  // the dots' own step timer instead (see FaceTicker) and report the cycle.
   intervalMs: number
   // When false, FaceTicker hides the rotating verb and just shows the
   // glyph + duration.  Lets `unicode` stay minimal while the other
@@ -83,17 +94,20 @@ interface IndicatorRender {
   dots: boolean
 }
 
-const renderIndicator = (style: IndicatorStyle, tick: number): IndicatorRender => {
+// `tick` counts glyph-timer firings; `slowTick` counts FACE_TICK_MS beats
+// (the face and the decorative verb change together, as they always did).
+const renderIndicator = (style: IndicatorStyle, tick: number, slowTick = 0): IndicatorRender => {
   if (style === 'kaomoji') {
-    const face = FACES[Math.floor(tick / FACE_TICKS_PER_FRAME) % FACES.length] ?? ''
+    const face = FACES[slowTick % FACES.length] ?? ''
 
-    return { frame: face, intervalMs: WORK_DOTS_TICK_MS, showVerb: true, dots: true }
+    return { frame: face, intervalMs: WORK_DOTS_CYCLE_MS, showVerb: true, dots: true }
   }
 
   if (style === 'emoji') {
-    const frame = EMOJI_FRAMES[Math.floor(tick / 5) % EMOJI_FRAMES.length] ?? '◆ '
+    // One emoji per half dots-cycle: the pace it had at 5 × 125 ms.
+    const frame = EMOJI_FRAMES[Math.floor(tick / 2) % EMOJI_FRAMES.length] ?? '◆ '
 
-    return { frame, intervalMs: WORK_DOTS_TICK_MS, showVerb: true, dots: true }
+    return { frame, intervalMs: WORK_DOTS_CYCLE_MS, showVerb: true, dots: true }
   }
 
   if (style === 'ascii') {
@@ -172,7 +186,7 @@ function FaceTicker({
   style: IndicatorStyle
 }) {
   const [tick, setTick] = useState(() => Math.floor(Math.random() * 1000))
-  const [verbTick, setVerbTick] = useState(() => Math.floor(Math.random() * VERBS.length))
+  const [slowTick, setSlowTick] = useState(() => Math.floor(Math.random() * VERBS.length))
   const [now, setNow] = useState(() => Date.now())
   const isOccluded = useStore($isStatusRuleOccluded)
   // What Robo is doing right now — "running…", "reading…", "thinking…",
@@ -187,7 +201,7 @@ function FaceTicker({
   // `/indicator` switch re-arms the interval (and skips the verb timer
   // for verb-less styles like `unicode`) without leaving the previous
   // timer dangling.
-  const { intervalMs, showVerb } = renderIndicator(style, 0)
+  const { dots: hasDots, intervalMs, showVerb } = renderIndicator(style, 0)
 
   useEffect(() => {
     // An overlay is painted OVER the status rule (the modal widget slot, or a
@@ -203,24 +217,53 @@ function FaceTicker({
 
     setNow(Date.now())
 
-    const glyph = setInterval(() => setTick(n => n + 1), intervalMs)
+    // The dots advance step by step, each step holding for its own time, so
+    // the timer fires only when the glyph is about to change. Spinner styles
+    // keep their fixed interval.
+    let glyphTimer: null | ReturnType<typeof setTimeout> = null
+    let glyphInterval: null | ReturnType<typeof setInterval> = null
+
+    if (hasDots) {
+      const arm = (step: number) => {
+        glyphTimer = setTimeout(() => {
+          setTick(n => n + 1)
+          arm(step + 1)
+        }, workDotsStep(step)[1])
+      }
+
+      arm(tick)
+    } else {
+      glyphInterval = setInterval(() => setTick(n => n + 1), intervalMs)
+    }
+
     const clock = setInterval(() => setNow(Date.now()), 1000)
-    // Verb timer is gated on `showVerb` — `unicode` style hides the verb
-    // entirely, so cycling `verbTick` would be an avoidable re-render.
-    const verb = showVerb ? setInterval(() => setVerbTick(n => n + 1), FACE_TICK_MS) : null
+    // The slow beat turns the face and the decorative verb. Gated on
+    // `showVerb` — `unicode` style hides both, so the beat would be an
+    // avoidable re-render.
+    const slow = showVerb ? setInterval(() => setSlowTick(n => n + 1), FACE_TICK_MS) : null
 
     return () => {
-      clearInterval(glyph)
+      if (glyphTimer !== null) {
+        clearTimeout(glyphTimer)
+      }
+
+      if (glyphInterval !== null) {
+        clearInterval(glyphInterval)
+      }
+
       clearInterval(clock)
 
-      if (verb !== null) {
-        clearInterval(verb)
+      if (slow !== null) {
+        clearInterval(slow)
       }
     }
-  }, [intervalMs, isOccluded, showVerb])
+    // `tick` seeds the step the chain starts from; re-arming on every tick
+    // would restart the chain it just advanced.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDots, intervalMs, isOccluded, showVerb])
 
-  const { dots, frame } = renderIndicator(style, tick)
-  const verb = liveVerb || (VERBS[verbTick % VERBS.length] ?? '')
+  const { dots, frame } = renderIndicator(style, tick, slowTick)
+  const verb = liveVerb || (VERBS[slowTick % VERBS.length] ?? '')
   const verbSegment = showVerb ? ` ${padVerb(verb)}` : ''
   // Leading space keeps a gap between the frame and the duration when the
   // verb segment is hidden (e.g. `unicode` spinner style).  When the verb
@@ -230,7 +273,7 @@ function FaceTicker({
 
   return (
     <Text color={color}>
-      {dots ? <Text color={dotsColor}> {workDotsFrame(tick)} </Text> : null}
+      {dots ? <Text color={dotsColor}> {workDotsStep(tick)[0]} </Text> : null}
       {frame}
       {verbSegment}
       {durationSegment}

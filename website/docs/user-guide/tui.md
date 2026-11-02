@@ -114,7 +114,7 @@ The composer is a box on all four sides whose tag and colour say what it is doin
 
 **Changing your mind while Robo works.** You are never locked out while a turn runs:
 
-- **Type and send a new message** — Robo reads it at once and redirects the live turn, keeping in mind what it was already doing (`display.busy_input_mode: interrupt`, the default). `queue` parks the message for the next turn instead; `steer` hands it over only after the current step finishes, which for a long tool run or a slow reply feels like the message never arrived — the box's hint tells you which mode is on, `/busy status` shows it and `/busy interrupt` switches (persisted to `config.yaml`). Your message appears at once at the bottom, right under what Robo has done so far, and stays at that point in the conversation — what Robo does next appears below it. That is the whole acknowledgement: nothing else is shown when Robo reads it now. Only when the message was parked instead (*read after this step*, *queued for next turn*) does a one-line note under the transcript say so, and it goes away a few seconds later.
+- **Type and send a new message** — Robo reads it at once and redirects the live turn, keeping in mind what it was already doing (`display.busy_input_mode: interrupt`, the default). `queue` parks the message for the next turn instead; `steer` hands it over only after the current step finishes, which for a long tool run or a slow reply feels like the message never arrived — the box's hint tells you which mode is on, `/busy status` shows it and `/busy interrupt` switches (persisted to `config.yaml`). Your message appears at once at the bottom, right under what Robo has done and said so far (the text it was in the middle of writing stays above your message), and stays at that point in the conversation — what Robo does next appears below it. That is the whole acknowledgement: nothing else is shown when Robo reads it now. Only when the message was parked instead (*read after this step*, *queued for next turn*) does a one-line note under the transcript say so, and it goes away a few seconds later.
 - **`/edit`** — Robo stops, the exchange is backed out of history, and your last message comes back into the box under `✎ EDIT`. Change it and press Enter: Robo starts again from that point as if the first version had never been sent. Esc Esc keeps the text in ↑ history. With messages still queued, `/edit` refuses — they would be sent the moment Robo stops — so remove them first (↑ into the queue, Ctrl+X) or send them (Ctrl+K).
 - **Answering a question Robo asks** works the same way: your answer, with the question's line above it, stays in the conversation at the point Robo asked, under the work so far.
 - **Ctrl+C** — stop the turn and send nothing.
@@ -200,6 +200,14 @@ export ROBO_TUI_RESUME=<session-id>   # specific session
 ```
 
 Unset the variable or pass `--resume <id>` explicitly to override on a per-launch basis.
+
+Over SSH, an idle connection is usually cut by the network, not by Robo. Ask the SSH client to keep it alive instead — in `~/.ssh/config` on the machine you connect from:
+
+```
+Host *
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+```
 
 ## Status line
 

@@ -624,6 +624,12 @@ class TurnController {
       return false
     }
 
+    // What Robo has said so far comes first. Text still streaming is not a
+    // segment yet and renders under the segments, so without sealing it here
+    // the person's message would show ABOVE the question it answers.
+    this.flushStreamingSegment()
+    this.closeReasoningSegment()
+
     for (const msg of msgs) {
       this.pushSegment(msg)
     }

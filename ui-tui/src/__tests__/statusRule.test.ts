@@ -6,8 +6,12 @@ import {
   statusBarSegments,
   statusRuleWidths,
   VERB_PAD_LEN,
+  WORK_DOTS_CYCLE_MS,
   WORK_DOTS_FRAMES,
-  workDotsFrame
+  WORK_DOTS_STEPS,
+  WORK_DOTS_TICK_MS,
+  workDotsFrame,
+  workDotsStep
 } from '../components/appChrome.js'
 
 describe('statusRuleWidths', () => {
@@ -133,6 +137,22 @@ describe('busyIndicatorWidth', () => {
     expect(WORK_DOTS_FRAMES.filter(frame => frame === square).length).toBeGreaterThanOrEqual(flips.length * 3)
     expect(workDotsFrame(0)).toBe(square)
     expect(workDotsFrame(WORK_DOTS_FRAMES.length)).toBe(square)
+  })
+
+  it('repaints the dots only when the glyph changes', () => {
+    // Four steps per cycle: hold, flip, hold, flip. The holds are long, the
+    // flips one tick — so a cycle costs four repaints, not one per tick.
+    expect(WORK_DOTS_STEPS).toHaveLength(4)
+    expect(WORK_DOTS_STEPS[0]![0]).toBe(WORK_DOTS_STEPS[2]![0])
+    expect(WORK_DOTS_STEPS[1]![0]).not.toBe(WORK_DOTS_STEPS[3]![0])
+    expect(WORK_DOTS_STEPS[1]![1]).toBe(WORK_DOTS_TICK_MS)
+    expect(WORK_DOTS_STEPS[3]![1]).toBe(WORK_DOTS_TICK_MS)
+    expect(WORK_DOTS_STEPS[0]![1]).toBeGreaterThanOrEqual(3 * WORK_DOTS_TICK_MS)
+    expect(WORK_DOTS_CYCLE_MS).toBe(WORK_DOTS_STEPS.reduce((sum, [, ms]) => sum + ms, 0))
+    // The tick-by-tick view is the same animation.
+    expect(WORK_DOTS_FRAMES).toHaveLength(WORK_DOTS_CYCLE_MS / WORK_DOTS_TICK_MS)
+    expect(workDotsStep(4)).toBe(WORK_DOTS_STEPS[0])
+    expect(workDotsStep(1)[0]).toBe(workDotsFrame(4))
   })
 
   it('reserves room for the elapsed-time tail only when a turn is timed', () => {

@@ -135,6 +135,13 @@ export class TerminalQuerier {
 
   constructor(private stdout: NodeJS.WriteStream) {}
 
+  /** True while at least one query or sentinel is waiting for its reply —
+   *  the terminal owes us bytes, so a lone ESC on stdin is very likely the
+   *  start of that reply rather than the Escape key. */
+  hasPending(): boolean {
+    return this.queue.length > 0
+  }
+
   /**
    * Send a query and wait for its response.
    *
