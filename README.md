@@ -218,4 +218,4 @@ your hardware; `robo doctor` shows what's available. Want to help build it? See
 
 [MIT](LICENSE) · Built by [Ignitee Now](https://igniteenow.com).
 
-<sub>Based on the MIT-licensed [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>
+<sub>Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).</sub>

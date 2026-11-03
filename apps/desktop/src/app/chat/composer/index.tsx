@@ -104,7 +104,8 @@ export function ChatBar({
   onRemoveAttachment,
   onSteer,
   onSubmit: onSubmitProp,
-  onTranscribeAudio
+  onTranscribeAudio,
+  onPreviewAudio
 }: ChatBarProps) {
   // Typed stop phrase during an active voice conversation ends it — same
   // semantics as SAYING "stop" (voice-stop-word.ts) or clicking the pill's
@@ -336,11 +337,7 @@ export function ChatBar({
 
   // While busy: text opens the choice, attachments queue for the next turn, an
   // empty composer stops.
-  const busyAction: 'ask' | 'queue' | 'stop' = canAsk
-    ? 'ask'
-    : compacting || hasComposerPayload
-      ? 'queue'
-      : 'stop'
+  const busyAction: 'ask' | 'queue' | 'stop' = canAsk ? 'ask' : compacting || hasComposerPayload ? 'queue' : 'stop'
 
   // The submit engine — the orchestration seam where draft + queue meet. Owns
   // the submit decision tree, the send-with-restore primitive, and steer.
@@ -933,6 +930,7 @@ export function ChatBar({
     // Voice barge-in mid-generation halts the run like the Stop button.
     onInterrupt: haltRun,
     onSubmit,
+    onPreviewAudio,
     onTranscribeAudio,
     sessionId,
     target: scope.target

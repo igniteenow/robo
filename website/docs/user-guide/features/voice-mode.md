@@ -172,6 +172,10 @@ When TTS is enabled, the agent speaks its reply **sentence-by-sentence** as it g
 
 The same pipeline runs in the classic CLI, the TUI, and the desktop app. In a desktop voice conversation the reply text is fed **live** into a per-reply speech WebSocket as the model generates it, so speech overlaps generation — one socket and one audio clock per reply, no per-sentence connection gaps.
 
+### Desktop dictation: live words
+
+When you dictate into the desktop composer with the microphone button, the words appear above the recording pill as you speak, about every second and a half, so you can see it is hearing you. When you stop, the whole recording is transcribed once more and that text goes into the message box; the live words are only a preview. Live words need local speech-to-text (`stt.provider: local`, the default): previews re-read the recording so far each time, and a cloud provider would bill that audio again on every preview, so with a cloud provider the text appears when you stop, as before. Previews stop after 90 seconds of a single recording.
+
 ### Barge-in
 
 You can interrupt the agent at ANY point in its turn — the microphone stays live from the moment you finish speaking until the reply has fully played (full duplex):

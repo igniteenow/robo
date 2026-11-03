@@ -10,6 +10,10 @@ type BrowserAudioContext = typeof AudioContext
 // 2% steps: every paint re-renders the composer.
 const LEVEL_PAINT_MS = 80
 const LEVEL_STEP = 0.02
+// The recorder hands its audio over in slices of this length, so the
+// recording so far can be read while it is still going (the live preview).
+// Concatenated, the slices are the same file a single-shot recording gives.
+const RECORDING_SLICE_MS = 1000
 
 export interface MicRecorderOptions {
   onLevel?: (level: number) => void
@@ -35,6 +39,9 @@ interface MicRecorderHandle {
   start: (options?: MicRecorderOptions) => Promise<void>
   stop: () => Promise<MicRecording | null>
   cancel: () => void
+  /** The audio recorded so far, while recording; null before the first
+   *  slice arrives or when not recording. Does not disturb the recording. */
+  snapshot: () => Blob | null
 }
 
 /** A getUserMedia / MediaRecorder failure as a message the user can act on. */
@@ -78,6 +85,7 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
   const audioContextRef = useRef<AudioContext | null>(null)
   const stopMeterRef = useRef<(() => void) | null>(null)
   const startedAtRef = useRef(0)
+  const mimeTypeRef = useRef('')
   const stopResolverRef = useRef<((recording: MicRecording | null) => void) | null>(null)
 
   /** Let go of the device, the audio graph and the meter. */
@@ -195,6 +203,7 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
     streamRef.current = stream
     recorderRef.current = recorder
     startedAtRef.current = Date.now()
+    mimeTypeRef.current = recorder.mimeType || mimeType || 'audio/webm'
 
     recorder.ondataavailable = event => {
       if (event.data.size > 0) {
@@ -234,7 +243,7 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
       resolver?.(null)
     }
 
-    recorder.start()
+    recorder.start(RECORDING_SLICE_MS)
     setRecording(true)
     startMeter(stream, options)
   }
@@ -270,7 +279,17 @@ export function useMicRecorder(copy: MicRecorderErrorCopy): {
     resolver?.(null)
   }
 
-  const handle: MicRecorderHandle = { start, stop, cancel }
+  const snapshot: MicRecorderHandle['snapshot'] = () => {
+    const recorder = recorderRef.current
+
+    if (!recorder || recorder.state === 'inactive' || !chunksRef.current.length) {
+      return null
+    }
+
+    return new Blob(chunksRef.current, { type: mimeTypeRef.current })
+  }
+
+  const handle: MicRecorderHandle = { start, stop, cancel, snapshot }
 
   return { handle, level, recording }
 }

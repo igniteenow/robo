@@ -194,4 +194,4 @@ Robo 3.0.1 正处于抢先体验阶段。欢迎试用并告诉我们你的想法
 
 [MIT](LICENSE) · 由 [Ignitee Now](https://igniteenow.com) 打造。
 
-<sub>基于 Nous Research 的 MIT 许可项目 [Hermes Agent](https://github.com/NousResearch/hermes-agent)。详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。</sub>
+<sub>第三方声明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。</sub>

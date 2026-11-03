@@ -59,6 +59,8 @@ export interface ChatBarProps {
   onSteer?: (text: string) => Promise<boolean> | boolean
   onSubmit: (value: string, options?: SubmitTextOptions) => Promise<boolean> | boolean
   onTranscribeAudio?: (audio: Blob) => Promise<string>
+  /** Live words of a dictation in progress; null = this machine cannot preview. */
+  onPreviewAudio?: (audio: Blob) => Promise<string | null>
 }
 
 export type VoiceStatus = 'idle' | 'recording' | 'transcribing'
@@ -67,4 +69,6 @@ export interface VoiceActivityState {
   elapsedSeconds: number
   level: number
   status: VoiceStatus
+  /** What has been heard so far while recording (live preview), or ''. */
+  liveText?: string
 }

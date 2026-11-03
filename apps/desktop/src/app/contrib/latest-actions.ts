@@ -51,6 +51,7 @@ export function latestChatActions(actions: ChatActions): ChatActions {
     onSubmit: (...args) => actions.onSubmit(...args),
     onThreadMessagesChange: (...args) => actions.onThreadMessagesChange(...args),
     onToggleSelectedPin: (...args) => actions.onToggleSelectedPin(...args),
+    onPreviewAudio: latestOptional(() => actions.onPreviewAudio),
     onTranscribeAudio: latestOptional(() => actions.onTranscribeAudio)
   }
 }

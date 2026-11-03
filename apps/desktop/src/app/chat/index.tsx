@@ -89,6 +89,8 @@ interface ChatViewProps extends Omit<React.ComponentProps<'div'>, 'onSubmit'> {
   onRestoreToMessage?: (messageId: string, target?: { text?: string; userOrdinal?: number | null }) => Promise<void>
   onRetryResume: (sessionId: string) => void
   onTranscribeAudio?: (audio: Blob) => Promise<string>
+  /** Live words of a dictation in progress; null = this machine cannot preview. */
+  onPreviewAudio?: (audio: Blob) => Promise<string | null>
   onDismissError?: (messageId: string) => void
   /** Render the transcript WITHOUT the composer — a live, read-only view of a
    *  session someone else is driving (Team mode's member panes). Same stance
@@ -309,6 +311,7 @@ export const ChatView = memo(function ChatView({
   onRestoreToMessage,
   onRetryResume,
   onTranscribeAudio,
+  onPreviewAudio,
   onDismissError,
   hideComposer = false
 }: ChatViewProps) {
@@ -632,6 +635,7 @@ export const ChatView = memo(function ChatView({
               onPickFiles={onPickFiles}
               onPickFolders={onPickFolders}
               onPickImages={onPickImages}
+              onPreviewAudio={onPreviewAudio}
               onRemoveAttachment={onRemoveAttachment}
               onSteer={onSteer}
               onSubmit={onSubmit}

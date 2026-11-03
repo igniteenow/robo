@@ -20,6 +20,9 @@ export interface AudioTranscriptionResponse {
   ok: boolean
   provider?: string
   transcript: string
+  /** A preview was asked for and the provider is not local (see
+   *  transcribeAudio's `preview`): nothing was transcribed. */
+  preview_unsupported?: boolean
 }
 
 export interface AudioSpeakResponse {

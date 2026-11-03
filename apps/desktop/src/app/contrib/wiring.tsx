@@ -578,6 +578,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     reloadFromMessage,
     restoreToMessage,
     steerPrompt,
+    previewVoiceAudio,
     submitText,
     transcribeVoiceAudio
   } = usePromptActions({
@@ -905,6 +906,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
     onSubmit: submitText,
     onThreadMessagesChange: handleThreadMessagesChange,
     onToggleSelectedPin: toggleSelectedPin,
+    onPreviewAudio: previewVoiceAudio,
     onTranscribeAudio: transcribeVoiceAudio,
     onTriggerCronJob: jobId => {
       void triggerCronJob(jobId)
