@@ -510,17 +510,18 @@ class TestBlockingApprovalE2E:
                 from tools.approval import reset_current_session_key, set_current_session_key
 
                 token = set_current_session_key(session_key)
-                os.environ["ROBO_GATEWAY_SESSION"] = "1"
-                os.environ["ROBO_EXEC_ASK"] = "1"
-                os.environ["ROBO_SESSION_KEY"] = session_key
                 try:
                     results[idx] = check_all_command_guards(cmd, "local")
                 finally:
-                    os.environ.pop("ROBO_GATEWAY_SESSION", None)
-                    os.environ.pop("ROBO_EXEC_ASK", None)
-                    os.environ.pop("ROBO_SESSION_KEY", None)
                     reset_current_session_key(token)
             return run
+
+        # Process-wide, so set once for all three agents: set and cleared per
+        # thread, the first agent to finish cleared them under the others,
+        # which then took the no-gateway path and never prompted.
+        os.environ["ROBO_GATEWAY_SESSION"] = "1"
+        os.environ["ROBO_EXEC_ASK"] = "1"
+        os.environ["ROBO_SESSION_KEY"] = session_key
 
         threads = [
             threading.Thread(target=make_agent(0, "rm -rf /a"), daemon=True),
@@ -531,17 +532,20 @@ class TestBlockingApprovalE2E:
             for t in threads:
                 t.start()
 
-            # Each round: wait for at least one more agent to reach the
-            # notify (its queue entry is appended before the callback fires),
-            # then approve everything currently queued. Ends when all three
-            # have been approved.
+            # Each round: wait until an agent has prompted that is not yet
+            # answered (its queue entry is appended before the callback
+            # fires), then approve everything currently queued. Ends when all
+            # three have been approved. Compare against the answered count,
+            # never a snapshot of ``notified`` taken here: the first agent can
+            # prompt before the snapshot, and the others wait for that prompt
+            # to be answered — waiting for a fourth prompt then deadlocks.
             approved = 0
             rounds = 0
             while approved < 3:
                 rounds += 1
                 assert rounds <= 3, "more approval rounds than agents"
-                seen = len(notified)
-                assert _wait_until(lambda: len(notified) > seen), \
+                answered = approved
+                assert _wait_until(lambda: len(notified) > answered), \
                     "no agent reached the gateway approval notify"
                 approved += resolve_gateway_approval(
                     session_key, "once", resolve_all=True
@@ -560,6 +564,9 @@ class TestBlockingApprovalE2E:
             # non-daemon thread would hang the whole pytest process.
             resolve_gateway_approval(session_key, "deny", resolve_all=True)
             unregister_gateway_notify(session_key)
+            os.environ.pop("ROBO_GATEWAY_SESSION", None)
+            os.environ.pop("ROBO_EXEC_ASK", None)
+            os.environ.pop("ROBO_SESSION_KEY", None)
 
 
 # ------------------------------------------------------------------
