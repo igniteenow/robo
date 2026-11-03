@@ -731,6 +731,11 @@ export type GatewayEvent =
       session_id?: string
       type: 'approval.request'
     }
+  | {
+      payload?: { command?: string; description?: string; reason?: string; verdict?: string }
+      session_id?: string
+      type: 'approval.reviewed'
+    }
   | { payload: { request_id: string }; session_id?: string; type: 'sudo.request' }
   | { payload: { env_var: string; prompt: string; request_id: string }; session_id?: string; type: 'secret.request' }
   | { payload: { request_id: string }; session_id?: string; type: 'secret.expire' | 'sudo.expire' }

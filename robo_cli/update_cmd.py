@@ -63,6 +63,29 @@ _UPDATE_RUNTIME_RELOAD_MODULES = (
     "tools.lazy_deps",
 )
 
+def _precompile_after_update() -> None:
+    """Compile the updated checkout before the update reports success.
+
+    The update clears ``__pycache__``; this rebuilds it with the checkout's
+    own interpreter so the first launch afterwards (the desktop app's backend,
+    usually) starts as fast as any other. Never raises; on any failure the
+    files are compiled on first import, as before.
+    """
+    try:
+        from robo_cli.managed_uv import _venv_python
+
+        venv_python = _venv_python(_m()._project_venv_dir())
+        python = str(venv_python) if venv_python.is_file() else None
+        print("→ Preparing Python files for a fast first start...")
+        from robo_cli.progress_heartbeat import heartbeat
+
+        with heartbeat("preparing Python files"):
+            ok = _m()._precompile_bytecode(_m().PROJECT_ROOT, python=python)
+        print("  ✓ Python files prepared" if ok else "  ✓ Python files prepared (a few will compile on first use)")
+    except Exception as exc:
+        logger.debug("Post-update bytecode precompile failed: %s", exc)
+
+
 def _reload_updated_runtime_modules() -> None:
     """Reload update-sensitive modules after the checkout changes in-place.
 
@@ -986,6 +1009,10 @@ def _update_via_zip(args):
     # after the dependency reinstall, same as the git-pull path (#53272,
     # #70636).
     _m()._refresh_active_memory_provider_dependencies()
+
+    # Same as the git path: rebuild the bytecode cleared above now, not in
+    # the next launch's startup window.
+    _precompile_after_update()
 
     # Now that dependencies are installed, verify the tree actually imports.
     # The copy loop above replaces top-level entries one at a time in
@@ -4601,6 +4628,10 @@ def _cmd_update_impl(args, gateway_mode: bool):
         # reinstall + lazy refresh above may have stripped or downgraded
         # plugin.yaml-declared deps that aren't in extras (#53272, #70636).
         _m()._refresh_active_memory_provider_dependencies()
+
+        # Rebuild the bytecode the sweeps above cleared, while the user is
+        # still watching the update — not in the next launch's startup window.
+        _precompile_after_update()
 
         # Everything that can legitimately produce a transient ImportError has
         # now run (bytecode sweep, dependency reinstall, lazy refresh), so a

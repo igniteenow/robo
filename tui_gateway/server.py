@@ -1883,6 +1883,7 @@ def _register_tui_approval_notify(sid: str, key: str) -> None:
         wait_forever=wait_forever,
         halt_on_deny=halt_on_deny,
         on_halt=_on_halt,
+        on_review=lambda review: _emit_approval_review(sid, review),
     )
 
 
@@ -1929,6 +1930,19 @@ def _emit_approval_request(sid: str, data: dict | None) -> None:
 
         payload["command"] = _redact_approval_command(payload.get("command"))
     _emit("approval.request", sid, payload)
+
+
+def _emit_approval_review(sid: str, review: dict | None) -> None:
+    """Emit an ``approval.reviewed`` event: the smart-approval reviewer's
+    decision on a flagged action, shown in the transcript so the person sees
+    every one — above all the approvals it makes without asking. Redacted the
+    same way as ``approval.request``."""
+    payload = dict(review or {})
+    if "command" in payload:
+        from gateway.run import _redact_approval_command
+
+        payload["command"] = _redact_approval_command(payload.get("command"))
+    _emit("approval.reviewed", sid, payload)
 
 
 def _status_update(sid: str, kind: str, text: str | None = None):
