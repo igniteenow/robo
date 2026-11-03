@@ -5,7 +5,6 @@ import { forceRedraw, onTerminalBackground, onTerminalForeground } from '@robo/i
 import { STARTUP_IMAGE, STARTUP_QUERY } from '../config/env.js'
 import { STREAM_BATCH_MS } from '../config/timing.js'
 import { buildSetupRequiredSections, SETUP_REQUIRED_TITLE } from '../content/setup.js'
-import { parseApprovalReview } from '../domain/approvalReview.js'
 import type {
   CommandsCatalogResponse,
   ConfigFullResponse,
@@ -1321,16 +1320,6 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
           }
         })
         setStatus('approval needed')
-
-        return
-      }
-
-      case 'approval.reviewed': {
-        const review = parseApprovalReview(ev.payload)
-
-        if (review) {
-          turnController.recordApprovalReview(review)
-        }
 
         return
       }

@@ -5,7 +5,6 @@ import {
   STREAM_SCROLL_BATCH_MS,
   STREAM_TYPING_BATCH_MS
 } from '../config/timing.js'
-import { type ApprovalReview, approvalReviewTrailLine } from '../domain/approvalReview.js'
 import { turnReceipt } from '../domain/receipt.js'
 import type { SessionInterruptResponse, SubagentEventPayload } from '../gatewayTypes.js'
 import { appendToolShelfMessage, findThinkingHolder, isToolShelfMessage, joinThinking } from '../lib/liveProgress.js'
@@ -906,18 +905,6 @@ class TurnController {
     const line = this.completeTool(toolId, fallbackName, error, summary, duration, resultText)
 
     this.pendingSegmentTools = [...this.pendingSegmentTools, line]
-    this.flushPendingToolsIntoLastSegment()
-    this.publishToolState()
-  }
-
-  // The smart-approval reviewer decided on a flagged action: one line in the
-  // tool shelf, next to the call it reviewed.
-  recordApprovalReview(review: ApprovalReview) {
-    if (this.interrupted || !getUiState().busy) {
-      return
-    }
-
-    this.pendingSegmentTools = [...this.pendingSegmentTools, approvalReviewTrailLine(review)]
     this.flushPendingToolsIntoLastSegment()
     this.publishToolState()
   }
