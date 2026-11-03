@@ -54,8 +54,6 @@ The full set of keys:
 | **manual** | Always prompt the user for approval on dangerous commands. |
 | **off** | Disable all approval checks — equivalent to running with `--yolo`. All commands execute without prompts. |
 
-In the TUI, every decision the smart reviewer makes shows up in the turn's tool list, next to the command it reviewed: `AI Reviewer("rm -rf build") :: auto-approved: recursive delete ✓` when it let the command run without asking you, `judged dangerous, asking you ✗` or `not sure, asking you` when it hands the decision to you. Nothing it approves on its own goes unseen.
-
 :::warning
 Setting `approvals.mode: off` disables all safety prompts. Use only in trusted environments (CI/CD, containers, etc.).
 :::
