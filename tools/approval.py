@@ -157,16 +157,50 @@ def _prepare_smart_approval_observer(
     return payload
 
 
-def _observe_smart_approval_verdict(payload: dict | None, verdict: str) -> None:
+def _observe_smart_approval_verdict(payload: dict | None, verdict: str, reason: str = "") -> None:
     """Emit a smart verdict after the auxiliary LLM decision, if safe."""
-    if payload is None or verdict not in {"approve", "deny"}:
+    if payload is None:
+        # Redaction failed: nothing may be shown or sent anywhere.
         return
-    _fire_approval_hook(
-        "post_approval_response",
-        **payload,
-        choice=f"smart_{verdict}",
-        decided_by="aux_llm",
-    )
+    if verdict in {"approve", "deny"}:
+        _fire_approval_hook(
+            "post_approval_response",
+            **payload,
+            choice=f"smart_{verdict}",
+            decided_by="aux_llm",
+        )
+    _notify_smart_review(payload, verdict, reason)
+
+
+def _notify_smart_review(payload: dict, verdict: str, reason: str) -> None:
+    """Tell the session's interactive surface what the reviewer decided.
+
+    *payload* is the already-redacted observer payload. The reviewer's reason
+    is model text that can quote the command, so it is redacted too. Never
+    raises: showing the decision must not affect the decision.
+    """
+    try:
+        if verdict not in {"approve", "deny", "escalate"}:
+            return
+        with _lock:
+            policy = _gateway_wait_policy.get(payload.get("session_key") or "")
+            on_review = (policy or {}).get("on_review")
+        if on_review is None:
+            return
+        if reason:
+            from agent.redact import redact_sensitive_text
+
+            reason = redact_sensitive_text(reason, force=True)
+        on_review(
+            {
+                "verdict": verdict,
+                "command": payload.get("command") or "",
+                "description": payload.get("description") or "",
+                "reason": reason or "",
+            }
+        )
+    except Exception as exc:
+        logger.debug("Smart review notify failed: %s", exc)
 
 
 
@@ -2735,6 +2769,7 @@ def register_gateway_notify(
     wait_forever: bool = False,
     halt_on_deny: bool = False,
     on_halt=None,
+    on_review=None,
 ) -> None:
     """Register a per-session callback for sending approval requests to the user.
 
@@ -2753,14 +2788,22 @@ def register_gateway_notify(
     thread right before the BLOCKED result is returned to the model when the
     policy decides the turn must stop (``reason`` is ``"denied"``,
     ``"timeout"``, or ``"closed"``). It must not block.
+
+    ``on_review(review: dict)`` is invoked from the agent thread each time the
+    smart-approval reviewer decides on a flagged action in this session, so an
+    interactive surface can show the decision — including the approvals it
+    makes without asking anyone. *review* holds ``verdict`` (``"approve"``,
+    ``"deny"`` or ``"escalate"``) and the redacted ``command``,
+    ``description`` and ``reason``. It must not block.
     """
     with _lock:
         _gateway_notify_cbs[session_key] = cb
-        if wait_forever or halt_on_deny or on_halt is not None:
+        if wait_forever or halt_on_deny or on_halt is not None or on_review is not None:
             _gateway_wait_policy[session_key] = {
                 "wait_forever": bool(wait_forever),
                 "halt_on_deny": bool(halt_on_deny),
                 "on_halt": on_halt,
+                "on_review": on_review,
             }
         else:
             _gateway_wait_policy.pop(session_key, None)
@@ -4452,7 +4495,7 @@ def check_all_command_guards(command: str, env_type: str,
         verdict = _smart_approve(command, combined_desc_for_llm)
         smart_verdict = verdict
         smart_reason = _consume_smart_review_reason()
-        _observe_smart_approval_verdict(observer_payload, verdict)
+        _observe_smart_approval_verdict(observer_payload, verdict, smart_reason)
         if verdict == "approve":
             # Approve this command only. Pattern-level persistence would let one
             # benign command suppress review of later commands that happen to
@@ -4828,7 +4871,7 @@ def check_execute_code_guard(code: str, env_type: str,
         verdict = _smart_approve(command, description)
         smart_verdict = verdict
         smart_reason = _consume_smart_review_reason()
-        _observe_smart_approval_verdict(observer_payload, verdict)
+        _observe_smart_approval_verdict(observer_payload, verdict, smart_reason)
         if verdict == "approve":
             _reset_denials(session_key)
             logger.debug("Smart approval: auto-approved execute_code for session %s",

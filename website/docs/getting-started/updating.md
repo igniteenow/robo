@@ -28,6 +28,7 @@ When you run `robo update`, the following steps occur:
 2. **Git pull** — pulls the latest code from the `main` branch and updates submodules
 3. **Post-pull syntax validation + auto-rollback** — after the pull, Robo compiles the nine critical files every `robo` invocation imports at startup. If any fails to parse (e.g. an orphan merge-conflict marker, an accidentally truncated file), Robo runs `git reset --hard <pre-pull-sha>` to roll the install back so your shell stays bootable. Re-run `robo update` once the upstream fix lands.
 4. **Dependency install** — runs `uv pip install -e ".[all]"` to pick up new or changed dependencies
+   - **Python files prepared** — the update clears Robo's compiled Python cache (stale copies break imports) and then rebuilds it from the new code, so the first start afterwards — the desktop app's "Connecting", say — is as fast as any other. The Python runtime Robo manages for you keeps its cache.
 5. **Config migration** — detects new config options added since your version and prompts you to set them
 6. **Gateway auto-restart** — running gateways are refreshed after the update completes so the new code takes effect immediately. Service-managed gateways (systemd on Linux, launchd on macOS) are restarted through the service manager. Manual gateways are relaunched automatically when Robo can map the running PID back to a profile.
 

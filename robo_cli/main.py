@@ -5151,6 +5151,18 @@ def cmd_uninstall(args):
     run_uninstall(args)
 
 
+# Directories under the checkout whose bytecode is not the checkout's own
+# source: virtualenvs, node packages, git internals, worktrees, and the
+# managed Python runtime store (``.robo-runtime``, see robo_cli/managed_uv.py).
+# The runtime store holds immutable interpreter generations; an update never
+# changes their standard library, so their bytecode never goes stale. Sweeping
+# it only forced every first start after an update to recompile the whole
+# standard library.
+_BYTECODE_SKIP_DIRS = frozenset(
+    {"venv", ".venv", "node_modules", ".git", ".worktrees", ".robo-runtime"}
+)
+
+
 def _clear_bytecode_cache(root: Path) -> int:
     """Remove all __pycache__ directories under *root*.
 
@@ -5163,12 +5175,8 @@ def _clear_bytecode_cache(root: Path) -> int:
     """
     removed = 0
     for dirpath, dirnames, _ in os.walk(root):
-        # Skip venv / node_modules / .git entirely
-        dirnames[:] = [
-            d
-            for d in dirnames
-            if d not in {"venv", ".venv", "node_modules", ".git", ".worktrees"}
-        ]
+        # Skip venv / node_modules / .git / the runtime store entirely
+        dirnames[:] = [d for d in dirnames if d not in _BYTECODE_SKIP_DIRS]
         if os.path.basename(dirpath) == "__pycache__":
             try:
                 shutil.rmtree(dirpath)
@@ -5177,6 +5185,67 @@ def _clear_bytecode_cache(root: Path) -> int:
                 pass
             dirnames.clear()  # nothing left to recurse into
     return removed
+
+
+# Generous: on Windows every new .pyc is scanned by antivirus as it is
+# written. A timeout only ends the warm-up early; whatever was compiled stays.
+_PRECOMPILE_TIMEOUT_SECONDS = 900
+
+
+def _precompile_bytecode(root: Path, python: str | None = None) -> bool:
+    """Compile the checkout's Python sources right after an update.
+
+    The update clears ``__pycache__`` (stale bytecode breaks imports), so
+    without this the FIRST process after an update compiles everything
+    before it can do anything. That process is usually the desktop app's
+    backend, which on a slow disk or under antivirus then misses the app's
+    startup deadline: "Connecting" ends in an error, and only a reopen (once
+    the abandoned backend has finished compiling) works. Compiling here,
+    while the update is still running, moves that cost to where the user is
+    already waiting. The bytecode is built from the fresh sources, so it is
+    exactly what the next import would have written.
+
+    Tests are skipped (never imported at startup), as are the directories the
+    sweep skips. Best effort: never raises; returns True when compileall
+    reported success.
+    """
+    skip = "|".join(re.escape(d) for d in sorted(_BYTECODE_SKIP_DIRS | {"tests"}))
+    # compileall matches -x against the full path it builds from *root*, so
+    # anchor at the root: a checkout that itself sits under a folder named
+    # "tests" or ".venv" must not be skipped whole.
+    exclude = rf"^{re.escape(str(root))}[\\/](?:.*[\\/])?(?:{skip})[\\/]"
+    cmd = [
+        python or sys.executable,
+        "-m",
+        "compileall",
+        "-q",
+        "-j",
+        "0",
+        "-x",
+        exclude,
+        str(root),
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(root),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_PRECOMPILE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.debug("Bytecode precompile skipped: %s", exc)
+        return False
+    if result.returncode != 0:
+        # A source file that does not compile (a skill script for another
+        # Python, say) is listed here and simply compiled on demand later.
+        logger.debug("Bytecode precompile reported errors:\n%s", (result.stdout or "")[-4000:])
+    return result.returncode == 0
 
 
 # Update pipeline extracted to robo_cli/update_cmd.py (main.py decomposition,
