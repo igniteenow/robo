@@ -83,11 +83,20 @@ export const summarizeTools = (toolNames: readonly string[]): string[] => {
 
 export interface TurnReceiptInput {
   endedAt: number
+  // What the end-of-turn check found ("checked 3 statements against 2
+  // sources: confirmed"); it explains the time between the answer and the
+  // receipt.
+  note?: string
   startedAt?: null | number
   toolNames: readonly string[]
 }
 
-export const turnReceipt = ({ endedAt, startedAt, toolNames }: TurnReceiptInput): string =>
-  [startedAt != null ? fmtTurnDuration(endedAt - startedAt) : '', ...summarizeTools(toolNames), fmtClock(endedAt)]
+export const turnReceipt = ({ endedAt, note = '', startedAt, toolNames }: TurnReceiptInput): string =>
+  [
+    startedAt != null ? fmtTurnDuration(endedAt - startedAt) : '',
+    ...summarizeTools(toolNames),
+    note.trim(),
+    fmtClock(endedAt)
+  ]
     .filter(Boolean)
     .join(' · ')

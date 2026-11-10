@@ -18,6 +18,19 @@ export interface ActivityItem {
   tone: 'error' | 'info' | 'warn'
 }
 
+// What the turn is doing when no tool is running and nothing is streaming:
+// the end-of-turn fact check, a verification pass, saving the exchange to
+// memory, a context compaction. Reported by the gateway's status.update
+// events and shown in the live area until the turn moves on.
+export interface TurnPhase {
+  kind: string
+  text: string
+  tone: ActivityItem['tone']
+  // The one-word form for the status bar ("checking", "saving"); empty keeps
+  // the ordinary verb.
+  verb: string
+}
+
 export type SubagentStatus = 'completed' | 'error' | 'failed' | 'interrupted' | 'queued' | 'running' | 'timeout'
 
 export interface SubagentProgress {

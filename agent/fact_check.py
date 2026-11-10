@@ -298,6 +298,55 @@ def _aux_text(messages: list[dict], *, max_tokens: int, timeout: float) -> str:
         return ""
 
 
+class CheckInterrupted(Exception):
+    """The person sent something new while the check ran: drop it at once."""
+
+
+# How often an in-flight auxiliary call is checked against the turn's
+# interrupt flag. A new message from the person lands within this time.
+_INTERRUPT_POLL_SECONDS = 0.2
+
+
+def interruptible(
+    aux: Callable[..., str],
+    is_interrupted: Callable[[], bool],
+    *,
+    poll: float = _INTERRUPT_POLL_SECONDS,
+) -> Callable[..., str]:
+    """Wrap an auxiliary call so it returns the moment the turn is interrupted.
+
+    The check runs after the answer is already on screen, so a message the
+    person sends meanwhile is the first priority: it interrupts the turn, and
+    the turn must end now, not after the current research call (up to a
+    minute on a slow model) returns. The call runs on a worker thread while
+    this thread watches the interrupt flag; on an interrupt
+    :class:`CheckInterrupted` is raised here and the worker's late result is
+    dropped. ``is_interrupted`` is read on the calling thread, where the
+    agent's per-thread interrupt bit lives.
+    """
+
+    def call(messages: list[dict], **kwargs: Any) -> str:
+        box: dict[str, Any] = {}
+
+        def worker() -> None:
+            try:
+                box["text"] = aux(messages, **kwargs)
+            except BaseException as exc:  # noqa: BLE001 — re-raised on the caller's thread
+                box["error"] = exc
+
+        thread = threading.Thread(target=worker, daemon=True, name="robo-fact-check-aux")
+        thread.start()
+        while thread.is_alive():
+            thread.join(poll)
+            if thread.is_alive() and is_interrupted():
+                raise CheckInterrupted()
+        if "error" in box:
+            raise box["error"]
+        return str(box.get("text") or "")
+
+    return call
+
+
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE)
 
 
@@ -372,6 +421,8 @@ def extract_claims(
             max_tokens=600,
             timeout=_AUX_CALL_TIMEOUT,
         )
+    except CheckInterrupted:
+        raise
     except Exception as exc:
         logger.debug("fact check: claim extraction failed (%s)", exc)
         return []
@@ -600,6 +651,8 @@ def research_claims(
             break
         try:
             raw = aux(convo, max_tokens=900, timeout=min(_AUX_CALL_TIMEOUT, max(5.0, deadline - time.monotonic())))
+        except CheckInterrupted:
+            raise
         except Exception as exc:
             logger.debug("fact check: research call failed (%s)", exc)
             break
@@ -925,14 +978,25 @@ def run_fact_check(agent: Any, final_response: str, messages: list) -> Optional[
         return None
     emit = getattr(agent, "_emit_status", None)
     progress = _progress_channel(agent)
+    # The verdict, for the TUI's receipt under the reply ("checked 3
+    # statements against 2 sources: confirmed"): the same line the CLI prints
+    # through ``emit``, on a kind of its own so the TUI can tell it from the
+    # per-step progress.
+    report_result = _progress_channel(agent, kind="fact_check_result")
     deadline = time.monotonic() + settings.timeout_seconds
     request_text = _last_request_text(messages)
     # The first thing the person sees after the answer streams is this line,
     # not a silent spinner while the statements are being picked out.
     if progress is not None:
         progress(CHECK_STARTING_LINE)
+    # Every model call below gives way the moment the person sends something
+    # new: their message is the first priority, not this check.
+    aux = interruptible(_aux_text, is_interrupted)
     try:
-        claims = extract_claims(request_text, final_response, settings)
+        claims = extract_claims(request_text, final_response, settings, aux=aux)
+    except CheckInterrupted:
+        logger.debug("fact check dropped: the person sent something new")
+        return None
     except Exception:
         logger.debug("fact check: extraction raised", exc_info=True)
         return None
@@ -956,44 +1020,39 @@ def run_fact_check(agent: Any, final_response: str, messages: list) -> Optional[
             tools=tools,
             cwd=cwd,
             task_id=getattr(agent, "_current_task_id", None),
+            aux=aux,
             deadline=deadline,
             is_interrupted=is_interrupted,
             progress=progress,
         )
+    except CheckInterrupted:
+        logger.debug("fact check dropped: the person sent something new")
+        return None
     except Exception:
         logger.debug("fact check: research raised", exc_info=True)
         return None
+    if is_interrupted():
+        logger.debug("fact check dropped: the person sent something new")
+        return None
     if callable(emit):
         emit(status_line(result))
+    if report_result is not None:
+        report_result(status_line(result))
     return result
 
 
-def _progress_channel(agent: Any) -> Optional[Callable[[str], None]]:
+def _progress_channel(agent: Any, kind: str = "fact_check") -> Optional[Callable[[str], None]]:
     """Per-step progress for surfaces with a live status line, else ``None``.
 
     Goes through ``status_callback`` with its own kind (``fact_check``) so the
     TUI can keep it in the status bar until the next step; the CLI's printed
     lifecycle lines and the messaging gateways (which relay every status as a
-    chat message) only get the two summary lines they always had.
+    chat message) only get the two summary lines they always had. See
+    ``agent/turn_phase.py``.
     """
-    callback = getattr(agent, "status_callback", None)
-    if not callable(callback):
-        return None
-    try:
-        from agent.judgment import on_messaging_surface
+    from agent.turn_phase import phase_channel
 
-        if on_messaging_surface():
-            return None
-    except Exception:
-        return None
-
-    def _progress(text: str) -> None:
-        try:
-            callback("fact_check", text)
-        except Exception:
-            logger.debug("fact check: status callback failed", exc_info=True)
-
-    return _progress
+    return phase_channel(agent, kind)
 
 
 def gate_decision(agent: Any, result: FactCheckResult) -> str:

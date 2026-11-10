@@ -15,6 +15,7 @@ import {
   widthByDepth
 } from '../lib/subagentTree.js'
 import {
+  ANALYZING_TRAIL_LINE,
   boundedLiveRenderText,
   compactPreview,
   estimateTokensRough,
@@ -22,6 +23,7 @@ import {
   parseToolTrailResultLine,
   pick,
   splitToolDuration,
+  tailPreview,
   thinkingPreview,
   toolTrailLabel
 } from '../lib/text.js'
@@ -40,11 +42,30 @@ import type {
 const THINK: BrailleSpinnerName[] = ['helix', 'breathe', 'orbit', 'dna', 'waverows', 'snake', 'pulse']
 const TOOL: BrailleSpinnerName[] = ['cascade', 'scan', 'diagswipe', 'fillsweep', 'rain', 'columns', 'sparkle']
 
-const fmtElapsed = (ms: number) => {
+// "0.4s", "12s", then "4m 12s": a command that runs for minutes reads as
+// minutes, not as a three-digit second count.
+export const fmtElapsed = (ms: number) => {
   const sec = Math.max(0, ms) / 1000
 
-  return sec < 10 ? `${sec.toFixed(1)}s` : `${Math.round(sec)}s`
+  if (sec < 10) {
+    return `${sec.toFixed(1)}s`
+  }
+
+  const whole = Math.round(sec)
+
+  if (whole < 60) {
+    return `${whole}s`
+  }
+
+  const mins = Math.floor(whole / 60)
+  const rest = whole % 60
+
+  return rest ? `${mins}m ${rest}s` : `${mins}m`
 }
+
+// How many steps the live list shows at once; older ones fold into one
+// "… N earlier steps" row so a long task never fills the screen.
+export const LIVE_STEPS_MAX = 6
 
 type TreeBranch = 'mid' | 'last'
 type TreeRails = readonly boolean[]
@@ -170,6 +191,22 @@ export function Spinner({ color, variant = 'think' }: { color: string; variant?:
   }, [spin])
 
   return <Text color={color}>{spin.frames[frame]}</Text>
+}
+
+// What the turn is doing right now when no tool runs and nothing streams —
+// "🔎 Checking the answer (2/8): searching the web for …", "💾 Saving this
+// exchange to memory…" — as one row with a spinner, under the answer. The
+// same row the live list of steps shows last, for turns without a list.
+export function PhaseRow({ t, text, tone = 'info' }: { t: Theme; text: string; tone?: ActivityItem['tone'] }) {
+  const color = tone === 'error' ? t.color.error : tone === 'warn' ? t.color.warn : t.color.muted
+
+  return (
+    <TreeRow branch="last" t={t}>
+      <Text color={color} wrap="truncate-end">
+        <Spinner color={t.color.accent} variant="think" /> {text}
+      </Text>
+    </TreeRow>
+  )
 }
 
 interface DetailRow {
@@ -685,15 +722,30 @@ interface Group {
   // The raw trail call (`Terminal("npm test")`): grouping and the delegate
   // checks key on it. `title` is what the row shows ("Ran npm test").
   label: string
+  // How the step ended, for the live list of steps: ✓ / ✗ for a finished
+  // call, · while the model is still drafting it, unset while it runs.
+  mark?: '·' | '✓' | '✗'
+  // One line on what went wrong, shown next to a ✗ step in the live list.
+  note?: string
   title: string
+  // The raw tool name of a step the model is still drafting.
+  tool?: string
 }
+
+// The tools section of a trail: the folded "Tool calls (N)" row, the open
+// list of every call and its result, or — while the turn runs and the
+// section is collapsed — the live list of steps.
+const LIVE_STEPS_TITLE = 'Working'
 
 export const ToolTrail = memo(function ToolTrail({
   busy = false,
   commandOverride = false,
   detailsMode = 'collapsed',
   friendlyToolLabels = true,
+  live = false,
   outcome = '',
+  phase = '',
+  phaseTone = 'info',
   reasoningActive = false,
   reasoning = '',
   reasoningAlwaysVisible = false,
@@ -713,7 +765,20 @@ export const ToolTrail = memo(function ToolTrail({
   // display.friendly_tool_labels: "Running npm test" rows and header, or the
   // raw `Terminal("npm test")` labels when off.
   friendlyToolLabels?: boolean
+  // This trail is the working phase in progress: with the tools section
+  // collapsed, the steps are drawn as a live list (every call so far with its
+  // ✓/✗ and how long it took, the running one with a spinner, then what Robo
+  // is doing between calls) instead of the folded "Tool calls (N)" row, so a
+  // person following along sees each command as it happens. The folded row
+  // comes back once the turn settles into the transcript.
+  live?: boolean
   outcome?: string
+  // What Robo is doing while no tool runs ("thinking…", or a phase the
+  // gateway reported such as the end-of-turn fact check), the last row of
+  // the live list. Empty when the rows already say it, or the answer is
+  // streaming.
+  phase?: string
+  phaseTone?: ActivityItem['tone']
   reasoningActive?: boolean
   reasoning?: string
   // MoA reference blocks (see Msg.isMoaReference) stay visible even when
@@ -836,6 +901,8 @@ export const ToolTrail = memo(function ToolTrail({
         details: [],
         key: `tr-${i}`,
         label: parsed.call,
+        mark: parsed.mark,
+        ...(parsed.mark === '✗' && parsed.detail && { note: compactPreview(parsed.detail.split('\n')[0] ?? '', 56) }),
         title
       })
 
@@ -854,7 +921,8 @@ export const ToolTrail = memo(function ToolTrail({
     if (line.startsWith('drafting ')) {
       // The model is still writing the call: its arguments are not known
       // yet, so the row keeps the tool's name until the real call lands.
-      const label = toolTrailLabel(line.slice(9).replace(/…$/, '').trim())
+      const tool = line.slice(9).replace(/…$/, '').trim()
+      const label = toolTrailLabel(tool)
 
       groups.push({
         color: t.color.text,
@@ -862,13 +930,15 @@ export const ToolTrail = memo(function ToolTrail({
         details: [{ color: t.color.muted, content: 'drafting...', dimColor: true, key: `tr-${i}-d` }],
         key: `tr-${i}`,
         label,
-        title: label
+        mark: '·',
+        title: label,
+        tool
       })
 
       continue
     }
 
-    if (line === 'analyzing tool output…') {
+    if (line === ANALYZING_TRAIL_LINE) {
       pushDetail({
         color: t.color.muted,
         dimColor: true,
@@ -951,18 +1021,24 @@ export const ToolTrail = memo(function ToolTrail({
   const delegateGroups = groups.filter(g => g.label.startsWith('Delegate Task'))
   const inlineDelegateKey = hasSubagents && delegateGroups.length === 1 ? delegateGroups[0]!.key : null
 
-  const toolLabel = (group: Group) => {
+  // `clock`: the stored " (70.2s)" re-read as the running clock shows it
+  // (" (1m 10s)"), for the live list where the two sit next to each other.
+  const toolLabel = (group: Group, clock = false) => {
     const { duration, label } = splitToolDuration(String(group.content))
 
-    return duration ? (
+    if (!duration) {
+      return group.content
+    }
+
+    const seconds = clock ? Number(/\d+(?:\.\d)?/.exec(duration)?.[0]) : NaN
+
+    return (
       <>
         {label}
         <Text color={t.color.statusFg} dim>
-          {duration}
+          {Number.isFinite(seconds) ? ` (${fmtElapsed(seconds * 1000)})` : duration}
         </Text>
       </>
-    ) : (
-      group.content
     )
   }
 
@@ -1050,6 +1126,11 @@ export const ToolTrail = memo(function ToolTrail({
   }[] = []
 
   if (hasThinking && (visible.thinking !== 'hidden' || reasoningAlwaysVisible)) {
+    // Collapsed while the model reasons: the row carries the tail of what it
+    // is thinking right now, so minutes of "Thinking" are never a blank row.
+    // Gone once the reasoning phase ends; the opened panel has the full text.
+    const thinkingTail = thinkingLive && !openThinking ? tailPreview(cot, 72) : ''
+
     panels.push({
       header: (
         <Box
@@ -1061,7 +1142,7 @@ export const ToolTrail = memo(function ToolTrail({
             }
           }}
         >
-          <Text color={t.color.muted} dim={!thinkingLive}>
+          <Text color={t.color.muted} dim={!thinkingLive} {...(thinkingTail && { wrap: 'truncate-end' as const })}>
             <Text color={t.color.accent}>{openThinking ? '▾ ' : '▸ '}</Text>
             {thinkingLive ? (
               <Text bold color={t.color.text}>
@@ -1072,6 +1153,12 @@ export const ToolTrail = memo(function ToolTrail({
                 Thinking
               </Text>
             )}
+            {thinkingTail ? (
+              <Text color={t.color.thinking}>
+                {'  '}
+                <Spinner color={t.color.accent} variant="think" /> {thinkingTail}
+              </Text>
+            ) : null}
             {thinkingTokensLabel ? (
               <Text color={t.color.statusFg} dim>
                 {'  '}
@@ -1106,75 +1193,189 @@ export const ToolTrail = memo(function ToolTrail({
     // from the turn's active tools and nothing else.
     const running = tools.length ? groups[groups.length - 1] : undefined
 
+    // The live list of steps: while the turn runs and the section is
+    // collapsed, every call of this working phase is a row of its own — ✓/✗
+    // with how long it took, the running one with a spinner and a clock, a
+    // step the model is still drafting, then what Robo is doing between
+    // calls. Bounded to the last LIVE_STEPS_MAX steps (older ones fold into
+    // one count row) so a long task stays a short block. A click opens the
+    // full panel with every result; the folded "Tool calls (N)" row is what
+    // the settled transcript keeps.
+    const liveSteps = live && visible.tools === 'collapsed' && !openTools
+
     const liveLine =
-      !openTools && running ? `${running.title}${running.elapsed ? ` (${running.elapsed})` : ''}` : undefined
+      !openTools && !liveSteps && running
+        ? `${running.title}${running.elapsed ? ` (${running.elapsed})` : ''}`
+        : undefined
 
-    panels.push({
-      header: (
-        <Chevron
-          count={groups.length}
-          live={liveLine}
-          onClick={shift => {
-            if (shift) {
-              expandAll()
-            } else {
-              setOpenTools(v => !v)
-            }
-          }}
-          open={openTools}
-          suffix={toolTokensLabel}
-          t={t}
-          title="Tool calls"
-        />
-      ),
-      key: 'tools',
-      open: openTools,
-      render: rails => (
-        <Box flexDirection="column">
-          {groups.map((group, index) => {
-            const branch: TreeBranch = index === groups.length - 1 ? 'last' : 'mid'
-            const childRails = nextTreeRails(rails, branch)
-            const hasInlineSubagents = inlineDelegateKey === group.key
-            // Surface the /agents hint the moment a delegate group appears —
-            // while it's still in-flight and before any subagent has
-            // registered — so users can open the live monitor immediately.
-            const isDelegateGroup = group.label.startsWith('Delegate Task')
+    if (liveSteps) {
+      const shown = groups.slice(-LIVE_STEPS_MAX)
+      const folded = groups.length - shown.length
 
-            return (
-              <Box flexDirection="column" key={group.key}>
-                <TreeTextRow
-                  branch={branch}
-                  color={group.color}
-                  content={
-                    <>
-                      <Text color={t.color.tool}>● </Text>
-                      {toolLabel(group)}
-                      {isDelegateGroup ? (
-                        <Text color={t.color.statusFg} dim>
-                          {'  (/agents to monitor)'}
-                        </Text>
-                      ) : null}
-                    </>
-                  }
-                  rails={rails}
-                  t={t}
-                />
-                {group.details.map((detail, detailIndex) => (
-                  <Detail
-                    {...detail}
-                    branch={detailIndex === group.details.length - 1 && !hasInlineSubagents ? 'last' : 'mid'}
-                    key={detail.key}
-                    rails={childRails}
+      const rows: { content: ReactNode; key: string }[] = []
+
+      if (folded > 0) {
+        rows.push({
+          content: (
+            <Text color={t.color.muted} dim>
+              … {folded} earlier {folded === 1 ? 'step' : 'steps'}
+            </Text>
+          ),
+          key: 'folded'
+        })
+      }
+
+      for (const group of shown) {
+        if (group.mark === '·') {
+          // "Running…" / "Reading…" while the call is drafted; the arguments
+          // fill in the moment it starts ("Running npm test (2s)").
+          rows.push({
+            content: (
+              <Text color={t.color.muted} dim>
+                <Spinner color={t.color.accent} variant="think" />{' '}
+                {describeToolCall(group.tool ?? group.title, '', false, friendlyToolLabels)}…
+              </Text>
+            ),
+            key: group.key
+          })
+        } else if (group.mark) {
+          const failed = group.mark === '✗'
+
+          rows.push({
+            content: (
+              <Text color={failed ? t.color.error : t.color.muted}>
+                <Text color={failed ? t.color.error : t.color.statusGood}>{group.mark}</Text> {toolLabel(group, true)}
+                {group.note ? ` — ${group.note}` : ''}
+              </Text>
+            ),
+            key: group.key
+          })
+        } else {
+          rows.push({
+            content: (
+              <Text color={t.color.text}>
+                {group.content}
+                {group.label.startsWith('Delegate Task') ? (
+                  <Text color={t.color.statusFg} dim>
+                    {'  (/agents to monitor)'}
+                  </Text>
+                ) : null}
+              </Text>
+            ),
+            key: group.key
+          })
+        }
+      }
+
+      if (phase && !tools.length && !shown.some(group => group.mark === '·')) {
+        const phaseColor = phaseTone === 'error' ? t.color.error : phaseTone === 'warn' ? t.color.warn : t.color.muted
+
+        rows.push({
+          content: (
+            <Text color={phaseColor} dim={phaseTone === 'info'}>
+              <Spinner color={t.color.accent} variant="think" /> {phase}
+            </Text>
+          ),
+          key: 'phase'
+        })
+      }
+
+      panels.push({
+        header: (
+          <Chevron
+            onClick={shift => {
+              if (shift) {
+                expandAll()
+              } else {
+                setOpenTools(true)
+              }
+            }}
+            open
+            suffix={`${groups.length} ${groups.length === 1 ? 'step' : 'steps'}`}
+            t={t}
+            title={LIVE_STEPS_TITLE}
+          />
+        ),
+        key: 'tools',
+        open: true,
+        render: rails => (
+          <Box flexDirection="column">
+            {rows.map((row, index) => (
+              <TreeRow branch={index === rows.length - 1 ? 'last' : 'mid'} key={row.key} rails={rails} t={t}>
+                <Text wrap="truncate-end">{row.content}</Text>
+              </TreeRow>
+            ))}
+          </Box>
+        )
+      })
+    } else {
+      panels.push({
+        header: (
+          <Chevron
+            count={groups.length}
+            live={liveLine}
+            onClick={shift => {
+              if (shift) {
+                expandAll()
+              } else {
+                setOpenTools(v => !v)
+              }
+            }}
+            open={openTools}
+            suffix={toolTokensLabel}
+            t={t}
+            title="Tool calls"
+          />
+        ),
+        key: 'tools',
+        open: openTools,
+        render: rails => (
+          <Box flexDirection="column">
+            {groups.map((group, index) => {
+              const branch: TreeBranch = index === groups.length - 1 ? 'last' : 'mid'
+              const childRails = nextTreeRails(rails, branch)
+              const hasInlineSubagents = inlineDelegateKey === group.key
+              // Surface the /agents hint the moment a delegate group appears —
+              // while it's still in-flight and before any subagent has
+              // registered — so users can open the live monitor immediately.
+              const isDelegateGroup = group.label.startsWith('Delegate Task')
+
+              return (
+                <Box flexDirection="column" key={group.key}>
+                  <TreeTextRow
+                    branch={branch}
+                    color={group.color}
+                    content={
+                      <>
+                        <Text color={t.color.tool}>● </Text>
+                        {toolLabel(group)}
+                        {isDelegateGroup ? (
+                          <Text color={t.color.statusFg} dim>
+                            {'  (/agents to monitor)'}
+                          </Text>
+                        ) : null}
+                      </>
+                    }
+                    rails={rails}
                     t={t}
                   />
-                ))}
-                {hasInlineSubagents ? renderSubagentList(childRails) : null}
-              </Box>
-            )
-          })}
-        </Box>
-      )
-    })
+                  {group.details.map((detail, detailIndex) => (
+                    <Detail
+                      {...detail}
+                      branch={detailIndex === group.details.length - 1 && !hasInlineSubagents ? 'last' : 'mid'}
+                      key={detail.key}
+                      rails={childRails}
+                      t={t}
+                    />
+                  ))}
+                  {hasInlineSubagents ? renderSubagentList(childRails) : null}
+                </Box>
+              )
+            })}
+          </Box>
+        )
+      })
+    }
   }
 
   if (hasSubagents && !inlineDelegateKey && visible.subagents !== 'hidden') {

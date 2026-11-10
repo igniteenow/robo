@@ -99,6 +99,15 @@ class TestVersionLabel:
 
 
 class TestContent:
+    def test_the_full_wordmark_needs_room_and_the_short_one_takes_over(self):
+        agent_row = "█████╗  ██████╗ ███████╗███╗   ██╗████████╗"  # the AGENT half, top row
+        short_row = "██████╗  ██████╗ ██████╗  ██████╗"
+        wide = render(width=120)
+        assert agent_row in wide
+        narrow = render(width=70)
+        assert agent_row not in narrow and short_row in narrow
+        assert all(len(line) <= 70 for line in narrow.splitlines())
+
     def test_core_facts_are_shown(self):
         out = render(session_id="sess-42", provider="openrouter", context_length=200000)
         for expected in ("claude-test", "/tmp/project", "sess-42", "openrouter", "200K context", "Robo v"):

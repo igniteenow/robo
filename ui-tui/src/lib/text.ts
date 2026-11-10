@@ -80,6 +80,26 @@ export const compactPreview = (s: string, max: number) => {
   return !one ? '' : one.length > max ? one.slice(0, max - 1) + '…' : one
 }
 
+// The END of a text on one line — "…and then check the port in config.yaml"
+// — for a row that follows something still being written, where the newest
+// words are the ones worth reading. Cuts on a word boundary when one is near.
+export const tailPreview = (s: string, max: number) => {
+  const one = s.replace(WS_RE, ' ').trim()
+
+  if (!one || one.length <= max) {
+    return one
+  }
+
+  let cut = one.length - (max - 1)
+  const space = one.indexOf(' ', cut)
+
+  if (space >= 0 && space - cut <= 16) {
+    cut = space + 1
+  }
+
+  return `…${one.slice(cut)}`
+}
+
 export const estimateTokensRough = (text: string) => (!text ? 0 : (text.length + 3) >> 2)
 
 export const edgePreview = (s: string, head = 16, tail = 28) => {
@@ -269,7 +289,7 @@ export const parseToolTrailResultLine = (line: string) => {
     return null
   }
 
-  const mark = line.endsWith(' ✗') ? '✗' : '✓'
+  const mark: '✓' | '✗' = line.endsWith(' ✗') ? '✗' : '✓'
   const body = line.slice(0, -2)
   const sep = body.indexOf(' :: ')
 
@@ -292,7 +312,10 @@ export const splitToolDuration = (call: string) => {
   return match ? { label: match[1]!, duration: match[2]! } : { label: call, duration: '' }
 }
 
-export const isTransientTrailLine = (line: string) => line.startsWith('drafting ') || line === 'analyzing tool output…'
+// The transient trail row between a tool result and the model's next move.
+export const ANALYZING_TRAIL_LINE = 'analyzing tool output…'
+
+export const isTransientTrailLine = (line: string) => line.startsWith('drafting ') || line === ANALYZING_TRAIL_LINE
 
 export const sameToolTrailGroup = (label: string, entry: string) =>
   entry === `${label} ✓` ||

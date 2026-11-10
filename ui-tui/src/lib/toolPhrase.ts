@@ -140,14 +140,18 @@ export function friendlyToolCall(call: string, done = true, friendly = true): st
 }
 
 export interface LiveActivity {
+  // A turn phase reported by the gateway (the end-of-turn fact check, a
+  // memory save…) with its own verb; see types.ts TurnPhase.
+  phase?: null | { verb: string }
   streaming?: string
   tools?: { name: string }[]
 }
 
 /**
  * The one short verb the status bar shows for what Robo is doing right now:
- * the running tool's verb, else "writing" while the answer streams, else
- * "thinking". Always ≤ STATUS_VERB_MAX characters.
+ * the running tool's verb, else the reported turn phase's ("checking"), else
+ * "writing" while the answer streams, else "thinking". Always ≤
+ * STATUS_VERB_MAX characters.
  */
 export function liveActivityVerb(state: LiveActivity, friendly = true): string {
   const tool = state.tools?.at(-1)
@@ -156,6 +160,12 @@ export function liveActivityVerb(state: LiveActivity, friendly = true): string {
     const verb = friendly ? TOOL_PHRASES[tool.name]?.verb : undefined
 
     return verb ?? PHASE_VERBS.tool
+  }
+
+  const phaseVerb = state.phase?.verb?.trim()
+
+  if (phaseVerb) {
+    return phaseVerb.slice(0, STATUS_VERB_MAX)
   }
 
   if (state.streaming) {

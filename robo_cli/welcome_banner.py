@@ -33,7 +33,15 @@ _BOLD = "\033[1m"
 _DIM = "\033[2m"
 _RST = "\033[0m"
 
-ROBO_AGENT_LOGO = """[bold #F5A13A]██████╗  ██████╗ ██████╗  ██████╗ [/]
+ROBO_AGENT_LOGO = """[bold #F5A13A]██████╗  ██████╗ ██████╗  ██████╗        █████╗  ██████╗ ███████╗███╗   ██╗████████╗[/]
+[bold #EF8A22]██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗      ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝[/]
+[#E8742A]██████╔╝██║   ██║██████╔╝██║   ██║█████╗███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   [/]
+[#DF5A30]██╔══██╗██║   ██║██╔══██╗██║   ██║╚════╝██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   [/]
+[#D93F32]██║  ██║╚██████╔╝██████╔╝╚██████╔╝      ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   [/]
+[#D52734]╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝       ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   [/]"""
+
+# For terminals too narrow for the full wordmark.
+ROBO_LOGO_SHORT = """[bold #F5A13A]██████╗  ██████╗ ██████╗  ██████╗ [/]
 [bold #EF8A22]██╔══██╗██╔═══██╗██╔══██╗██╔═══██╗[/]
 [#E8742A]██████╔╝██║   ██║██████╔╝██║   ██║[/]
 [#DF5A30]██╔══██╗██║   ██║██╔══██╗██║   ██║[/]
@@ -48,6 +56,8 @@ ROBO_HERO = """[bold #F5A13A]  ██████╗  ██████╗ █�
 [#D52734]  ╚═╝  ╚═╝ ╚═════╝ ╚═════╝  ╚═════╝ [/]
 [#8E8CE0]  autonomous engineering agent · Ignitee Now[/]"""
 
+_TAGLINE = "autonomous engineering agent"
+_BYLINE = "by Ignitee Now"
 _HERO_MIN_WIDTH = 100   # below this the art is dropped and the info takes the full width
 _LOGO_MIN_WIDTH = 60
 _MIN_NAMES_SHOWN = 3
@@ -287,9 +297,11 @@ def build_welcome_banner(
         from robo_cli.skin_engine import get_active_skin
 
         skin = get_active_skin()
-        hero_art, logo_art = skin.banner_hero or ROBO_HERO, skin.banner_logo or ROBO_AGENT_LOGO
+        # The start-up screen opens the way the TUI does: the wordmark, then
+        # the tagline. Side art is drawn only when a skin brings its own.
+        hero_art, logo_art = skin.banner_hero or "", skin.banner_logo or ROBO_AGENT_LOGO
     except Exception:
-        hero_art, logo_art = ROBO_HERO, ROBO_AGENT_LOGO
+        hero_art, logo_art = "", ROBO_AGENT_LOGO
 
     width = int(getattr(console, "width", 0) or 80)
     show_hero = width >= _HERO_MIN_WIDTH and bool(hero_art.strip())
@@ -400,7 +412,11 @@ def build_welcome_banner(
         title = f"[link={_esc(url)}]{title}[/link]"
 
     if width >= _LOGO_MIN_WIDTH and logo_art.strip():
-        console.print(logo_art)
+        # A wordmark wider than the terminal would wrap into noise: fall back
+        # to the short one.
+        logo_width = max((len(_strip_markup(line)) for line in logo_art.splitlines()), default=0)
+        console.print(logo_art if logo_width <= width else ROBO_LOGO_SHORT)
+        console.print(f"[{dim}]{_TAGLINE}[/]  [{accent}]◆[/]  [{label_c}]{_BYLINE}[/]\n")
     console.print(Panel(body, title=title, title_align="left", border_style=border, padding=(1, 2)))
     welcome = _skin_branding("welcome", "")
     if welcome:

@@ -32,7 +32,7 @@ display:
 
 | Skin | Description | Agent branding | Visual character |
 |------|-------------|----------------|------------------|
-| `robo` | Navy, indigo and ember — the Ignitee Now look (default) | `Robo` | Deep navy fills, indigo structure, ember accents. `default` is an alias for this skin. |
+| `robo` | Black and white with indigo accents and the flame wordmark — the Ignitee Now look (default) | `Robo` | Black fills, near-white text, grey secondary text, the logo's indigo for accents and labels, green for success, and the flame on the wordmark. `default` is an alias for this skin. |
 | `ember` | Warm charcoal with the full flame | `Robo` | Amber and flame-red accents on warm charcoal, with spinner wings. |
 | `midnight` | Calm indigo for long sessions | `Robo` | Indigo-forward and lower saturation; ember is kept for the shell prompt only. |
 | `paper` | For light terminals | `Robo` | Indigo ink and burnt ember on warm paper fills. |

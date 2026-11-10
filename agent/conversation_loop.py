@@ -7138,6 +7138,16 @@ def run_conversation(
                     # terminal. Keep a debug breadcrumb in agent.log for tracing.
                     logger.debug("verification stop-loop nudge issued (attempt %d)",
                                  agent._verification_stop_nudges)
+                    # Not silent on the TUI, though: there the attempted answer
+                    # is already on screen, and what follows would read as a
+                    # bare "thinking…" until the first verification step. One
+                    # live-area line says why the turn goes on (agent/turn_phase.py).
+                    try:
+                        from agent.turn_phase import report_phase
+
+                        report_phase(agent, "verify", "🔍 Checking the work before finishing…")
+                    except Exception:
+                        logger.debug("verify-on-stop phase report failed", exc_info=True)
                     # Keep the attempted answer only as an explicit fallback for
                     # continuation-budget exhaustion.  ``final_response`` itself
                     # must be cleared so the finalizer can distinguish this gate

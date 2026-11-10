@@ -20,7 +20,7 @@ import {
   stripAnsi
 } from '../lib/text.js'
 import type { Theme } from '../theme.js'
-import type { ActiveTool, DetailsMode, Msg, SectionVisibility } from '../types.js'
+import type { ActiveTool, ActivityItem, DetailsMode, Msg, SectionVisibility } from '../types.js'
 
 import { Md } from './markdown.js'
 import { StreamingMd } from './streamingMarkdown.js'
@@ -36,8 +36,13 @@ export const MessageLine = memo(function MessageLine({
   detailsMode = 'collapsed',
   detailsModeCommandOverride = false,
   isStreaming = false,
+  live = false,
   msg,
+  phase = '',
+  phaseTone = 'info',
   prev,
+  reasoningLive = false,
+  reasoningStreaming = false,
   sections,
   t,
   tools = []
@@ -88,8 +93,13 @@ export const MessageLine = memo(function MessageLine({
           commandOverride={detailsModeCommandOverride}
           detailsMode={detailsMode}
           friendlyToolLabels={friendlyToolLabels}
+          live={live}
+          phase={phase}
+          phaseTone={phaseTone}
           reasoning={thinking}
+          reasoningActive={reasoningLive}
           reasoningAlwaysVisible={msg.isMoaReference}
+          reasoningStreaming={reasoningLive && reasoningStreaming}
           reasoningTokens={msg.thinkingTokens}
           sections={sections}
           t={t}
@@ -335,11 +345,21 @@ interface MessageLineProps {
   detailsMode?: DetailsMode
   detailsModeCommandOverride?: boolean
   isStreaming?: boolean
+  // Live-area only: this trail is the working phase in progress, so its
+  // steps draw as a live list while the tools section is collapsed (see
+  // ToolTrail.live); `phase` is the row under them when no tool runs.
+  live?: boolean
   msg: Msg
+  phase?: string
+  phaseTone?: ActivityItem['tone']
   // The block rendered directly above this one. Drives the group-boundary
   // lead gap (see domain/blockLayout.ts::hasLeadGap). Undefined at the top of
   // the transcript or when spacing is irrelevant.
   prev?: Msg
+  // Live-area only: this trail holds the reasoning the model is writing now,
+  // so the collapsed Thinking row shows its tail (ToolTrail.reasoningActive).
+  reasoningLive?: boolean
+  reasoningStreaming?: boolean
   sections?: SectionVisibility
   t: Theme
   tools?: ActiveTool[]

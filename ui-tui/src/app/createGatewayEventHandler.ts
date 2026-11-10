@@ -40,6 +40,27 @@ const NO_PROVIDER_RE = /\bNo (?:LLM|inference) provider configured\b/i
 
 const statusFromBusy = () => (getUiState().busy ? 'running…' : 'ready')
 
+// The status-bar verb for a turn phase reported by status.update (≤ 12
+// characters, see lib/toolPhrase.ts STATUS_VERB_MAX). Kinds without a verb
+// keep the ordinary "thinking…".
+const PHASE_VERBS: Record<string, string> = {
+  compacting: 'compacting',
+  compressing: 'compacting',
+  fact_check: 'checking',
+  fact_check_result: 'checking',
+  verify: 'verifying'
+}
+
+const phaseVerb = (kind: string) => PHASE_VERBS[kind] ?? ''
+
+// "🔎 Checked 3 statements against 2 sources: confirmed" → "checked 3
+// statements against 2 sources: confirmed", as a receipt fragment.
+export const checkSummaryNote = (text: string) => {
+  const plain = text.replace(/^[^\p{L}\p{N}]+/u, '').trim()
+
+  return plain ? plain[0]!.toLowerCase() + plain.slice(1) : ''
+}
+
 // The last gateway skin, kept so the theme can be re-derived when the OSC-11
 // background answer arrives after (or without) gateway.ready.
 let lastSkin: GatewaySkin | null = null
@@ -850,19 +871,35 @@ export function createGatewayEventHandler(ctx: GatewayEventHandlerContext): (ev:
           return
         }
 
+        const tone = p.kind === 'error' ? 'error' : p.kind === 'warn' || p.kind === 'approval' ? 'warn' : 'info'
+
         if (turnController.lastStatusNote !== p.text) {
           turnController.lastStatusNote = p.text
-          turnController.pushActivity(
-            p.text,
-            p.kind === 'error' ? 'error' : p.kind === 'warn' || p.kind === 'approval' ? 'warn' : 'info'
-          )
+          turnController.pushActivity(p.text, tone)
+        }
+
+        // What the end-of-turn fact check found, for the receipt that closes
+        // the reply: it says why the turn ran on after the answer streamed.
+        if (p.kind === 'fact_check_result') {
+          turnController.checkSummary = checkSummaryNote(p.text)
+        }
+
+        // While the turn runs, the status bar shows only the busy verb, and
+        // the activity panel is hidden by default — so without this, the
+        // fact check, a verification pass, a memory save or a compaction
+        // after the answer streamed looked like a silent "thinking…" for
+        // minutes. Keep the latest report as the turn's phase: the live area
+        // shows it under the answer (or as the last row of the live list of
+        // steps) until the model moves on, and the status-bar verb follows.
+        if (getUiState().busy) {
+          turnController.setPhase(p.kind, p.text, tone, phaseVerb(p.kind))
         }
 
         // The end-of-turn fact check reports each research step through this
         // kind. Keep the line in the status bar until the next one (or the
         // turn ends): reverting to "running…" after four seconds left the
         // whole check looking like a silent hang after the answer streamed.
-        if (p.kind === 'fact_check') {
+        if (p.kind === 'fact_check' || p.kind === 'fact_check_result') {
           turnController.clearStatusTimer()
 
           return
