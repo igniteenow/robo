@@ -165,3 +165,17 @@ def test_upload_happy_path_mocked(monkeypatch):
 
 
 
+
+
+def test_redact_strips_url_credentials():
+    """Uploads are an egress boundary: credential query params and
+    user:pass@ userinfo in URLs must not survive redaction."""
+    from agent.trace_upload import _redact
+
+    text = (
+        "fetch https://user:invented-pass@api.example.com/v1 "
+        "and https://h.example.com/cb?access_token=invented-token"
+    )
+    out = _redact(text, True)
+    assert "invented-pass" not in out
+    assert "invented-token" not in out

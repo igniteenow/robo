@@ -427,14 +427,16 @@ def _redact_log_text(text: str) -> str:
     Uses ``force=True`` so redaction fires regardless of the operator's
     ``security.redact_secrets`` setting. The local on-disk log file is
     not modified; only the in-memory copy headed for the public paste
-    service is sanitized. Returns the redacted text (or the original
-    when empty / non-string).
+    service is sanitized. ``redact_url_credentials`` is on because the
+    bundle leaves the machine: URLs in logs must not carry credential
+    query parameters or ``user:pass@`` userinfo into the paste.
+    Returns the redacted text (or the original when empty / non-string).
     """
     if not text:
         return text
     from agent.redact import redact_sensitive_text
 
-    text = redact_sensitive_text(text, force=True)
+    text = redact_sensitive_text(text, force=True, redact_url_credentials=True)
     return _EMAIL_ADDRESS_RE.sub("[REDACTED_EMAIL]", text)
 
 
