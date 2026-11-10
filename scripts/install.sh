@@ -934,6 +934,35 @@ install_node() {
         return 0
     fi
 
+    # Verify against the SHASUMS256.txt published in the same dist
+    # directory (the same check the Dockerfile applies to its downloads).
+    # A mismatch means the tarball is not what nodejs.org published.
+    log_info "Verifying $tarball_name checksum..."
+    if ! curl -fsSL "${index_url}SHASUMS256.txt" -o "$tmp_dir/SHASUMS256.txt"; then
+        log_warn "Could not download SHASUMS256.txt; refusing unverified Node.js tarball"
+        rm -rf "$tmp_dir"
+        HAS_NODE=false
+        return 0
+    fi
+    local expected_hash actual_hash
+    expected_hash=$(grep -F " $tarball_name" "$tmp_dir/SHASUMS256.txt" | awk '{print $1}' | head -1)
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual_hash=$(sha256sum "$tmp_dir/$tarball_name" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        actual_hash=$(shasum -a 256 "$tmp_dir/$tarball_name" | awk '{print $1}')
+    else
+        log_warn "No sha256sum or shasum available; refusing unverified Node.js tarball"
+        rm -rf "$tmp_dir"
+        HAS_NODE=false
+        return 0
+    fi
+    if [ -z "$expected_hash" ] || [ "$expected_hash" != "$actual_hash" ]; then
+        log_warn "Node.js tarball checksum mismatch; refusing to install"
+        rm -rf "$tmp_dir"
+        HAS_NODE=false
+        return 0
+    fi
+
     log_info "Extracting to ~/.robo/node/..."
     if [[ "$tarball_name" == *.tar.xz ]]; then
         tar xf "$tmp_dir/$tarball_name" -C "$tmp_dir"
