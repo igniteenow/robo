@@ -23,8 +23,9 @@ import { compactPreview, toolTrailLabel } from './text.js'
 interface ToolPhrase {
   doing: string
   done: string
-  // "Searching the web for X" reads better than "Searching the web X".
-  joiner?: ' for '
+  // "Searching the web for X" reads better than "Searching the web X";
+  // "Ran code: import os…" sets a script apart from the words before it.
+  joiner?: ' for ' | ': '
   // The verb alone — the argument preview adds nothing a person needs.
   noPreview?: true
   // The one-word form for the status bar (≤ 12 characters; see STATUS_VERB_MAX).
@@ -40,7 +41,7 @@ export const TOOL_PHRASES: Record<string, ToolPhrase> = {
   clarify: { doing: 'Asking you', done: 'Asked you', noPreview: true, verb: 'asking' },
   cronjob: { doing: 'Scheduling', done: 'Scheduled', verb: 'scheduling' },
   delegate_task: { doing: 'Delegating', done: 'Delegated', verb: 'delegating' },
-  execute_code: { doing: 'Running code', done: 'Ran code', noPreview: true, verb: 'running' },
+  execute_code: { doing: 'Running code', done: 'Ran code', joiner: ': ', verb: 'running' },
   image_generate: { doing: 'Generating an image', done: 'Generated an image', noPreview: true, verb: 'generating' },
   memory: { doing: 'Updating memory', done: 'Updated memory', noPreview: true, verb: 'remembering' },
   patch: { doing: 'Editing', done: 'Edited', verb: 'editing' },
