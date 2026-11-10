@@ -170,9 +170,25 @@ export ROBO_TUI_THEME=light
 While a turn runs, the TUI says what Robo is doing in plain words, in two places, and keeps it to one line each:
 
 - **The status bar** — four dots flip over the whole time Robo works (`⠛ [o_o] running… · 25s`: the square holds, turns over on one diagonal, snaps back, turns over on the other), and the verb is the current step: `running…` while a command runs, `reading…`, `editing…`, `searching…`, `writing…` while the answer streams in, `thinking…` while Robo waits on the model. The dots stop when the turn ends, so a still status bar means Robo is done.
-- **The live area** — one `Thinking` panel and one `Tool calls` panel per working phase: every model call between two things Robo says adds to the same two panels, so a long task reads as *Thinking · Tool calls (6) · what Robo said · Thinking · Tool calls (2) · the answer*, not as a new `Thinking` row for every call. The collapsed `Tool calls` row names the step and how long it has taken: `▸ Tool calls (3)  ⠋ Running npm test (12s)`. Open it (click, or `/details tools expanded`) and every step reads the same way: `Ran npm test (1.2s)`, `Read src/app.ts`, `Searched the web for vite 8 release notes`, each with its result underneath. Tools Robo has no plain phrase for (plugins, MCP servers) keep their own name.
+- **The live area** — while Robo works, the steps of the current working phase are a live list, one row per call, so you see every command as it happens:
+
+  ```
+  ▸ Thinking  ⠋ …one test failed, so the fix goes in src/app.ts first.
+  ▾ Working  5 steps
+    ├─ ✓ Searched files for PORT (0.4s)
+    ├─ ✓ Read config.yaml (0.1s)
+    ├─ ✗ Ran npm test (14s) — exit 1
+    ├─ ✓ Edited src/app.ts (0.3s)
+    └─ ⠋ Running npm test (3s)
+  ```
+
+  A finished step keeps its ✓ or ✗ and how long it took (a failed one adds what went wrong); the running step has a spinner and a clock; between calls the last row says what Robo is doing (`thinking…`, `analyzing tool output…`, `Running…` while the next call is drafted). The list shows the last six steps — older ones fold into `… 9 earlier steps` — so a long task never fills the screen. Click the `Working` row (or `/details tools expanded`) for every call with its result. While the model reasons, the collapsed `Thinking` row carries the tail of what it is thinking right now.
+
+  Once the turn ends the transcript keeps one `Thinking` panel and one `Tool calls` panel per working phase: every model call between two things Robo says adds to the same two panels, so a long task reads as *Thinking · Tool calls (6) · what Robo said · Thinking · Tool calls (2) · the answer*, not as a new `Thinking` row for every call. Open `▸ Tool calls (6)` and every step reads the same way: `Ran npm test (1.2s)`, `Read src/app.ts`, `Searched the web for vite 8 release notes`, each with its result underneath. Tools Robo has no plain phrase for (plugins, MCP servers) keep their own name.
 
 Robo also writes one short line before each step it takes ("Checking the config files to find the current port.") — see `agent.step_narration` in `config.yaml`.
+
+**After the answer.** A turn can keep going once the answer is on screen: with `fact_check` on, Robo checks the answer's statements against sources before delivering it; after editing code, it runs a verification pass. That time used to look like a bare `thinking…`. Now one row under the answer says what is happening and moves with it — `🔎 Checking the answer (2/8): reading config.yaml`, `🔍 Checking the work before finishing…` — and the status bar reads `checking…` or `verifying…`. The receipt that closes the reply then records the verdict: `✓ 48s · 2 edits · checked 3 statements against 2 sources: confirmed · 10:41 PM`. Anything you type during that check comes first: the check is dropped the moment your message lands, the turn ends, and your message runs next — Robo never finishes a check before reading what you just sent.
 
 **The receipt.** Every reply closes with one dim line under it — `✓ 7.6s · 1 search · 10:39 PM`: how long the turn took, what Robo did to get there (`3 commands · 2 edits · 1 file read`, with plugin and MCP tools counted as tool calls), and the time it finished. It is written when the turn ends, so a reply with a receipt under it is finished; one without is still being written.
 
@@ -267,8 +283,10 @@ The TUI ships with opinionated per-section defaults that keep a turn to a few
 lines while still showing what Robo is doing:
 
 - `thinking` — **collapsed**. One `▸ Thinking` row; open it to read the reasoning.
-- `tools` — **collapsed**. One `▸ Tool calls (N)` row that names the running step
-  (`⠋ Running npm test (12s)`); open it for every call and its result.
+- `tools` — **collapsed**. While Robo works, a live `▾ Working  N steps` list
+  (the last six steps with ✓/✗ and timing, the running one with a clock, then
+  what Robo is doing between calls); once the turn is over, one
+  `▸ Tool calls (N)` row — open it for every call and its result.
 - `subagents` — falls through to the global `details_mode` (collapsed under
   chevron by default — stays quiet until a delegation actually happens).
 - `activity` — **hidden**. Ambient meta (gateway hints, terminal-parity

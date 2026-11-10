@@ -100,6 +100,17 @@ describe('liveActivityVerb (status bar)', () => {
     expect(liveActivityVerb({ streaming: '' })).toBe(PHASE_VERBS.thinking)
   })
 
+  it('a reported turn phase names itself once the answer has streamed', () => {
+    // The fact check after the answer: the text is on screen, nothing streams
+    // any more, and the verb says what the wait is for.
+    expect(liveActivityVerb({ phase: { verb: 'checking' }, streaming: 'The fix is in.' })).toBe('checking')
+    expect(liveActivityVerb({ phase: { verb: '' } })).toBe(PHASE_VERBS.thinking)
+    expect(liveActivityVerb({ phase: null })).toBe(PHASE_VERBS.thinking)
+    // A running tool still wins; a long verb is cut to the slot.
+    expect(liveActivityVerb({ phase: { verb: 'checking' }, tools: [{ name: 'terminal' }] })).toBe('running')
+    expect(liveActivityVerb({ phase: { verb: 'x'.repeat(40) } })).toHaveLength(STATUS_VERB_MAX)
+  })
+
   it('every verb fits the fixed status-bar slot', () => {
     const verbs = [...Object.values(TOOL_PHRASES).map(p => p.verb), ...Object.values(PHASE_VERBS)]
 

@@ -776,6 +776,11 @@ def test_real_research_over_the_registry_keeps_and_footnotes_when_nobody_can_be_
         "🔎 Checking 1 statement in the answer against sources…",
         "🔎 Checked 1 statement against 1 source: 1 contradicted",
     ]
+    # The verdict also goes out on its own kind, for the receipt the TUI
+    # closes the reply with — once, after the research, never a progress line.
+    assert [t for k, t in statuses if k == "fact_check_result"] == [
+        "🔎 Checked 1 statement against 1 source: 1 contradicted",
+    ]
 
 
 class TestProgressChannel:
@@ -800,3 +805,117 @@ class TestProgressChannel:
         assert progress is not None
         progress("🔎 step")  # must not raise
         assert seen == [("fact_check", "🔎 step")]
+
+    def test_other_phases_share_the_channel_with_their_own_kind(self):
+        from agent.turn_phase import phase_channel, report_phase
+
+        seen = []
+        agent = SimpleNamespace(status_callback=lambda k, t: seen.append((k, t)))
+        with patch("agent.judgment.on_messaging_surface", return_value=False):
+            assert fc._progress_channel(agent, kind="fact_check_result") is not None
+            report_phase(agent, "verify", "🔍 Checking the work before finishing…")
+        assert seen == [("verify", "🔍 Checking the work before finishing…")]
+        # Messaging surfaces relay every status as a chat message: nothing
+        # goes there, and a silent agent is not an error.
+        with patch("agent.judgment.on_messaging_surface", return_value=True):
+            assert phase_channel(agent, "verify") is None
+            report_phase(agent, "verify", "🔍 Checking the work before finishing…")
+        report_phase(SimpleNamespace(), "verify", "🔍 …")
+        assert len(seen) == 1
+
+
+def test_verify_on_stop_reports_a_phase_to_live_surfaces(agent, monkeypatch):
+    """When the verification pass holds an answer back, a surface with a live
+    status line is told why the turn goes on — once, on its own kind — while
+    the CLI's printed lifecycle lines stay as quiet as before."""
+    monkeypatch.setenv("ROBO_VERIFY_ON_STOP", "1")
+    statuses = []
+    agent.status_callback = lambda kind, text: statuses.append((kind, text))
+    agent.interim_assistant_callback = lambda text, **kw: None
+    answers = iter([_response("Edited the file; done."), _response("Edited the file; tests pass.")])
+    nudges = iter(["Verify the edit before finishing.", None])
+
+    agent._interruptible_api_call = lambda _kwargs: next(answers)
+    with (
+        patch("agent.verification_stop.verify_on_stop_enabled", return_value=True),
+        patch("agent.verification_stop.build_verify_on_stop_nudge", side_effect=lambda **kw: next(nudges)),
+        patch("agent.fact_check.run_fact_check", return_value=None),
+        patch("agent.judgment.on_messaging_surface", return_value=False),
+        patch("robo_cli.plugins.has_hook", return_value=False),
+        patch("robo_cli.plugins.invoke_hook", return_value=[]),
+    ):
+        out = agent.run_conversation("fix the failing test")
+
+    assert out["final_response"] == "Edited the file; tests pass."
+    assert [t for k, t in statuses if k == "verify"] == ["🔍 Checking the work before finishing…"]
+    assert not [t for k, t in statuses if k == "lifecycle" and "Checking the work" in t]
+
+
+class TestANewMessageComesFirst:
+    """The check runs after the answer is on screen. A message the person
+    sends meanwhile interrupts the turn, and the check must give way at once —
+    not after the research call in flight (up to a minute) returns."""
+
+    def test_an_in_flight_call_is_abandoned_within_a_poll(self):
+        import threading
+        import time
+
+        release = threading.Event()
+        flag = {"interrupted": False}
+
+        def slow_aux(messages, **kw):
+            release.wait(5)
+            return '{"action": "done", "verdicts": []}'
+
+        call = fc.interruptible(slow_aux, lambda: flag["interrupted"], poll=0.05)
+        started = time.monotonic()
+        threading.Timer(0.1, lambda: flag.__setitem__("interrupted", True)).start()
+        with pytest.raises(fc.CheckInterrupted):
+            call([{"role": "user", "content": "x"}], max_tokens=10, timeout=5)
+        assert time.monotonic() - started < 1.0
+        release.set()
+
+    def test_an_uninterrupted_call_returns_its_text_and_errors_surface(self):
+        call = fc.interruptible(lambda m, **kw: "  text  ", lambda: False, poll=0.01)
+        assert call([], max_tokens=1, timeout=1) == "  text  "
+
+        def failing(m, **kw):
+            raise RuntimeError("provider down")
+
+        with pytest.raises(RuntimeError):
+            fc.interruptible(failing, lambda: False, poll=0.01)([], max_tokens=1, timeout=1)
+
+    def test_run_fact_check_drops_the_check_and_keeps_the_answer(self, monkeypatch):
+        import threading
+
+        answered = threading.Event()
+        calls = []
+        statuses = []
+
+        def slow_aux(task=None, *, messages, **kw):
+            calls.append(task)
+            answered.wait(3)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"claims": []}'))])
+
+        agent = SimpleNamespace(
+            quiet_mode=False,
+            status_callback=lambda k, t: statuses.append((k, t)),
+            valid_tool_names=["read_file"],
+            platform="cli",
+            _emit_status=lambda text: statuses.append(("lifecycle", text)),
+        )
+        interrupted = {"now": False}
+        monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: interrupted["now"])
+        threading.Timer(0.15, lambda: interrupted.__setitem__("now", True)).start()
+        with (
+            patch("agent.auxiliary_client.call_llm", side_effect=slow_aux),
+            patch("agent.judgment.on_messaging_surface", return_value=False),
+        ):
+            result = fc.run_fact_check(agent, "word " * 30, [{"role": "user", "content": "q"}])
+        answered.set()
+
+        # Nothing checked, nothing reported as a verdict: the answer is
+        # delivered as written and the turn ends now.
+        assert result is None
+        assert calls == ["fact_check"]
+        assert not [t for k, t in statuses if k == "fact_check_result"]

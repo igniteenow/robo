@@ -64,6 +64,7 @@ See [Configuration → Fact check](/user-guide/configuration#fact-check-robo-che
 
 - **One check per turn.** The revised answer is not checked again, so a check can never loop.
 - **Fails open.** Any error, timeout, missing tool, or interruption (Stop, a new instruction) delivers the answer as written — exactly the behaviour with the feature off.
+- **Your next message comes first.** A message sent while the check runs stops it at once — in the middle of a model call, not after it — so the turn ends within a fraction of a second and your message runs next. The answer is delivered as written, without a verdict.
 - **Bounded.** `max_claims`, `max_steps` and `timeout_seconds` have hard ceilings (8, 16, 600) regardless of what the config says.
 - **Untrusted input stays untrusted.** The answer being checked, every web page and every file are treated as evidence only; instructions inside them are ignored.
 - **Subagents are never checked.** Their output is checked when the parent delivers it.

@@ -10,6 +10,7 @@ import type { SessionInterruptResponse, SubagentEventPayload } from '../gatewayT
 import { appendToolShelfMessage, findThinkingHolder, isToolShelfMessage, joinThinking } from '../lib/liveProgress.js'
 import { hasReasoningTag, splitReasoning } from '../lib/reasoning.js'
 import {
+  ANALYZING_TRAIL_LINE,
   boundedLiveRenderText,
   buildToolTrailLine,
   buildVerboseToolTrailLine,
@@ -18,7 +19,7 @@ import {
   sameToolTrailGroup,
   toolTrailLabel
 } from '../lib/text.js'
-import type { ActiveTool, ActivityItem, Msg, SubagentProgress, TodoItem } from '../types.js'
+import type { ActiveTool, ActivityItem, Msg, SubagentProgress, TodoItem, TurnPhase } from '../types.js'
 
 import type { Notice } from './interfaces.js'
 import { resetFlowOverlays } from './overlayStore.js'
@@ -128,6 +129,10 @@ class TurnController {
   // turn — complete, interrupt, error, reset — starts the next one fresh.
   turnStartedAt: null | number = null
   turnToolNames: string[] = []
+  // What the end-of-turn fact check found ("checked 3 statements against 2
+  // sources: confirmed"), for the receipt: it says why the turn ran on after
+  // the answer. Cleared with the rest in idle().
+  checkSummary = ''
 
   private activeTools: ActiveTool[] = []
   private activeReasoningText = ''
@@ -288,6 +293,7 @@ class TurnController {
     this.segmentMessages = []
 
     patchTurnState({
+      phase: null,
       streamPendingTools: [],
       streamSegments: [],
       streaming: '',
@@ -300,7 +306,31 @@ class TurnController {
     patchUiState({ busy: false, midTurnSent: [] })
     this.turnStartedAt = null
     this.turnToolNames = []
+    this.checkSummary = ''
     resetFlowOverlays()
+  }
+
+  /**
+   * What the turn is doing right now while no tool runs and nothing streams
+   * — the end-of-turn fact check, a verification pass, saving to memory, a
+   * compaction. Shown in the live area under the answer (or as the last row
+   * of the live list of steps) and as the status-bar verb, so the time after
+   * the answer streamed is never a bare "thinking…". Replaced by the next
+   * report; cleared the moment the model moves on (a tool starts, reasoning
+   * or text streams) and at the end of the turn.
+   */
+  setPhase(kind: string, text: string, tone: TurnPhase['tone'] = 'info', verb = '') {
+    if (this.interrupted || !text.trim()) {
+      return
+    }
+
+    patchTurnState({ phase: { kind, text: text.trim(), tone, verb } })
+  }
+
+  clearPhase() {
+    if (getTurnState().phase) {
+      patchTurnState({ phase: null })
+    }
   }
 
   // `keepBusy` holds the session busy after interrupting so a queued message
@@ -674,7 +704,12 @@ class TurnController {
     const receipt =
       payload.status === 'error'
         ? undefined
-        : turnReceipt({ endedAt: Date.now(), startedAt: this.turnStartedAt, toolNames: this.turnToolNames })
+        : turnReceipt({
+            endedAt: Date.now(),
+            note: this.checkSummary,
+            startedAt: this.turnStartedAt,
+            toolNames: this.turnToolNames
+          })
 
     let tools = this.pendingSegmentTools
     const last = this.segmentMessages[this.segmentMessages.length - 1]
@@ -774,6 +809,7 @@ class TurnController {
 
     this.pruneTransient()
     this.endReasoningPhase()
+    this.clearPhase()
 
     // Always accumulate the raw text delta.  The pre-#16391 path replaced
     // the entire buffer with `rendered` (an *incremental* Rich ANSI
@@ -876,6 +912,7 @@ class TurnController {
       this.flushStreamingSegment()
     }
 
+    this.clearPhase()
     this.reasoningText += text
     this.activeReasoningText += text
 
@@ -962,7 +999,7 @@ class TurnController {
     const next = this.turnTools.filter(item => !sameToolTrailGroup(label, item))
 
     if (!this.activeTools.length) {
-      next.push('analyzing tool output…')
+      next.push(ANALYZING_TRAIL_LINE)
     }
 
     this.turnTools = next.slice(-TRAIL_LIMIT)
@@ -1010,6 +1047,7 @@ class TurnController {
     this.closeReasoningSegment()
     this.pruneTransient()
     this.endReasoningPhase()
+    this.clearPhase()
 
     const sample = `${name} ${context}`.trim()
 
@@ -1116,7 +1154,7 @@ class TurnController {
     }
 
     patchUiState({ busy: true })
-    patchTurnState({ activity: [], outcome: '', subagents: [], toolTokens: 0, tools: [], turnTrail: [] })
+    patchTurnState({ activity: [], outcome: '', phase: null, subagents: [], toolTokens: 0, tools: [], turnTrail: [] })
   }
 
   upsertSubagent(

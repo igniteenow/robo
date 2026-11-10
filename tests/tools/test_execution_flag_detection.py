@@ -32,6 +32,40 @@ def test_real_read_tool_binaries_confirm_option_ownership(
     assert completed.stdout == expected_output
 
 
+def _is_gnu_coreutils(tool: str) -> bool:
+    """Whether ``tool`` on PATH is the GNU coreutils implementation.
+
+    The grammar these tests pin is GNU's. Ubuntu 25.10+ (and so GitHub's
+    ``ubuntu-latest`` from 26.04 on) ships the Rust uutils coreutils instead,
+    whose option parser refuses a leading-dash program name outright
+    (``--compress-program -x`` is "unexpected argument '-x'"), so the payload
+    never runs there and the executed-marker assertion cannot hold.
+    """
+    try:
+        completed = subprocess.run(
+            [tool, "--version"], capture_output=True, text=True, timeout=10
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return "GNU coreutils" in completed.stdout
+
+
+def _man_has_page(name: str) -> bool:
+    """Whether ``man`` can find a page for ``name`` (it starts no pager otherwise).
+
+    Minimized container images replace ``man`` with a stub that prints a notice
+    and exits 0, and strip the manpages; ``man -w`` then prints no path.
+    """
+    try:
+        completed = subprocess.run(
+            ["man", "-w", name], capture_output=True, text=True, timeout=10
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    path = completed.stdout.strip().splitlines()[:1]
+    return completed.returncode == 0 and bool(path) and os.path.isfile(path[0])
+
+
 @pytest.mark.parametrize(
     ("tool", "args", "stdin", "needs_tty"),
     [
@@ -49,6 +83,10 @@ def test_real_binaries_execute_leading_dash_program_payload(
     """A PATH marker proves these binaries do not reparse '-program' as an option."""
     if shutil.which(tool) is None or (needs_tty and shutil.which("script") is None):
         pytest.skip(f"{tool} or script is not installed")
+    if tool == "sort" and not _is_gnu_coreutils(tool):
+        pytest.skip("the pinned --compress-program grammar is GNU sort's; this sort is not GNU coreutils")
+    if tool == "man" and not _man_has_page("ls"):
+        pytest.skip("man has no ls(1) page here (minimized image), so no pager is ever started")
 
     marker = tmp_path / "executed"
     payload = tmp_path / "-payload-marker"

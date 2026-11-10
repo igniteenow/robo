@@ -267,8 +267,13 @@ def test_binutils_backend_recovers_functions_and_string_refs(robo_home):
 
     out = run_action("/bin/ls", "functions", backend="binutils", limit=5, sort="callers")
     assert "backend=binutils" in out and "total" in out
-    out = run_action("/bin/ls", "strings", backend="binutils", query="tagged", with_refs=True, limit=5)
+    # Any string the code references gets a "← caller" annotation. Not keyed
+    # on query=tagged: the tagger looks for C-style format strings and URLs,
+    # and the Rust uutils ls that Ubuntu 26.04 ships as /bin/ls has none.
+    out = run_action("/bin/ls", "strings", backend="binutils", with_refs=True, limit=5)
     assert "←" in out  # string → referencing function
+    out = run_action("/bin/ls", "strings", backend="binutils", query="tagged", with_refs=True, limit=5)
+    assert "· strings ·" in out and "backend=binutils" in out
     out = run_action("/bin/ls", "xrefs", backend="binutils", function="0x0", limit=3)
     assert "references" in out or "not found" in out
 

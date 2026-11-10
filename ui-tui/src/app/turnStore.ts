@@ -2,11 +2,12 @@ import { atom } from 'nanostores'
 import { useSyncExternalStore } from 'react'
 
 import { isTodoDone } from '../lib/liveProgress.js'
-import type { ActiveTool, ActivityItem, Msg, SubagentProgress, TodoItem } from '../types.js'
+import type { ActiveTool, ActivityItem, Msg, SubagentProgress, TodoItem, TurnPhase } from '../types.js'
 
 const buildTurnState = (): TurnState => ({
   activity: [],
   outcome: '',
+  phase: null,
   reasoning: '',
   reasoningActive: false,
   reasoningStreaming: false,
@@ -69,6 +70,7 @@ export const resetTurnState = () => $turnState.set(buildTurnState())
 export interface TurnState {
   activity: ActivityItem[]
   outcome: string
+  phase: null | TurnPhase
   reasoning: string
   reasoningActive: boolean
   reasoningStreaming: boolean

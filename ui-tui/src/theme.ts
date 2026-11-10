@@ -369,50 +369,50 @@ export function buildPalette(seeds: ThemeSeeds, isLight: boolean): ThemeColors {
 }
 
 // ── Ignitee identity ────────────────────────────────────────────────
-// Sampled from the Ignitee Now logo (see assets/brand/BRAND.md): deep navy
-// base, the indigo of the logo disc for structure and interactive rows, and
-// the flame (red -> ember orange) as the accent. Semantic hues stay
-// conventional (green ok / amber warn / red error) so status is never
-// ambiguous; warn is yellower than the ember accent so the two never blur.
+// Black surfaces lifted in steps of grey, near-white text and grey secondary
+// text (igniteenow.com's tokens), with the indigo of the Ignitee Now logo's
+// disc for everything interactive. The flame stays on the wordmark
+// (branding.tsx) and on the "bad" status. Status hues stay conventional:
+// green ok / amber warn / flame bad / red critical.
 export const DARK_SEEDS: ThemeSeeds = {
-  accent: '#EF8A22',
-  activeRow: '#1E255C',
-  bg: '#0A1030',
-  border: '#2A2F73',
-  error: '#F0525F',
-  muted: '#A9AECF',
-  ok: '#3FBF7F',
+  accent: '#8E8CE0',
+  activeRow: '#232834',
+  bg: '#050608',
+  border: '#737A87',
+  error: '#FF5C5C',
+  muted: '#AAB0BB',
+  ok: '#39E58C',
   primary: '#8E8CE0',
-  prompt: '#FFE9D6',
-  selection: '#2A2C73',
-  shellDollar: '#DF5A30',
-  statusBad: '#DF5A30',
-  statusCritical: '#F0525F',
-  statusGood: '#3FBF7F',
+  prompt: '#F3F4F6',
+  selection: '#2A2F3B',
+  shellDollar: '#8E8CE0',
+  statusBad: '#EF8A22',
+  statusCritical: '#FF5C5C',
+  statusGood: '#39E58C',
   statusWarn: '#F2B441',
-  surface: '#0E1437',
-  text: '#FFE9D6',
+  surface: '#0F1116',
+  text: '#F3F4F6',
   warn: '#F2B441'
 }
 
-// Light-terminal seeds: the same indigo/flame family, deepened to hold
+// Light-terminal seeds: the same black/indigo family, deepened to hold
 // ≥4.5:1 contrast on white.
 export const LIGHT_SEEDS: ThemeSeeds = {
-  accent: '#C2410C',
-  bg: '#FFF8F1',
-  border: '#D9CFE8',
-  error: '#B91C1C',
-  muted: '#5A5F8A',
-  ok: '#15803D',
+  accent: '#3F3E98',
+  bg: '#FFFFFF',
+  border: '#8A919E',
+  error: '#C0262F',
+  muted: '#5B6270',
+  ok: '#0F8A4A',
   primary: '#3F3E98',
-  prompt: '#0A1030',
-  shellDollar: '#B5361E',
-  statusBad: '#B64E16',
-  statusCritical: '#B91C1C',
-  statusGood: '#15803D',
-  statusWarn: '#92400E',
-  text: '#0A1030',
-  warn: '#92400E'
+  prompt: '#0A0B0F',
+  shellDollar: '#3F3E98',
+  statusBad: '#B5470F',
+  statusCritical: '#C0262F',
+  statusGood: '#0F8A4A',
+  statusWarn: '#8A5A00',
+  text: '#0F1116',
+  warn: '#8A5A00'
 }
 
 export const DARK_THEME: Theme = {

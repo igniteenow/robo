@@ -73,6 +73,38 @@ export const findThinkingHolder = (prev: readonly Msg[]): null | number => {
 
 export const joinThinking = (base: string, next: string): string => (base ? `${base}\n\n${next}` : next)
 
+/**
+ * The tool rows of the working phase in progress, lifted out of the segment
+ * that holds them so the live area can draw them as one running list of
+ * steps (components/streamingAssistant.tsx) instead of a folded "Tool calls
+ * (N)" row that only changes its number while Robo works. The holder is the
+ * same trail appendToolShelfMessage would merge the next row into — the last
+ * tool-carrying trail after anything the person sees as a step of the
+ * conversation — and it keeps everything else it carries (its reasoning, its
+ * token tally). Render-time only: the segments themselves, what message.complete
+ * writes to the transcript, and resume are untouched.
+ */
+export const takeLiveToolShelf = (segments: readonly Msg[]): { lines: string[]; segments: Msg[] } => {
+  for (let index = segments.length - 1; index >= 0; index--) {
+    const candidate = segments[index]
+
+    if (isToolCarryingTrail(candidate)) {
+      const { tools, ...rest } = candidate!
+      const next = [...segments]
+
+      next[index] = rest
+
+      return { lines: tools ?? [], segments: next }
+    }
+
+    if (isBarrierMessage(candidate)) {
+      break
+    }
+  }
+
+  return { lines: [], segments: [...segments] }
+}
+
 export const appendToolShelfMessage = (prev: readonly Msg[], msg: Msg): Msg[] => {
   if (!isToolShelfMessage(msg)) {
     return [...prev, msg]

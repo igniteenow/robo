@@ -91,26 +91,28 @@ def _palette(
 _SPINNER_FACES = ["◐", "◓", "◑", "◒"]
 
 _BUILTIN_SKINS: Dict[str, Dict[str, Any]] = {
-    # The brand skin: navy, indigo structure, ember accent.
+    # The brand skin: igniteenow.com's look — black surfaces, near-white text,
+    # grey secondary text, green for success, with the logo's indigo for accents
+    # and the flame for the wordmark. Values are the site's tokens (src/styles/tokens.css).
     "robo": {
         "name": "robo",
-        "description": "Robo — navy, indigo and ember. The Ignitee Now look.",
+        "description": "Robo — black and white with indigo accents and the flame wordmark. The Ignitee Now look.",
         "colors": _palette(
-            title="#FFE9D6", text="#E6E3F5", dim="#8C91BD", line="#6462C4",
-            accent="#EF8A22", accent_soft="#E8742A", label="#A3A1EC",
-            ok="#3FBF7F", warn="#F2B441", bad="#F08A4B", critical="#F0626E",
-            fill="#0E1437", fill_hi="#2A2C73", selection="#2A2C73", voice="#141A45",
+            title="#F3F4F6", text="#F3F4F6", dim="#AAB0BB", line="#737A87",
+            accent="#8E8CE0", accent_soft="#B3B1F0", label="#B3B1F0",
+            ok="#39E58C", warn="#F2B441", bad="#EF8A22", critical="#FF5C5C",
+            fill="#0F1116", fill_hi="#232834", selection="#2A2F3B", voice="#161923",
         ),
         # Fills-only flip for light terminals plus the foregrounds that need it.
         "light_colors": {
-            "banner_border": "#8F88BD", "banner_title": "#0A1030", "banner_accent": "#B5470F",
-            "banner_dim": "#5C6088", "banner_text": "#23264A", "ui_accent": "#B5470F",
-            "ui_label": "#3F3E98", "ui_ok": "#1E7A46", "ui_error": "#B42332", "ui_warn": "#8F5400",
-            "prompt": "#0A1030", "input_rule": "#8F88BD", "response_border": "#B5470F",
-            "status_bar_bg": "#F3E9DD", "status_bar_text": "#23264A", "status_bar_strong": "#0A1030",
-            "status_bar_dim": "#5C6088", "completion_menu_bg": "#F3E9DD",
-            "completion_menu_current_bg": "#E2CDB5", "selection_bg": "#F6D9BC",
-            "voice_status_bg": "#EFE3D5", "shell_dollar": "#B5470F",
+            "banner_border": "#8A919E", "banner_title": "#0A0B0F", "banner_accent": "#3F3E98",
+            "banner_dim": "#5B6270", "banner_text": "#0F1116", "ui_accent": "#3F3E98",
+            "ui_label": "#3F3E98", "ui_ok": "#0F8A4A", "ui_error": "#C0262F", "ui_warn": "#8A5A00",
+            "prompt": "#0A0B0F", "input_rule": "#8A919E", "response_border": "#3F3E98",
+            "status_bar_bg": "#EEF0F3", "status_bar_text": "#0F1116", "status_bar_strong": "#0A0B0F",
+            "status_bar_dim": "#5B6270", "completion_menu_bg": "#EEF0F3",
+            "completion_menu_current_bg": "#C9C8F2", "selection_bg": "#DDDCF7",
+            "voice_status_bg": "#EEF0F3", "shell_dollar": "#3F3E98",
         },
         "branding": {
             "agent_name": "Robo",

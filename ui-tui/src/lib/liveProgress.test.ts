@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import type { Msg } from '../types.js'
 
-import { appendToolShelfMessage, canHoldToolShelf, isTodoDone, mergeToolShelfInto } from './liveProgress.js'
+import {
+  appendToolShelfMessage,
+  canHoldToolShelf,
+  isTodoDone,
+  mergeToolShelfInto,
+  takeLiveToolShelf
+} from './liveProgress.js'
 
 describe('isTodoDone', () => {
   it('only treats non-empty all-completed/cancelled lists as done', () => {
@@ -112,5 +118,53 @@ describe('appendToolShelfMessage', () => {
     )
 
     expect(merged).toHaveLength(3)
+  })
+})
+
+// The live list of steps lifts the rows of the working phase in progress out
+// of the segment that holds them — the same segment appendToolShelfMessage
+// would merge the next row into — and leaves everything else as it was.
+describe('takeLiveToolShelf', () => {
+  it('lifts the tool rows of the current phase and keeps the reasoning they sat with', () => {
+    const segments: Msg[] = [
+      { role: 'assistant', text: 'Checking the config.' },
+      { kind: 'trail', role: 'system', text: '', thinking: 'plan', toolTokens: 12, tools: ['one ✓', 'two ✗'] },
+      { kind: 'trail', role: 'system', text: '', thinking: 'more plan' }
+    ]
+
+    const { lines, segments: rest } = takeLiveToolShelf(segments)
+
+    expect(lines).toEqual(['one ✓', 'two ✗'])
+    expect(rest).toEqual([
+      { role: 'assistant', text: 'Checking the config.' },
+      { kind: 'trail', role: 'system', text: '', thinking: 'plan', toolTokens: 12 },
+      { kind: 'trail', role: 'system', text: '', thinking: 'more plan' }
+    ])
+    // Pure: the caller's segments are left alone.
+    expect(segments[1]?.tools).toEqual(['one ✓', 'two ✗'])
+  })
+
+  it('agrees with appendToolShelfMessage on which segment holds the phase', () => {
+    const settled: Msg[] = [
+      { kind: 'trail', role: 'system', text: '', tools: ['one ✓'] },
+      { role: 'assistant', text: 'Now the tests.' },
+      { kind: 'trail', role: 'system', text: '', thinking: 'plan' }
+    ]
+
+    const merged = appendToolShelfMessage(settled, { kind: 'trail', role: 'system', text: '', tools: ['two ✓'] })
+    const { lines, segments } = takeLiveToolShelf(merged)
+
+    expect(lines).toEqual(['two ✓'])
+    expect(segments.map(msg => msg.tools)).toEqual([['one ✓'], undefined, undefined])
+  })
+
+  it('lifts nothing across something the person sees as a step of the conversation', () => {
+    const segments: Msg[] = [
+      { kind: 'trail', role: 'system', text: '', tools: ['one ✓'] },
+      { role: 'assistant', text: 'Here is what I found.' }
+    ]
+
+    expect(takeLiveToolShelf(segments)).toEqual({ lines: [], segments })
+    expect(takeLiveToolShelf([])).toEqual({ lines: [], segments: [] })
   })
 })

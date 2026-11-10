@@ -722,7 +722,7 @@ robo_cli/skin_engine.py    # SkinConfig dataclass, built-in skins, YAML loader
 
 ### Built-in skins
 
-- `robo` — Navy, indigo and ember: the Ignitee Now look (default; `default` is kept as an alias)
+- `robo` — Black and white with indigo accents and the flame wordmark: the Ignitee Now look (default; `default` is kept as an alias)
 - `ember` — Warm charcoal with the full flame and spinner wings
 - `midnight` — Calm indigo for long sessions
 - `paper` — For light terminals

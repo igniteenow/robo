@@ -42,9 +42,9 @@ const PROMPT = '\u203a'
 const RULE = '\u2500'
 const RULE_HEAVY = '\u2501'
 
-/** The ROBO wordmark. Same letterforms as the CLI banner, so the product looks
- *  identical whichever interface opens it. 34 columns wide. */
-export const WORDMARK: readonly string[] = [
+/** The short wordmark, for windows too narrow for the full one. Same
+ *  letterforms as the CLI banner. 34 columns wide. */
+export const WORDMARK_SHORT: readonly string[] = [
   '\u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 ',
   '\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557',
   '\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551',
@@ -53,11 +53,22 @@ export const WORDMARK: readonly string[] = [
   '\u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u255d '
 ]
 
+/** The full ROBO-AGENT wordmark, 84 columns wide. */
+export const WORDMARK: readonly string[] = [
+  '\u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557        \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2557   \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557',
+  '\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557      \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2551\u255a\u2550\u2550\u2588\u2588\u2554\u2550\u2550\u255d',
+  '\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2554\u2588\u2588\u2557 \u2588\u2588\u2551   \u2588\u2588\u2551   ',
+  '\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551\u255a\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u255d  \u2588\u2588\u2551\u255a\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551   ',
+  '\u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d      \u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551 \u255a\u2588\u2588\u2588\u2588\u2551   \u2588\u2588\u2551   ',
+  '\u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u255d       \u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u2550\u2550\u255d   \u255a\u2550\u255d   '
+]
+
 /** The Ignitee Now flame, one shade per wordmark row, ember at the top burning
  *  down to red. Brand constants from assets/brand/BRAND.md. */
 export const FLAME: readonly string[] = ['#F5A13A', '#EF8A22', '#E8742A', '#DF5A30', '#D93F32', '#D52734']
 
-const WORDMARK_WIDTH = 34
+const WORDMARK_WIDTH = 84
+const WORDMARK_SHORT_WIDTH = 34
 const HIDE_BELOW = 24
 const TAGLINE = 'autonomous engineering agent'
 const BYLINE = 'by Ignitee Now'
@@ -80,7 +91,7 @@ function InlineLoader({ label, t }: { label: string; t: Theme }) {
   )
 }
 
-/** The brand name shaded letter by letter from red to ember. */
+/** The brand name shaded letter by letter across the wordmark's shades. */
 export function FlameWord({ bold = true, word }: { bold?: boolean; word: string }) {
   const letters = Array.from(word)
   const span = Math.max(1, letters.length - 1)
@@ -96,7 +107,8 @@ export function FlameWord({ bold = true, word }: { bold?: boolean; word: string 
   )
 }
 
-/** The hero: the wordmark in the flame, or the skin's own agent name. */
+/** The hero: the wordmark (full, or short on a narrow window), or the skin's
+ *  own agent name. */
 export function Banner({ maxWidth, t }: { maxWidth?: number; t: Theme }) {
   const term = useStdout().stdout?.columns ?? 80
   const cols = Math.max(1, Math.min(term, maxWidth ?? term))
@@ -115,7 +127,7 @@ export function Banner({ maxWidth, t }: { maxWidth?: number; t: Theme }) {
     </Text>
   )
 
-  if (!isRobo || cols < WORDMARK_WIDTH + 4) {
+  if (!isRobo || cols < WORDMARK_SHORT_WIDTH + 4) {
     return (
       <Box flexDirection="column" marginBottom={1}>
         <Text wrap="truncate-end">
@@ -129,7 +141,7 @@ export function Banner({ maxWidth, t }: { maxWidth?: number; t: Theme }) {
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      {WORDMARK.map((row, index) => (
+      {(cols < WORDMARK_WIDTH + 4 ? WORDMARK_SHORT : WORDMARK).map((row, index) => (
         <Text bold color={FLAME[index] ?? FLAME[FLAME.length - 1]} key={index}>
           {row}
         </Text>
