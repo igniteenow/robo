@@ -69,8 +69,8 @@ def _is_robo_provider_credential(name: str) -> bool:
     """
     try:
         from tools.environments.local import (
-            _build_provider_env_blocklist,
             _is_robo_internal_secret,
+            _provider_env_blocklist_upper,
         )
     except Exception as e:
         logger.warning(
@@ -87,7 +87,10 @@ def _is_robo_provider_credential(name: str) -> bool:
     # as passthrough and tunnel them into an execute_code / terminal child.
     if _is_robo_internal_secret(name):
         return True
-    return name in _build_provider_env_blocklist()
+    # Case-insensitive: on Windows a differently-cased spelling is the same
+    # variable, so an exact-case test would let a skill register the
+    # lowercase twin of a provider credential and receive the real value.
+    return name.upper() in _provider_env_blocklist_upper()
 
 
 def register_env_passthrough(var_names: Iterable[str]) -> None:
