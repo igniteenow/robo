@@ -28,7 +28,12 @@ describe('describeToolCall', () => {
   it('uses "for" with the searches and no preview where it adds nothing', () => {
     expect(describeToolCall('web_search', 'vite 8 release notes')).toBe('Searching the web for vite 8 release notes')
     expect(describeToolCall('search_files', 'TODO', true)).toBe('Searched files for TODO')
-    expect(describeToolCall('execute_code', 'import os\nprint(1)')).toBe('Running code')
+    // A code run says which script: twenty runs in a turn must not all read
+    // the same.
+    expect(describeToolCall('execute_code', 'import os; print(1)')).toBe('Running code: import os; print(1)')
+    expect(describeToolCall('execute_code', 'import os; print(1)', true)).toBe('Ran code: import os; print(1)')
+    expect(describeToolCall('execute_code', '')).toBe('Running code')
+    expect(friendlyToolCall('Execute Code("import os; print(1)") (0.4s)')).toBe('Ran code: import os; print(1) (0.4s)')
     expect(describeToolCall('todo', '{"todos": []}', true)).toBe('Updated the plan')
     expect(describeToolCall('clarify', 'Which one?')).toBe('Asking you')
   })
